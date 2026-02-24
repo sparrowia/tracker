@@ -278,21 +278,56 @@ export default function IntakeReviewPage() {
       if (!orgId) throw new Error("No org found");
 
       // Get people for fuzzy matching owner names
-      const { data: people } = await supabase
+      const { data: existingPeople } = await supabase
         .from("people")
         .select("id, full_name")
         .eq("org_id", orgId);
 
       const peopleMap = new Map(
-        (people || []).map((p: { id: string; full_name: string }) => [
+        (existingPeople || []).map((p: { id: string; full_name: string }) => [
           p.full_name.toLowerCase(),
           p.id,
         ])
       );
 
+      // Collect all owner names from accepted items that need person records
+      const allOwnerNames = new Set<string>();
+      for (const [cat, items] of Object.entries(extracted)) {
+        for (const item of items) {
+          if (!item._accepted) continue;
+          const name = cat === "decisions" ? item.made_by : item.owner_name;
+          if (name && name.trim()) allOwnerNames.add(name.trim());
+        }
+      }
+
+      // Create missing people
+      for (const name of allOwnerNames) {
+        const lower = name.toLowerCase();
+        let found = false;
+        if (peopleMap.has(lower)) { found = true; }
+        if (!found) {
+          for (const [fullName] of peopleMap) {
+            if (fullName.includes(lower) || lower.includes(fullName)) { found = true; break; }
+            const parts = fullName.split(" ");
+            if (parts.some((part) => part === lower)) { found = true; break; }
+          }
+        }
+        if (!found) {
+          const { data: newPerson, error: personErr } = await supabase
+            .from("people")
+            .insert({ full_name: name, org_id: orgId, is_internal: false })
+            .select("id, full_name")
+            .single();
+          if (personErr) throw new Error(`Failed to create person "${name}": ${personErr.message}`);
+          if (newPerson) {
+            peopleMap.set(newPerson.full_name.toLowerCase(), newPerson.id);
+          }
+        }
+      }
+
       function findPersonId(name: string | null | undefined): string | null {
         if (!name) return null;
-        const lower = name.toLowerCase();
+        const lower = name.trim().toLowerCase();
         if (peopleMap.has(lower)) return peopleMap.get(lower)!;
         for (const [fullName, id] of peopleMap) {
           if (fullName.includes(lower) || lower.includes(fullName)) return id;
@@ -302,10 +337,12 @@ export default function IntakeReviewPage() {
         return null;
       }
 
+      const errors: string[] = [];
+
       // Create accepted action items
       const acceptedActions = extracted.action_items.filter((i) => i._accepted);
       if (acceptedActions.length > 0) {
-        await supabase.from("action_items").insert(
+        const { error: err } = await supabase.from("action_items").insert(
           acceptedActions.map((item) => ({
             org_id: orgId,
             title: item.title,
@@ -317,6 +354,7 @@ export default function IntakeReviewPage() {
             notes: item.notes || null,
           }))
         );
+        if (err) errors.push(`Action items: ${err.message}`);
       }
 
       // Create accepted decisions as RAID entries
@@ -328,7 +366,7 @@ export default function IntakeReviewPage() {
           .eq("org_id", orgId)
           .eq("raid_type", "decision");
 
-        await supabase.from("raid_entries").insert(
+        const { error: err } = await supabase.from("raid_entries").insert(
           acceptedDecisions.map((item, idx) => ({
             org_id: orgId,
             raid_type: "decision" as const,
@@ -341,6 +379,7 @@ export default function IntakeReviewPage() {
             priority: "medium" as const,
           }))
         );
+        if (err) errors.push(`Decisions: ${err.message}`);
       }
 
       // Create accepted issues as RAID entries
@@ -352,7 +391,7 @@ export default function IntakeReviewPage() {
           .eq("org_id", orgId)
           .eq("raid_type", "issue");
 
-        await supabase.from("raid_entries").insert(
+        const { error: err } = await supabase.from("raid_entries").insert(
           acceptedIssues.map((item, idx) => ({
             org_id: orgId,
             raid_type: "issue" as const,
@@ -365,6 +404,7 @@ export default function IntakeReviewPage() {
             vendor_id: item._vendor_id || null,
           }))
         );
+        if (err) errors.push(`Issues: ${err.message}`);
       }
 
       // Create accepted risks as RAID entries
@@ -376,7 +416,7 @@ export default function IntakeReviewPage() {
           .eq("org_id", orgId)
           .eq("raid_type", "risk");
 
-        await supabase.from("raid_entries").insert(
+        const { error: err } = await supabase.from("raid_entries").insert(
           acceptedRisks.map((item, idx) => ({
             org_id: orgId,
             raid_type: "risk" as const,
@@ -388,12 +428,13 @@ export default function IntakeReviewPage() {
             project_id: item._project_id || null,
           }))
         );
+        if (err) errors.push(`Risks: ${err.message}`);
       }
 
       // Create accepted blockers
       const acceptedBlockers = extracted.blockers.filter((i) => i._accepted);
       if (acceptedBlockers.length > 0) {
-        await supabase.from("blockers").insert(
+        const { error: err } = await supabase.from("blockers").insert(
           acceptedBlockers.map((item) => ({
             org_id: orgId,
             title: item.title,
@@ -404,6 +445,11 @@ export default function IntakeReviewPage() {
             priority: item.priority || "high",
           }))
         );
+        if (err) errors.push(`Blockers: ${err.message}`);
+      }
+
+      if (errors.length > 0) {
+        throw new Error(`Some items failed to save:\n${errors.join("\n")}`);
       }
 
       router.push("/dashboard");
