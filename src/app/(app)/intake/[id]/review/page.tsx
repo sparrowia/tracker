@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter, useParams } from "next/navigation";
 import { priorityColor } from "@/lib/utils";
-import type { Intake, PriorityLevel, Vendor, Project } from "@/lib/types";
+import type { Intake, PriorityLevel, Vendor, Project, Person } from "@/lib/types";
 
 interface ExtractedItem {
   title: string;
@@ -54,23 +54,23 @@ const priorityOptions: PriorityLevel[] = ["critical", "high", "medium", "low"];
 const statusOptions = ["pending", "in_progress", "complete", "needs_verification", "paused", "at_risk", "blocked"];
 
 // Which fields to show per category
-const categoryFields: Record<EntityCategory, { field: string; label: string; type: "text" | "select" | "date" | "textarea" }[]> = {
+const categoryFields: Record<EntityCategory, { field: string; label: string; type: "text" | "select" | "date" | "textarea" | "person" }[]> = {
   action_items: [
     { field: "title", label: "Title", type: "text" },
-    { field: "owner_name", label: "Owner", type: "text" },
+    { field: "owner_name", label: "Owner", type: "person" },
     { field: "priority", label: "Priority", type: "select" },
     { field: "due_date", label: "Due Date", type: "date" },
     { field: "notes", label: "Notes", type: "textarea" },
   ],
   decisions: [
     { field: "title", label: "Decision", type: "text" },
-    { field: "made_by", label: "Made By", type: "text" },
+    { field: "made_by", label: "Made By", type: "person" },
     { field: "decision_date", label: "Date", type: "date" },
     { field: "rationale", label: "Rationale", type: "textarea" },
   ],
   issues: [
     { field: "title", label: "Issue", type: "text" },
-    { field: "owner_name", label: "Owner", type: "text" },
+    { field: "owner_name", label: "Owner", type: "person" },
     { field: "priority", label: "Priority", type: "select" },
     { field: "impact", label: "Impact", type: "textarea" },
   ],
@@ -82,7 +82,7 @@ const categoryFields: Record<EntityCategory, { field: string; label: string; typ
   ],
   blockers: [
     { field: "title", label: "Blocker", type: "text" },
-    { field: "owner_name", label: "Owner", type: "text" },
+    { field: "owner_name", label: "Owner", type: "person" },
     { field: "priority", label: "Priority", type: "select" },
     { field: "impact_description", label: "Impact", type: "textarea" },
   ],
@@ -118,6 +118,7 @@ export default function IntakeReviewPage() {
   const [intake, setIntake] = useState<Intake | null>(null);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [people, setPeople] = useState<Person[]>([]);
   const [extracted, setExtracted] = useState<Record<EntityCategory, ExtractedItem[]>>({
     action_items: [],
     decisions: [],
@@ -166,11 +167,12 @@ export default function IntakeReviewPage() {
 
   useEffect(() => {
     async function loadData() {
-      const [{ data: intakeData, error: intakeErr }, { data: v }, { data: p }] =
+      const [{ data: intakeData, error: intakeErr }, { data: v }, { data: p }, { data: ppl }] =
         await Promise.all([
           supabase.from("intakes").select("*").eq("id", intakeId).single(),
           supabase.from("vendors").select("*").order("name"),
           supabase.from("projects").select("*").order("name"),
+          supabase.from("people").select("*").order("full_name"),
         ]);
 
       if (intakeErr || !intakeData) {
@@ -182,6 +184,7 @@ export default function IntakeReviewPage() {
       setIntake(intakeData as Intake);
       setVendors((v || []) as Vendor[]);
       setProjects((p || []) as Project[]);
+      setPeople((ppl || []) as Person[]);
 
       if (intakeData.extracted_data) {
         const ed = intakeData.extracted_data as Record<string, ExtractedItem[]>;
@@ -536,6 +539,40 @@ export default function IntakeReviewPage() {
                                       ))}
                                     </select>
                                   )}
+                                  {fieldDef.type === "person" && (() => {
+                                    const isKnown = people.some((pr) => pr.full_name === val);
+                                    const showInput = val && !isKnown;
+                                    return (
+                                      <div className="flex-1">
+                                        <select
+                                          value={isKnown ? val : showInput ? "__new__" : ""}
+                                          onChange={(e) => {
+                                            if (e.target.value === "__new__") {
+                                              updateItem(category, idx, fieldDef.field, val || " ");
+                                            } else {
+                                              updateItem(category, idx, fieldDef.field, e.target.value);
+                                            }
+                                          }}
+                                          className="w-full text-sm text-gray-900 bg-white/60 rounded border border-gray-200 px-2 py-0.5 focus:border-blue-500 focus:outline-none"
+                                        >
+                                          <option value="">— Unassigned —</option>
+                                          {people.map((pr) => (
+                                            <option key={pr.id} value={pr.full_name}>{pr.full_name}</option>
+                                          ))}
+                                          <option value="__new__">+ New Person</option>
+                                        </select>
+                                        {showInput && (
+                                          <input
+                                            type="text"
+                                            value={val}
+                                            onChange={(e) => updateItem(category, idx, fieldDef.field, e.target.value)}
+                                            placeholder="Full name"
+                                            className="mt-1 w-full text-sm text-gray-900 bg-white/60 rounded border border-gray-200 px-2 py-0.5 focus:border-blue-500 focus:outline-none"
+                                          />
+                                        )}
+                                      </div>
+                                    );
+                                  })()}
                                 </div>
                               );
                             })}
