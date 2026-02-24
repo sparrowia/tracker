@@ -194,37 +194,37 @@ export default function IntakeReviewPage() {
         setExtracted({
           action_items: (ed.action_items || []).map((i: ExtractedItem) => ({
             ...i,
-            _accepted: true,
+            _accepted: undefined,
             _project_id: defaultProjectId,
             _vendor_id: defaultVendorId,
           })),
           decisions: (ed.decisions || []).map((i: ExtractedItem) => ({
             ...i,
-            _accepted: true,
+            _accepted: undefined,
             _project_id: defaultProjectId,
             _vendor_id: defaultVendorId,
           })),
           issues: (ed.issues || []).map((i: ExtractedItem) => ({
             ...i,
-            _accepted: true,
+            _accepted: undefined,
             _project_id: defaultProjectId,
             _vendor_id: defaultVendorId,
           })),
           risks: (ed.risks || []).map((i: ExtractedItem) => ({
             ...i,
-            _accepted: true,
+            _accepted: undefined,
             _project_id: defaultProjectId,
             _vendor_id: defaultVendorId,
           })),
           blockers: (ed.blockers || []).map((i: ExtractedItem) => ({
             ...i,
-            _accepted: true,
+            _accepted: undefined,
             _project_id: defaultProjectId,
             _vendor_id: defaultVendorId,
           })),
           status_updates: (ed.status_updates || []).map((i: ExtractedItem) => ({
             ...i,
-            _accepted: true,
+            _accepted: undefined,
             _project_id: defaultProjectId,
             _vendor_id: defaultVendorId,
           })),
@@ -236,10 +236,21 @@ export default function IntakeReviewPage() {
     loadData();
   }, [intakeId]);
 
-  function removeItem(category: EntityCategory, index: number) {
+  function acceptItem(category: EntityCategory, index: number) {
     setExtracted((prev) => ({
       ...prev,
-      [category]: prev[category].filter((_, i) => i !== index),
+      [category]: prev[category].map((item, i) =>
+        i === index ? { ...item, _accepted: item._accepted === true ? undefined : true } : item
+      ),
+    }));
+  }
+
+  function rejectItem(category: EntityCategory, index: number) {
+    setExtracted((prev) => ({
+      ...prev,
+      [category]: prev[category].map((item, i) =>
+        i === index ? { ...item, _accepted: item._accepted === false ? undefined : false } : item
+      ),
     }));
   }
 
@@ -337,7 +348,7 @@ export default function IntakeReviewPage() {
       const errors: string[] = [];
 
       // Create accepted action items
-      const acceptedActions = extracted.action_items;
+      const acceptedActions = extracted.action_items.filter((i) => i._accepted === true);
       if (acceptedActions.length > 0) {
         const { error: err } = await supabase.from("action_items").insert(
           acceptedActions.map((item) => ({
@@ -355,7 +366,7 @@ export default function IntakeReviewPage() {
       }
 
       // Create accepted decisions as RAID entries
-      const acceptedDecisions = extracted.decisions;
+      const acceptedDecisions = extracted.decisions.filter((i) => i._accepted === true);
       if (acceptedDecisions.length > 0) {
         const { count } = await supabase
           .from("raid_entries")
@@ -380,7 +391,7 @@ export default function IntakeReviewPage() {
       }
 
       // Create accepted issues as RAID entries
-      const acceptedIssues = extracted.issues;
+      const acceptedIssues = extracted.issues.filter((i) => i._accepted === true);
       if (acceptedIssues.length > 0) {
         const { count } = await supabase
           .from("raid_entries")
@@ -405,7 +416,7 @@ export default function IntakeReviewPage() {
       }
 
       // Create accepted risks as RAID entries
-      const acceptedRisks = extracted.risks;
+      const acceptedRisks = extracted.risks.filter((i) => i._accepted === true);
       if (acceptedRisks.length > 0) {
         const { count } = await supabase
           .from("raid_entries")
@@ -429,7 +440,7 @@ export default function IntakeReviewPage() {
       }
 
       // Create accepted blockers
-      const acceptedBlockers = extracted.blockers;
+      const acceptedBlockers = extracted.blockers.filter((i) => i._accepted === true);
       if (acceptedBlockers.length > 0) {
         const { error: err } = await supabase.from("blockers").insert(
           acceptedBlockers.map((item) => ({
@@ -473,13 +484,14 @@ export default function IntakeReviewPage() {
   }
 
   const totalItems = Object.values(extracted).flat().length;
+  const totalAccepted = Object.values(extracted).flat().filter((i) => i._accepted === true).length;
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Review Extraction</h1>
         <p className="text-sm text-gray-500 mt-1">
-          {totalItems} items extracted. Remove items you don&apos;t want, edit the rest, then confirm.
+          {totalItems} items extracted. {totalAccepted} accepted.
         </p>
       </div>
 
@@ -513,13 +525,19 @@ export default function IntakeReviewPage() {
               items.length > 0 && (
                 <div key={category}>
                   <h3 className="text-sm font-medium text-gray-700 mb-2">
-                    {categoryLabels[category]} ({items.length})
+                    {categoryLabels[category]} ({items.filter((i) => i._accepted === true).length}/{items.length})
                   </h3>
                   <div className="space-y-2">
                     {items.map((item, idx) => (
                       <div
                         key={idx}
-                        className={`rounded-lg border p-3 ${categoryColors[category]}`}
+                        className={`rounded-lg border p-3 transition-all ${
+                          item._accepted === true
+                            ? "border-green-300 bg-green-50"
+                            : item._accepted === false
+                              ? "border-gray-200 bg-gray-100 opacity-50"
+                              : categoryColors[category]
+                        }`}
                       >
                         {item._editing ? (
                           /* Edit mode */
@@ -708,9 +726,26 @@ export default function IntakeReviewPage() {
                             </svg>
                           </button>
                           <button
-                            onClick={() => removeItem(category, idx)}
-                            className="text-gray-400 hover:text-red-600 transition-colors"
-                            title="Remove item"
+                            onClick={() => acceptItem(category, idx)}
+                            className={`transition-colors ${
+                              item._accepted === true
+                                ? "text-green-600"
+                                : "text-gray-300 hover:text-green-600"
+                            }`}
+                            title="Accept"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                          </button>
+                          <button
+                            onClick={() => rejectItem(category, idx)}
+                            className={`transition-colors ${
+                              item._accepted === false
+                                ? "text-red-500"
+                                : "text-gray-300 hover:text-red-500"
+                            }`}
+                            title="Reject"
                           >
                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                               <line x1="18" y1="6" x2="6" y2="18"/>
@@ -733,11 +768,11 @@ export default function IntakeReviewPage() {
         </div>
       </div>
 
-      {totalItems > 0 && (
+      {totalAccepted > 0 && (
         <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 -mx-6 px-6 py-4">
           <div className="max-w-6xl mx-auto flex justify-between items-center">
             <p className="text-sm text-gray-600">
-              {totalItems} items will be created
+              {totalAccepted} items will be created
             </p>
             <div className="flex gap-3">
               <button
@@ -751,7 +786,7 @@ export default function IntakeReviewPage() {
                 disabled={confirming}
                 className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50"
               >
-                {confirming ? "Creating..." : `Confirm ${totalItems} Items`}
+                {confirming ? "Creating..." : `Confirm ${totalAccepted} Items`}
               </button>
             </div>
           </div>
