@@ -507,7 +507,7 @@ export default function IntakeReviewPage() {
           <h2 className="text-sm font-semibold text-gray-700 mb-2 uppercase tracking-wide">
             Original Text
           </h2>
-          <div ref={rawTextRef} className="bg-white rounded-lg border border-gray-200 p-4 max-h-[calc(100vh-6rem)] overflow-y-auto">
+          <div ref={rawTextRef} className="bg-white rounded-lg border border-gray-200 p-4 max-h-[600px] overflow-y-auto">
             <pre className="text-sm text-gray-700 whitespace-pre-wrap font-mono">
               {highlightedQuote ? renderHighlightedText(intake.raw_text, highlightedQuote) : intake.raw_text}
             </pre>
