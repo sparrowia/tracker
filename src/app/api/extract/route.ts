@@ -12,7 +12,8 @@ Return a JSON object with these arrays (each can be empty):
       "owner_name": "Person's full name or null",
       "priority": "critical|high|medium|low",
       "due_date": "YYYY-MM-DD or null",
-      "notes": "Additional context"
+      "notes": "Additional context",
+      "source_quote": "Exact short phrase from the original text that this item was extracted from"
     }
   ],
   "decisions": [
@@ -20,7 +21,8 @@ Return a JSON object with these arrays (each can be empty):
       "title": "Decision made",
       "rationale": "Why this was decided",
       "made_by": "Person's name or null",
-      "decision_date": "YYYY-MM-DD or null"
+      "decision_date": "YYYY-MM-DD or null",
+      "source_quote": "Exact short phrase from the original text"
     }
   ],
   "issues": [
@@ -28,7 +30,8 @@ Return a JSON object with these arrays (each can be empty):
       "title": "Issue description",
       "priority": "critical|high|medium|low",
       "impact": "What this affects",
-      "owner_name": "Person responsible or null"
+      "owner_name": "Person responsible or null",
+      "source_quote": "Exact short phrase from the original text"
     }
   ],
   "risks": [
@@ -36,7 +39,8 @@ Return a JSON object with these arrays (each can be empty):
       "title": "Risk description",
       "priority": "critical|high|medium|low",
       "impact": "Potential impact",
-      "mitigation": "Suggested mitigation or null"
+      "mitigation": "Suggested mitigation or null",
+      "source_quote": "Exact short phrase from the original text"
     }
   ],
   "blockers": [
@@ -44,14 +48,16 @@ Return a JSON object with these arrays (each can be empty):
       "title": "What is blocked",
       "impact_description": "What this prevents",
       "owner_name": "Person responsible or null",
-      "priority": "critical|high|medium|low"
+      "priority": "critical|high|medium|low",
+      "source_quote": "Exact short phrase from the original text"
     }
   ],
   "status_updates": [
     {
       "subject": "What was updated",
       "new_status": "pending|in_progress|complete|needs_verification|paused|at_risk|blocked",
-      "details": "Additional context"
+      "details": "Additional context",
+      "source_quote": "Exact short phrase from the original text"
     }
   ]
 }
@@ -63,6 +69,7 @@ Rules:
 - Dates should be in YYYY-MM-DD format
 - Keep titles concise but descriptive
 - Do not fabricate information not present in the text
+- source_quote MUST be a verbatim substring copied exactly from the input text (5-15 words). It will be used for text search, so it must match exactly
 - Return ONLY valid JSON, no other text`;
 
 export async function POST(request: Request) {

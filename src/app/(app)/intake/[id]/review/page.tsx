@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter, useParams } from "next/navigation";
 import { priorityColor } from "@/lib/utils";
@@ -21,6 +21,7 @@ interface ExtractedItem {
   new_status?: string | null;
   details?: string | null;
   subject?: string | null;
+  source_quote?: string | null;
   // Per-item overrides
   _accepted?: boolean;
   _edited?: boolean;
@@ -48,6 +49,25 @@ const categoryColors: Record<EntityCategory, string> = {
   status_updates: "border-gray-200 bg-gray-50",
 };
 
+function renderHighlightedText(text: string, quote: string) {
+  const lowerText = text.toLowerCase();
+  const lowerQuote = quote.toLowerCase();
+  const idx = lowerText.indexOf(lowerQuote);
+  if (idx === -1) return text;
+
+  const before = text.substring(0, idx);
+  const match = text.substring(idx, idx + quote.length);
+  const after = text.substring(idx + quote.length);
+
+  return (
+    <>
+      {before}
+      <mark className="bg-yellow-200 text-yellow-900 rounded px-0.5">{match}</mark>
+      {after}
+    </>
+  );
+}
+
 export default function IntakeReviewPage() {
   const params = useParams();
   const intakeId = params.id as string;
@@ -65,8 +85,40 @@ export default function IntakeReviewPage() {
   const [loading, setLoading] = useState(true);
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [highlightedQuote, setHighlightedQuote] = useState<string | null>(null);
+  const rawTextRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const supabase = createClient();
+
+  const scrollToSource = useCallback((quote: string | null | undefined) => {
+    if (!quote || !rawTextRef.current || !intake) return;
+
+    // Clear any existing highlight
+    setHighlightedQuote(quote);
+
+    const container = rawTextRef.current;
+    const text = intake.raw_text;
+    const lowerText = text.toLowerCase();
+    const lowerQuote = quote.toLowerCase();
+    const matchIndex = lowerText.indexOf(lowerQuote);
+
+    if (matchIndex === -1) return;
+
+    // Find the text node and scroll to it using a temporary mark
+    // We'll use window.find or a range-based approach
+    const pre = container.querySelector("pre");
+    if (!pre) return;
+
+    // Scroll the container to roughly the right position
+    const textBefore = text.substring(0, matchIndex);
+    const linesBefore = textBefore.split("\n").length - 1;
+    const lineHeight = 20; // approximate line height for text-sm mono
+    const scrollTarget = linesBefore * lineHeight - container.clientHeight / 3;
+    container.scrollTo({ top: Math.max(0, scrollTarget), behavior: "smooth" });
+
+    // Auto-clear highlight after 4 seconds
+    setTimeout(() => setHighlightedQuote(null), 4000);
+  }, [intake]);
 
   useEffect(() => {
     async function loadData() {
@@ -341,13 +393,13 @@ export default function IntakeReviewPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Raw text */}
-        <div>
+        <div className="lg:sticky lg:top-0">
           <h2 className="text-sm font-semibold text-gray-700 mb-2 uppercase tracking-wide">
             Original Text
           </h2>
-          <div className="bg-white rounded-lg border border-gray-200 p-4 max-h-[600px] overflow-y-auto">
+          <div ref={rawTextRef} className="bg-white rounded-lg border border-gray-200 p-4 max-h-[600px] overflow-y-auto">
             <pre className="text-sm text-gray-700 whitespace-pre-wrap font-mono">
-              {intake.raw_text}
+              {highlightedQuote ? renderHighlightedText(intake.raw_text, highlightedQuote) : intake.raw_text}
             </pre>
           </div>
         </div>
@@ -440,16 +492,30 @@ export default function IntakeReviewPage() {
                               </div>
                             )}
                           </div>
-                          <button
-                            onClick={() => toggleAccept(category, idx)}
-                            className={`flex-shrink-0 px-2 py-1 text-xs rounded ${
-                              item._accepted
-                                ? "bg-green-100 text-green-700 border border-green-200"
-                                : "bg-gray-100 text-gray-500 border border-gray-200"
-                            }`}
-                          >
-                            {item._accepted ? "Accepted" : "Rejected"}
-                          </button>
+                          <div className="flex flex-col gap-1 flex-shrink-0">
+                            {item.source_quote && (
+                              <button
+                                onClick={() => scrollToSource(item.source_quote)}
+                                className="px-2 py-1 text-xs rounded bg-white border border-gray-200 text-gray-500 hover:text-blue-600 hover:border-blue-300 transition-colors"
+                                title="View source in original text"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                                  <circle cx="12" cy="12" r="3"/>
+                                </svg>
+                              </button>
+                            )}
+                            <button
+                              onClick={() => toggleAccept(category, idx)}
+                              className={`px-2 py-1 text-xs rounded ${
+                                item._accepted
+                                  ? "bg-green-100 text-green-700 border border-green-200"
+                                  : "bg-gray-100 text-gray-500 border border-gray-200"
+                              }`}
+                            >
+                              {item._accepted ? "Accepted" : "Rejected"}
+                            </button>
+                          </div>
                         </div>
                       </div>
                     ))}
