@@ -49,6 +49,49 @@ const categoryColors: Record<EntityCategory, string> = {
   status_updates: "border-gray-200 bg-gray-50",
 };
 
+const priorityOptions: PriorityLevel[] = ["critical", "high", "medium", "low"];
+const statusOptions = ["pending", "in_progress", "complete", "needs_verification", "paused", "at_risk", "blocked"];
+
+// Which fields to show per category
+const categoryFields: Record<EntityCategory, { field: string; label: string; type: "text" | "select" | "date" | "textarea" }[]> = {
+  action_items: [
+    { field: "title", label: "Title", type: "text" },
+    { field: "owner_name", label: "Owner", type: "text" },
+    { field: "priority", label: "Priority", type: "select" },
+    { field: "due_date", label: "Due Date", type: "date" },
+    { field: "notes", label: "Notes", type: "textarea" },
+  ],
+  decisions: [
+    { field: "title", label: "Decision", type: "text" },
+    { field: "made_by", label: "Made By", type: "text" },
+    { field: "decision_date", label: "Date", type: "date" },
+    { field: "rationale", label: "Rationale", type: "textarea" },
+  ],
+  issues: [
+    { field: "title", label: "Issue", type: "text" },
+    { field: "owner_name", label: "Owner", type: "text" },
+    { field: "priority", label: "Priority", type: "select" },
+    { field: "impact", label: "Impact", type: "textarea" },
+  ],
+  risks: [
+    { field: "title", label: "Risk", type: "text" },
+    { field: "priority", label: "Priority", type: "select" },
+    { field: "impact", label: "Impact", type: "textarea" },
+    { field: "mitigation", label: "Mitigation", type: "textarea" },
+  ],
+  blockers: [
+    { field: "title", label: "Blocker", type: "text" },
+    { field: "owner_name", label: "Owner", type: "text" },
+    { field: "priority", label: "Priority", type: "select" },
+    { field: "impact_description", label: "Impact", type: "textarea" },
+  ],
+  status_updates: [
+    { field: "subject", label: "Subject", type: "text" },
+    { field: "new_status", label: "Status", type: "select" },
+    { field: "details", label: "Details", type: "textarea" },
+  ],
+};
+
 function renderHighlightedText(text: string, quote: string) {
   const lowerText = text.toLowerCase();
   const lowerQuote = quote.toLowerCase();
@@ -427,73 +470,92 @@ export default function IntakeReviewPage() {
                             : categoryColors[category]
                         }`}
                       >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex-1 min-w-0">
-                            <input
-                              type="text"
-                              value={item.title || item.subject || ""}
-                              onChange={(e) =>
-                                updateItem(category, idx, item.subject !== undefined ? "subject" : "title", e.target.value)
-                              }
-                              className="w-full text-sm font-medium text-gray-900 bg-transparent border-none p-0 focus:outline-none focus:ring-0"
-                            />
-                            <div className="flex gap-2 mt-1 flex-wrap">
-                              {item.owner_name && (
-                                <span className="text-xs text-gray-500">
-                                  Owner: {item.owner_name}
-                                </span>
-                              )}
-                              {item.priority && (
-                                <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border ${priorityColor(item.priority)}`}>
-                                  {item.priority}
-                                </span>
-                              )}
-                              {item.due_date && (
-                                <span className="text-xs text-gray-500">
-                                  Due: {item.due_date}
-                                </span>
-                              )}
-                            </div>
-                            {(item.notes || item.impact || item.rationale || item.details) && (
-                              <p className="text-xs text-gray-600 mt-1">
-                                {item.notes || item.impact || item.rationale || item.details}
-                              </p>
-                            )}
+                        <div className="space-y-2">
+                          {categoryFields[category].map((fieldDef) => {
+                            const val = (item as Record<string, unknown>)[fieldDef.field] as string || "";
+                            return (
+                              <div key={fieldDef.field} className="flex items-start gap-2">
+                                <label className="text-xs text-gray-500 w-16 flex-shrink-0 pt-1">{fieldDef.label}</label>
+                                {fieldDef.type === "text" && (
+                                  <input
+                                    type="text"
+                                    value={val}
+                                    onChange={(e) => updateItem(category, idx, fieldDef.field, e.target.value)}
+                                    className="flex-1 text-sm text-gray-900 bg-white/60 rounded border border-gray-200 px-2 py-0.5 focus:border-blue-500 focus:outline-none"
+                                  />
+                                )}
+                                {fieldDef.type === "date" && (
+                                  <input
+                                    type="date"
+                                    value={val}
+                                    onChange={(e) => updateItem(category, idx, fieldDef.field, e.target.value)}
+                                    className="flex-1 text-sm text-gray-900 bg-white/60 rounded border border-gray-200 px-2 py-0.5 focus:border-blue-500 focus:outline-none"
+                                  />
+                                )}
+                                {fieldDef.type === "textarea" && (
+                                  <textarea
+                                    value={val}
+                                    onChange={(e) => updateItem(category, idx, fieldDef.field, e.target.value)}
+                                    rows={2}
+                                    className="flex-1 text-sm text-gray-900 bg-white/60 rounded border border-gray-200 px-2 py-0.5 focus:border-blue-500 focus:outline-none resize-y"
+                                  />
+                                )}
+                                {fieldDef.type === "select" && fieldDef.field === "priority" && (
+                                  <select
+                                    value={val}
+                                    onChange={(e) => updateItem(category, idx, fieldDef.field, e.target.value)}
+                                    className="flex-1 text-sm text-gray-900 bg-white/60 rounded border border-gray-200 px-2 py-0.5 focus:border-blue-500 focus:outline-none"
+                                  >
+                                    <option value="">—</option>
+                                    {priorityOptions.map((p) => (
+                                      <option key={p} value={p}>{p}</option>
+                                    ))}
+                                  </select>
+                                )}
+                                {fieldDef.type === "select" && fieldDef.field === "new_status" && (
+                                  <select
+                                    value={val}
+                                    onChange={(e) => updateItem(category, idx, fieldDef.field, e.target.value)}
+                                    className="flex-1 text-sm text-gray-900 bg-white/60 rounded border border-gray-200 px-2 py-0.5 focus:border-blue-500 focus:outline-none"
+                                  >
+                                    <option value="">—</option>
+                                    {statusOptions.map((s) => (
+                                      <option key={s} value={s}>{s.replace(/_/g, " ")}</option>
+                                    ))}
+                                  </select>
+                                )}
+                              </div>
+                            );
+                          })}
 
-                            {/* Per-item project/vendor assignment */}
-                            {item._accepted && category !== "status_updates" && (
-                              <div className="flex gap-2 mt-2">
+                          {/* Per-item project/vendor assignment */}
+                          {category !== "status_updates" && (
+                            <div className="flex items-start gap-2">
+                              <label className="text-xs text-gray-500 w-16 flex-shrink-0 pt-1">Assign</label>
+                              <div className="flex-1 flex gap-2">
                                 <select
                                   value={item._project_id || ""}
-                                  onChange={(e) =>
-                                    updateItem(category, idx, "_project_id", e.target.value || "")
-                                  }
-                                  className="flex-1 text-xs rounded border border-gray-300 px-1.5 py-1 bg-white focus:border-blue-500 focus:outline-none"
+                                  onChange={(e) => updateItem(category, idx, "_project_id", e.target.value || "")}
+                                  className="flex-1 text-xs rounded border border-gray-200 px-2 py-1 bg-white/60 focus:border-blue-500 focus:outline-none"
                                 >
                                   <option value="">No project</option>
                                   {projects.map((p) => (
-                                    <option key={p.id} value={p.id}>
-                                      {p.name}
-                                    </option>
+                                    <option key={p.id} value={p.id}>{p.name}</option>
                                   ))}
                                 </select>
                                 <select
                                   value={item._vendor_id || ""}
-                                  onChange={(e) =>
-                                    updateItem(category, idx, "_vendor_id", e.target.value || "")
-                                  }
-                                  className="flex-1 text-xs rounded border border-gray-300 px-1.5 py-1 bg-white focus:border-blue-500 focus:outline-none"
+                                  onChange={(e) => updateItem(category, idx, "_vendor_id", e.target.value || "")}
+                                  className="flex-1 text-xs rounded border border-gray-200 px-2 py-1 bg-white/60 focus:border-blue-500 focus:outline-none"
                                 >
                                   <option value="">No vendor</option>
                                   {vendors.map((v) => (
-                                    <option key={v.id} value={v.id}>
-                                      {v.name}
-                                    </option>
+                                    <option key={v.id} value={v.id}>{v.name}</option>
                                   ))}
                                 </select>
                               </div>
-                            )}
-                          </div>
+                            </div>
+                          )}
                         </div>
                         <div className="flex justify-end items-center gap-2 mt-1">
                           {item.source_quote && (
