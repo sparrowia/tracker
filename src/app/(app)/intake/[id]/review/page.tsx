@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter, useParams } from "next/navigation";
 import { priorityColor } from "@/lib/utils";
-import type { Intake, PriorityLevel } from "@/lib/types";
+import type { Intake, PriorityLevel, Vendor, Project } from "@/lib/types";
 
 interface ExtractedItem {
   title: string;
@@ -21,9 +21,11 @@ interface ExtractedItem {
   new_status?: string | null;
   details?: string | null;
   subject?: string | null;
-  // UI state
+  // Per-item overrides
   _accepted?: boolean;
   _edited?: boolean;
+  _project_id?: string | null;
+  _vendor_id?: string | null;
 }
 
 type EntityCategory = "action_items" | "decisions" | "issues" | "risks" | "blockers" | "status_updates";
@@ -50,6 +52,8 @@ export default function IntakeReviewPage() {
   const params = useParams();
   const intakeId = params.id as string;
   const [intake, setIntake] = useState<Intake | null>(null);
+  const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [extracted, setExtracted] = useState<Record<EntityCategory, ExtractedItem[]>>({
     action_items: [],
     decisions: [],
@@ -65,36 +69,72 @@ export default function IntakeReviewPage() {
   const supabase = createClient();
 
   useEffect(() => {
-    async function loadIntake() {
-      const { data, error } = await supabase
-        .from("intakes")
-        .select("*")
-        .eq("id", intakeId)
-        .single();
+    async function loadData() {
+      const [{ data: intakeData, error: intakeErr }, { data: v }, { data: p }] =
+        await Promise.all([
+          supabase.from("intakes").select("*").eq("id", intakeId).single(),
+          supabase.from("vendors").select("*").order("name"),
+          supabase.from("projects").select("*").order("name"),
+        ]);
 
-      if (error || !data) {
+      if (intakeErr || !intakeData) {
         setError("Intake not found");
         setLoading(false);
         return;
       }
 
-      setIntake(data as Intake);
+      setIntake(intakeData as Intake);
+      setVendors((v || []) as Vendor[]);
+      setProjects((p || []) as Project[]);
 
-      if (data.extracted_data) {
-        const ed = data.extracted_data as Record<string, ExtractedItem[]>;
+      if (intakeData.extracted_data) {
+        const ed = intakeData.extracted_data as Record<string, ExtractedItem[]>;
+        const defaultProjectId = intakeData.project_id || null;
+        const defaultVendorId = intakeData.vendor_id || null;
+
         setExtracted({
-          action_items: (ed.action_items || []).map((i: ExtractedItem) => ({ ...i, _accepted: true })),
-          decisions: (ed.decisions || []).map((i: ExtractedItem) => ({ ...i, _accepted: true })),
-          issues: (ed.issues || []).map((i: ExtractedItem) => ({ ...i, _accepted: true })),
-          risks: (ed.risks || []).map((i: ExtractedItem) => ({ ...i, _accepted: true })),
-          blockers: (ed.blockers || []).map((i: ExtractedItem) => ({ ...i, _accepted: true })),
-          status_updates: (ed.status_updates || []).map((i: ExtractedItem) => ({ ...i, _accepted: true })),
+          action_items: (ed.action_items || []).map((i: ExtractedItem) => ({
+            ...i,
+            _accepted: true,
+            _project_id: defaultProjectId,
+            _vendor_id: defaultVendorId,
+          })),
+          decisions: (ed.decisions || []).map((i: ExtractedItem) => ({
+            ...i,
+            _accepted: true,
+            _project_id: defaultProjectId,
+            _vendor_id: defaultVendorId,
+          })),
+          issues: (ed.issues || []).map((i: ExtractedItem) => ({
+            ...i,
+            _accepted: true,
+            _project_id: defaultProjectId,
+            _vendor_id: defaultVendorId,
+          })),
+          risks: (ed.risks || []).map((i: ExtractedItem) => ({
+            ...i,
+            _accepted: true,
+            _project_id: defaultProjectId,
+            _vendor_id: defaultVendorId,
+          })),
+          blockers: (ed.blockers || []).map((i: ExtractedItem) => ({
+            ...i,
+            _accepted: true,
+            _project_id: defaultProjectId,
+            _vendor_id: defaultVendorId,
+          })),
+          status_updates: (ed.status_updates || []).map((i: ExtractedItem) => ({
+            ...i,
+            _accepted: true,
+            _project_id: defaultProjectId,
+            _vendor_id: defaultVendorId,
+          })),
         });
       }
 
       setLoading(false);
     }
-    loadIntake();
+    loadData();
   }, [intakeId]);
 
   function toggleAccept(category: EntityCategory, index: number) {
@@ -145,9 +185,7 @@ export default function IntakeReviewPage() {
       function findPersonId(name: string | null | undefined): string | null {
         if (!name) return null;
         const lower = name.toLowerCase();
-        // Exact match
         if (peopleMap.has(lower)) return peopleMap.get(lower)!;
-        // Partial match (first name or last name)
         for (const [fullName, id] of peopleMap) {
           if (fullName.includes(lower) || lower.includes(fullName)) return id;
           const parts = fullName.split(" ");
@@ -164,8 +202,8 @@ export default function IntakeReviewPage() {
             org_id: orgId,
             title: item.title,
             owner_id: findPersonId(item.owner_name),
-            vendor_id: intake.vendor_id,
-            project_id: intake.project_id,
+            vendor_id: item._vendor_id || null,
+            project_id: item._project_id || null,
             priority: item.priority || "medium",
             due_date: item.due_date || null,
             notes: item.notes || null,
@@ -190,7 +228,7 @@ export default function IntakeReviewPage() {
             title: item.title,
             description: item.rationale || null,
             owner_id: findPersonId(item.made_by),
-            project_id: intake.project_id,
+            project_id: item._project_id || null,
             decision_date: item.decision_date || null,
             priority: "medium" as const,
           }))
@@ -215,8 +253,8 @@ export default function IntakeReviewPage() {
             impact: item.impact || null,
             priority: item.priority || "medium",
             owner_id: findPersonId(item.owner_name),
-            project_id: intake.project_id,
-            vendor_id: intake.vendor_id,
+            project_id: item._project_id || null,
+            vendor_id: item._vendor_id || null,
           }))
         );
       }
@@ -239,7 +277,7 @@ export default function IntakeReviewPage() {
             impact: item.impact || null,
             description: item.mitigation || null,
             priority: item.priority || "medium",
-            project_id: intake.project_id,
+            project_id: item._project_id || null,
           }))
         );
       }
@@ -253,8 +291,8 @@ export default function IntakeReviewPage() {
             title: item.title,
             impact_description: item.impact_description || null,
             owner_id: findPersonId(item.owner_name),
-            vendor_id: intake.vendor_id,
-            project_id: intake.project_id,
+            vendor_id: item._vendor_id || null,
+            project_id: item._project_id || null,
             priority: item.priority || "high",
           }))
         );
@@ -291,7 +329,7 @@ export default function IntakeReviewPage() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Review Extraction</h1>
         <p className="text-sm text-gray-500 mt-1">
-          {totalAccepted} of {totalItems} items accepted. Toggle items to include/exclude, edit inline if needed.
+          {totalAccepted} of {totalItems} items accepted. Toggle items to include/exclude, edit inline if needed. Reassign project/vendor per item.
         </p>
       </div>
 
@@ -336,7 +374,7 @@ export default function IntakeReviewPage() {
                         } ${!item._accepted ? "opacity-40" : ""}`}
                       >
                         <div className="flex items-start justify-between gap-2">
-                          <div className="flex-1">
+                          <div className="flex-1 min-w-0">
                             <input
                               type="text"
                               value={item.title || item.subject || ""}
@@ -366,6 +404,40 @@ export default function IntakeReviewPage() {
                               <p className="text-xs text-gray-600 mt-1">
                                 {item.notes || item.impact || item.rationale || item.details}
                               </p>
+                            )}
+
+                            {/* Per-item project/vendor assignment */}
+                            {item._accepted && category !== "status_updates" && (
+                              <div className="flex gap-2 mt-2">
+                                <select
+                                  value={item._project_id || ""}
+                                  onChange={(e) =>
+                                    updateItem(category, idx, "_project_id", e.target.value || "")
+                                  }
+                                  className="flex-1 text-xs rounded border border-gray-300 px-1.5 py-1 bg-white focus:border-blue-500 focus:outline-none"
+                                >
+                                  <option value="">No project</option>
+                                  {projects.map((p) => (
+                                    <option key={p.id} value={p.id}>
+                                      {p.name}
+                                    </option>
+                                  ))}
+                                </select>
+                                <select
+                                  value={item._vendor_id || ""}
+                                  onChange={(e) =>
+                                    updateItem(category, idx, "_vendor_id", e.target.value || "")
+                                  }
+                                  className="flex-1 text-xs rounded border border-gray-300 px-1.5 py-1 bg-white focus:border-blue-500 focus:outline-none"
+                                >
+                                  <option value="">No vendor</option>
+                                  {vendors.map((v) => (
+                                    <option key={v.id} value={v.id}>
+                                      {v.name}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
                             )}
                           </div>
                           <button
