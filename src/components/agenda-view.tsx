@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
-import { severityBadge, priorityColor, formatAge } from "@/lib/utils";
+import { priorityColor, formatAge } from "@/lib/utils";
 import type { Vendor, VendorAgendaRow, PriorityLevel } from "@/lib/types";
 
 const priorityOptions: PriorityLevel[] = ["critical", "high", "medium", "low"];
@@ -264,7 +264,6 @@ export function AgendaView({
       ) : (
         <div className="space-y-3">
           {items.map((item) => {
-            const sev = severityBadge(item.severity);
             const itemKey = `${item.entity_type}-${item.entity_id}`;
             const isEditing = editingId === itemKey;
             return (
@@ -322,9 +321,6 @@ export function AgendaView({
                   <>
                     <div className="flex items-center gap-2 mb-1">
                       <span className="text-sm font-mono text-gray-400">#{item.rank}</span>
-                      <span className={`inline-flex px-1.5 py-0.5 text-xs font-medium rounded ${sev.className}`}>
-                        {sev.label}
-                      </span>
                       <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border ${priorityColor(item.priority)}`}>
                         {item.priority}
                       </span>
