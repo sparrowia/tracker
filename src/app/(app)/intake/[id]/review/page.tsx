@@ -501,13 +501,13 @@ export default function IntakeReviewPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:items-start">
         {/* Raw text */}
-        <div className="lg:sticky lg:top-0">
+        <div className="lg:sticky lg:top-4 lg:self-start">
           <h2 className="text-sm font-semibold text-gray-700 mb-2 uppercase tracking-wide">
             Original Text
           </h2>
-          <div ref={rawTextRef} className="bg-white rounded-lg border border-gray-200 p-4 max-h-[600px] overflow-y-auto">
+          <div ref={rawTextRef} className="bg-white rounded-lg border border-gray-200 p-4 max-h-[calc(100vh-6rem)] overflow-y-auto">
             <pre className="text-sm text-gray-700 whitespace-pre-wrap font-mono">
               {highlightedQuote ? renderHighlightedText(intake.raw_text, highlightedQuote) : intake.raw_text}
             </pre>
