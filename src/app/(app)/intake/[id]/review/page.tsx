@@ -194,37 +194,37 @@ export default function IntakeReviewPage() {
         setExtracted({
           action_items: (ed.action_items || []).map((i: ExtractedItem) => ({
             ...i,
-            _accepted: false,
+            _accepted: true,
             _project_id: defaultProjectId,
             _vendor_id: defaultVendorId,
           })),
           decisions: (ed.decisions || []).map((i: ExtractedItem) => ({
             ...i,
-            _accepted: false,
+            _accepted: true,
             _project_id: defaultProjectId,
             _vendor_id: defaultVendorId,
           })),
           issues: (ed.issues || []).map((i: ExtractedItem) => ({
             ...i,
-            _accepted: false,
+            _accepted: true,
             _project_id: defaultProjectId,
             _vendor_id: defaultVendorId,
           })),
           risks: (ed.risks || []).map((i: ExtractedItem) => ({
             ...i,
-            _accepted: false,
+            _accepted: true,
             _project_id: defaultProjectId,
             _vendor_id: defaultVendorId,
           })),
           blockers: (ed.blockers || []).map((i: ExtractedItem) => ({
             ...i,
-            _accepted: false,
+            _accepted: true,
             _project_id: defaultProjectId,
             _vendor_id: defaultVendorId,
           })),
           status_updates: (ed.status_updates || []).map((i: ExtractedItem) => ({
             ...i,
-            _accepted: false,
+            _accepted: true,
             _project_id: defaultProjectId,
             _vendor_id: defaultVendorId,
           })),
@@ -236,12 +236,10 @@ export default function IntakeReviewPage() {
     loadData();
   }, [intakeId]);
 
-  function toggleAccept(category: EntityCategory, index: number) {
+  function removeItem(category: EntityCategory, index: number) {
     setExtracted((prev) => ({
       ...prev,
-      [category]: prev[category].map((item, i) =>
-        i === index ? { ...item, _accepted: !item._accepted } : item
-      ),
+      [category]: prev[category].filter((_, i) => i !== index),
     }));
   }
 
@@ -294,7 +292,6 @@ export default function IntakeReviewPage() {
       const allOwnerNames = new Set<string>();
       for (const [cat, items] of Object.entries(extracted)) {
         for (const item of items) {
-          if (!item._accepted) continue;
           const name = cat === "decisions" ? item.made_by : item.owner_name;
           if (name && name.trim()) allOwnerNames.add(name.trim());
         }
@@ -340,7 +337,7 @@ export default function IntakeReviewPage() {
       const errors: string[] = [];
 
       // Create accepted action items
-      const acceptedActions = extracted.action_items.filter((i) => i._accepted);
+      const acceptedActions = extracted.action_items;
       if (acceptedActions.length > 0) {
         const { error: err } = await supabase.from("action_items").insert(
           acceptedActions.map((item) => ({
@@ -358,7 +355,7 @@ export default function IntakeReviewPage() {
       }
 
       // Create accepted decisions as RAID entries
-      const acceptedDecisions = extracted.decisions.filter((i) => i._accepted);
+      const acceptedDecisions = extracted.decisions;
       if (acceptedDecisions.length > 0) {
         const { count } = await supabase
           .from("raid_entries")
@@ -383,7 +380,7 @@ export default function IntakeReviewPage() {
       }
 
       // Create accepted issues as RAID entries
-      const acceptedIssues = extracted.issues.filter((i) => i._accepted);
+      const acceptedIssues = extracted.issues;
       if (acceptedIssues.length > 0) {
         const { count } = await supabase
           .from("raid_entries")
@@ -408,7 +405,7 @@ export default function IntakeReviewPage() {
       }
 
       // Create accepted risks as RAID entries
-      const acceptedRisks = extracted.risks.filter((i) => i._accepted);
+      const acceptedRisks = extracted.risks;
       if (acceptedRisks.length > 0) {
         const { count } = await supabase
           .from("raid_entries")
@@ -432,7 +429,7 @@ export default function IntakeReviewPage() {
       }
 
       // Create accepted blockers
-      const acceptedBlockers = extracted.blockers.filter((i) => i._accepted);
+      const acceptedBlockers = extracted.blockers;
       if (acceptedBlockers.length > 0) {
         const { error: err } = await supabase.from("blockers").insert(
           acceptedBlockers.map((item) => ({
@@ -475,7 +472,6 @@ export default function IntakeReviewPage() {
     );
   }
 
-  const totalAccepted = Object.values(extracted).flat().filter((i) => i._accepted).length;
   const totalItems = Object.values(extracted).flat().length;
 
   return (
@@ -483,7 +479,7 @@ export default function IntakeReviewPage() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Review Extraction</h1>
         <p className="text-sm text-gray-500 mt-1">
-          {totalItems} items extracted. Click the checkmark to accept items. {totalAccepted} accepted so far.
+          {totalItems} items extracted. Remove items you don&apos;t want, edit the rest, then confirm.
         </p>
       </div>
 
@@ -517,17 +513,13 @@ export default function IntakeReviewPage() {
               items.length > 0 && (
                 <div key={category}>
                   <h3 className="text-sm font-medium text-gray-700 mb-2">
-                    {categoryLabels[category]} ({items.filter((i) => i._accepted).length}/{items.length})
+                    {categoryLabels[category]} ({items.length})
                   </h3>
                   <div className="space-y-2">
                     {items.map((item, idx) => (
                       <div
                         key={idx}
-                        className={`rounded-lg border p-3 transition-all ${
-                          item._accepted
-                            ? "border-green-300 bg-green-50"
-                            : categoryColors[category]
-                        }`}
+                        className={`rounded-lg border p-3 ${categoryColors[category]}`}
                       >
                         {item._editing ? (
                           /* Edit mode */
@@ -716,16 +708,13 @@ export default function IntakeReviewPage() {
                             </svg>
                           </button>
                           <button
-                            onClick={() => toggleAccept(category, idx)}
-                            className={`transition-colors ${
-                              item._accepted
-                                ? "text-green-600 hover:text-red-400"
-                                : "text-gray-300 hover:text-green-600"
-                            }`}
-                            title={item._accepted ? "Click to reject" : "Click to accept"}
+                            onClick={() => removeItem(category, idx)}
+                            className="text-gray-400 hover:text-red-600 transition-colors"
+                            title="Remove item"
                           >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                              <polyline points="20 6 9 17 4 12"/>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <line x1="18" y1="6" x2="6" y2="18"/>
+                              <line x1="6" y1="6" x2="18" y2="18"/>
                             </svg>
                           </button>
                         </div>
@@ -744,11 +733,11 @@ export default function IntakeReviewPage() {
         </div>
       </div>
 
-      {totalAccepted > 0 && (
+      {totalItems > 0 && (
         <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 -mx-6 px-6 py-4">
           <div className="max-w-6xl mx-auto flex justify-between items-center">
             <p className="text-sm text-gray-600">
-              {totalAccepted} items will be created
+              {totalItems} items will be created
             </p>
             <div className="flex gap-3">
               <button
@@ -762,7 +751,7 @@ export default function IntakeReviewPage() {
                 disabled={confirming}
                 className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50"
               >
-                {confirming ? "Creating..." : `Confirm ${totalAccepted} Items`}
+                {confirming ? "Creating..." : `Confirm ${totalItems} Items`}
               </button>
             </div>
           </div>
