@@ -147,37 +147,37 @@ export default function IntakeReviewPage() {
         setExtracted({
           action_items: (ed.action_items || []).map((i: ExtractedItem) => ({
             ...i,
-            _accepted: true,
+            _accepted: false,
             _project_id: defaultProjectId,
             _vendor_id: defaultVendorId,
           })),
           decisions: (ed.decisions || []).map((i: ExtractedItem) => ({
             ...i,
-            _accepted: true,
+            _accepted: false,
             _project_id: defaultProjectId,
             _vendor_id: defaultVendorId,
           })),
           issues: (ed.issues || []).map((i: ExtractedItem) => ({
             ...i,
-            _accepted: true,
+            _accepted: false,
             _project_id: defaultProjectId,
             _vendor_id: defaultVendorId,
           })),
           risks: (ed.risks || []).map((i: ExtractedItem) => ({
             ...i,
-            _accepted: true,
+            _accepted: false,
             _project_id: defaultProjectId,
             _vendor_id: defaultVendorId,
           })),
           blockers: (ed.blockers || []).map((i: ExtractedItem) => ({
             ...i,
-            _accepted: true,
+            _accepted: false,
             _project_id: defaultProjectId,
             _vendor_id: defaultVendorId,
           })),
           status_updates: (ed.status_updates || []).map((i: ExtractedItem) => ({
             ...i,
-            _accepted: true,
+            _accepted: false,
             _project_id: defaultProjectId,
             _vendor_id: defaultVendorId,
           })),
@@ -381,7 +381,7 @@ export default function IntakeReviewPage() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Review Extraction</h1>
         <p className="text-sm text-gray-500 mt-1">
-          {totalAccepted} of {totalItems} items accepted. Toggle items to include/exclude, edit inline if needed. Reassign project/vendor per item.
+          {totalItems} items extracted. Click the checkmark to accept items. {totalAccepted} accepted so far.
         </p>
       </div>
 
@@ -421,9 +421,11 @@ export default function IntakeReviewPage() {
                     {items.map((item, idx) => (
                       <div
                         key={idx}
-                        className={`rounded-lg border p-3 transition-opacity ${
-                          categoryColors[category]
-                        } ${!item._accepted ? "opacity-40" : ""}`}
+                        className={`rounded-lg border p-3 transition-all ${
+                          item._accepted
+                            ? "border-green-300 bg-green-50"
+                            : categoryColors[category]
+                        }`}
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex-1 min-w-0">
