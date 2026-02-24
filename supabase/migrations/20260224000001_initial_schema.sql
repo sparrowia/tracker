@@ -1,5 +1,4 @@
 -- Edcetera Project Tracker — Initial Schema
--- Run this in Supabase SQL Editor
 
 -- ============================================================
 -- ENUMS
@@ -30,30 +29,15 @@ CREATE TYPE intake_source AS ENUM (
 );
 
 -- ============================================================
--- HELPER: get current user's org_id
--- ============================================================
-
-CREATE OR REPLACE FUNCTION auth.user_org_id()
-RETURNS uuid
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-AS $$
-  SELECT org_id FROM public.profiles WHERE id = auth.uid()
-$$;
-
--- ============================================================
 -- CORE TABLES
 -- ============================================================
 
--- 1. Organizations
 CREATE TABLE organizations (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   name text NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
--- 2. Profiles (extends auth.users)
 CREATE TABLE profiles (
   id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   org_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -65,7 +49,6 @@ CREATE TABLE profiles (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
--- 3. Vendors
 CREATE TABLE vendors (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   org_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -77,7 +60,6 @@ CREATE TABLE vendors (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
--- 4. People (all contacts — internal + vendor)
 CREATE TABLE people (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   org_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -93,7 +75,6 @@ CREATE TABLE people (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
--- 5. Projects
 CREATE TABLE projects (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   org_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -109,7 +90,6 @@ CREATE TABLE projects (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
--- 6. Action Items (the core unit)
 CREATE TABLE action_items (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   org_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -129,12 +109,11 @@ CREATE TABLE action_items (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
--- 7. RAID Entries
 CREATE TABLE raid_entries (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   org_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   raid_type raid_type NOT NULL,
-  display_id text NOT NULL, -- R1, I12, D8, etc.
+  display_id text NOT NULL,
   project_id uuid REFERENCES projects(id) ON DELETE SET NULL,
   title text NOT NULL,
   description text,
@@ -151,7 +130,6 @@ CREATE TABLE raid_entries (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
--- 8. Blockers
 CREATE TABLE blockers (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   org_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -163,6 +141,7 @@ CREATE TABLE blockers (
   project_id uuid REFERENCES projects(id) ON DELETE SET NULL,
   status item_status NOT NULL DEFAULT 'blocked',
   priority priority_level NOT NULL DEFAULT 'high',
+  due_date date,
   first_flagged_at timestamptz NOT NULL DEFAULT now(),
   escalation_count integer NOT NULL DEFAULT 0,
   resolved_at timestamptz,
@@ -170,7 +149,6 @@ CREATE TABLE blockers (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
--- 9. Support Tickets
 CREATE TABLE support_tickets (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   org_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -189,7 +167,6 @@ CREATE TABLE support_tickets (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
--- 10. Meetings
 CREATE TABLE meetings (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   org_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -202,7 +179,6 @@ CREATE TABLE meetings (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
--- 11. Agenda Items (the killer feature)
 CREATE TABLE agenda_items (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   org_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -216,22 +192,21 @@ CREATE TABLE agenda_items (
   first_raised_at timestamptz NOT NULL DEFAULT now(),
   escalation_count integer NOT NULL DEFAULT 0,
   resolved_at timestamptz,
-  -- Optional links to source entities
   action_item_id uuid REFERENCES action_items(id) ON DELETE SET NULL,
   blocker_id uuid REFERENCES blockers(id) ON DELETE SET NULL,
   raid_entry_id uuid REFERENCES raid_entries(id) ON DELETE SET NULL,
   support_ticket_id uuid REFERENCES support_tickets(id) ON DELETE SET NULL,
+  owner_id uuid REFERENCES people(id) ON DELETE SET NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
--- 12. Intakes
 CREATE TABLE intakes (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   org_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   raw_text text NOT NULL,
   source intake_source NOT NULL DEFAULT 'manual',
-  extraction_status text NOT NULL DEFAULT 'pending', -- pending, processing, complete, failed
+  extraction_status text NOT NULL DEFAULT 'pending',
   extracted_data jsonb,
   submitted_by uuid REFERENCES profiles(id) ON DELETE SET NULL,
   vendor_id uuid REFERENCES vendors(id) ON DELETE SET NULL,
@@ -240,13 +215,12 @@ CREATE TABLE intakes (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
--- 13. Activity Log
 CREATE TABLE activity_log (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   org_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-  entity_type text NOT NULL, -- 'action_item', 'blocker', 'raid_entry', etc.
+  entity_type text NOT NULL,
   entity_id uuid NOT NULL,
-  action text NOT NULL, -- 'created', 'updated', 'status_changed', 'escalated'
+  action text NOT NULL,
   field_name text,
   old_value text,
   new_value text,
@@ -311,10 +285,22 @@ CREATE INDEX idx_activity_log_entity ON activity_log(entity_type, entity_id);
 CREATE INDEX idx_activity_log_org ON activity_log(org_id);
 
 -- ============================================================
+-- HELPER FUNCTION (after tables exist)
+-- ============================================================
+
+CREATE OR REPLACE FUNCTION public.user_org_id()
+RETURNS uuid
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+AS $$
+  SELECT org_id FROM public.profiles WHERE id = auth.uid()
+$$;
+
+-- ============================================================
 -- COMPUTED VIEWS
 -- ============================================================
 
--- Blocker ages with severity classification
 CREATE OR REPLACE VIEW blocker_ages AS
 SELECT
   b.*,
@@ -327,14 +313,13 @@ SELECT
 FROM blockers b
 WHERE b.status != 'complete' AND b.resolved_at IS NULL;
 
--- Action item ages with overdue tracking
 CREATE OR REPLACE VIEW action_item_ages AS
 SELECT
   ai.*,
   EXTRACT(DAY FROM now() - ai.first_flagged_at)::integer AS age_days,
   CASE
     WHEN ai.due_date IS NULL THEN NULL
-    WHEN ai.due_date < CURRENT_DATE THEN EXTRACT(DAY FROM CURRENT_DATE - ai.due_date)::integer
+    WHEN ai.due_date < CURRENT_DATE THEN (CURRENT_DATE - ai.due_date)
     ELSE 0
   END AS days_overdue,
   CASE
@@ -346,56 +331,57 @@ SELECT
 FROM action_items ai
 WHERE ai.status NOT IN ('complete');
 
--- Vendor accountability: union of action items + blockers per vendor
 CREATE OR REPLACE VIEW vendor_accountability AS
-SELECT
-  'action_item' AS entity_type,
-  ai.id AS entity_id,
-  ai.vendor_id,
-  ai.org_id,
-  ai.title,
-  ai.status,
-  ai.priority,
-  ai.due_date,
-  ai.first_flagged_at,
-  ai.escalation_count,
-  EXTRACT(DAY FROM now() - ai.first_flagged_at)::integer AS age_days,
-  ai.owner_id,
-  ai.project_id
-FROM action_items ai
-WHERE ai.status NOT IN ('complete') AND ai.vendor_id IS NOT NULL
+SELECT * FROM (
+  SELECT
+    'action_item' AS entity_type,
+    ai.id AS entity_id,
+    ai.vendor_id,
+    ai.org_id,
+    ai.title,
+    ai.status,
+    ai.priority,
+    ai.due_date,
+    ai.first_flagged_at,
+    ai.escalation_count,
+    EXTRACT(DAY FROM now() - ai.first_flagged_at)::integer AS age_days,
+    ai.owner_id,
+    ai.project_id,
+    CASE ai.priority
+      WHEN 'critical' THEN 1
+      WHEN 'high' THEN 2
+      WHEN 'medium' THEN 3
+      WHEN 'low' THEN 4
+    END AS priority_order
+  FROM action_items ai
+  WHERE ai.status NOT IN ('complete') AND ai.vendor_id IS NOT NULL
 
-UNION ALL
+  UNION ALL
 
-SELECT
-  'blocker' AS entity_type,
-  b.id AS entity_id,
-  b.vendor_id,
-  b.org_id,
-  b.title,
-  b.status,
-  b.priority,
-  b.due_date,
-  b.first_flagged_at,
-  b.escalation_count,
-  EXTRACT(DAY FROM now() - b.first_flagged_at)::integer AS age_days,
-  b.owner_id,
-  b.project_id
-FROM blockers b
-WHERE b.status NOT IN ('complete') AND b.resolved_at IS NULL AND b.vendor_id IS NOT NULL
-
-ORDER BY
-  CASE priority
-    WHEN 'critical' THEN 1
-    WHEN 'high' THEN 2
-    WHEN 'medium' THEN 3
-    WHEN 'low' THEN 4
-  END,
-  age_days DESC;
-
--- Add due_date to blockers for the union (it's not on the blockers table, so we need a workaround)
--- Actually, let's fix the view by making blockers have a NULL due_date
-ALTER TABLE blockers ADD COLUMN IF NOT EXISTS due_date date;
+  SELECT
+    'blocker' AS entity_type,
+    b.id AS entity_id,
+    b.vendor_id,
+    b.org_id,
+    b.title,
+    b.status,
+    b.priority,
+    b.due_date,
+    b.first_flagged_at,
+    b.escalation_count,
+    EXTRACT(DAY FROM now() - b.first_flagged_at)::integer AS age_days,
+    b.owner_id,
+    b.project_id,
+    CASE b.priority
+      WHEN 'critical' THEN 1
+      WHEN 'high' THEN 2
+      WHEN 'medium' THEN 3
+      WHEN 'low' THEN 4
+    END AS priority_order
+  FROM blockers b
+  WHERE b.status NOT IN ('complete') AND b.resolved_at IS NULL AND b.vendor_id IS NOT NULL
+) sub
+ORDER BY priority_order, age_days DESC;
 
 -- ============================================================
 -- AGENDA RANKING FUNCTION
@@ -424,7 +410,6 @@ LANGUAGE sql
 STABLE
 AS $$
   WITH scored_items AS (
-    -- Agenda items (primary source)
     SELECT
       'agenda_item'::text AS entity_type,
       ag.id AS entity_id,
@@ -461,7 +446,6 @@ AS $$
 
     UNION ALL
 
-    -- Unresolved blockers for vendor (auto-surface)
     SELECT
       'blocker'::text,
       b.id,
@@ -485,7 +469,7 @@ AS $$
         END
         + (EXTRACT(DAY FROM now() - b.first_flagged_at) * 2)
         + (b.escalation_count * 15)
-        + 30 -- blocker bonus
+        + 30
       )::numeric,
       p.full_name,
       proj.name
@@ -498,7 +482,6 @@ AS $$
 
     UNION ALL
 
-    -- Overdue action items for vendor (auto-surface)
     SELECT
       'action_item'::text,
       ai.id,
@@ -524,7 +507,7 @@ AS $$
         + (ai.escalation_count * 15)
         + CASE
             WHEN ai.due_date IS NOT NULL AND ai.due_date < CURRENT_DATE
-            THEN LEAST(EXTRACT(DAY FROM CURRENT_DATE - ai.due_date) * 3, 60)
+            THEN LEAST((CURRENT_DATE - ai.due_date) * 3, 60)
             ELSE 0
           END
       )::numeric,
@@ -573,71 +556,67 @@ ALTER TABLE agenda_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE intakes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE activity_log ENABLE ROW LEVEL SECURITY;
 
--- Organizations: users see their own org
 CREATE POLICY "Users see own org" ON organizations
-  FOR ALL USING (id = auth.user_org_id());
+  FOR ALL USING (id = public.user_org_id());
 
--- Profiles: users see profiles in their org
 CREATE POLICY "Users see org profiles" ON profiles
-  FOR ALL USING (org_id = auth.user_org_id());
+  FOR ALL USING (org_id = public.user_org_id());
 
--- All org-scoped tables: same pattern
 CREATE POLICY "Org isolation" ON vendors
-  FOR ALL USING (org_id = auth.user_org_id());
+  FOR ALL USING (org_id = public.user_org_id());
 
 CREATE POLICY "Org isolation" ON people
-  FOR ALL USING (org_id = auth.user_org_id());
+  FOR ALL USING (org_id = public.user_org_id());
 
 CREATE POLICY "Org isolation" ON projects
-  FOR ALL USING (org_id = auth.user_org_id());
+  FOR ALL USING (org_id = public.user_org_id());
 
 CREATE POLICY "Org isolation" ON action_items
-  FOR ALL USING (org_id = auth.user_org_id());
+  FOR ALL USING (org_id = public.user_org_id());
 
 CREATE POLICY "Org isolation" ON raid_entries
-  FOR ALL USING (org_id = auth.user_org_id());
+  FOR ALL USING (org_id = public.user_org_id());
 
 CREATE POLICY "Org isolation" ON blockers
-  FOR ALL USING (org_id = auth.user_org_id());
+  FOR ALL USING (org_id = public.user_org_id());
 
 CREATE POLICY "Org isolation" ON support_tickets
-  FOR ALL USING (org_id = auth.user_org_id());
+  FOR ALL USING (org_id = public.user_org_id());
 
 CREATE POLICY "Org isolation" ON meetings
-  FOR ALL USING (org_id = auth.user_org_id());
+  FOR ALL USING (org_id = public.user_org_id());
 
 CREATE POLICY "Org isolation" ON agenda_items
-  FOR ALL USING (org_id = auth.user_org_id());
+  FOR ALL USING (org_id = public.user_org_id());
 
 CREATE POLICY "Org isolation" ON intakes
-  FOR ALL USING (org_id = auth.user_org_id());
+  FOR ALL USING (org_id = public.user_org_id());
 
 CREATE POLICY "Org isolation" ON activity_log
-  FOR ALL USING (org_id = auth.user_org_id());
+  FOR ALL USING (org_id = public.user_org_id());
 
--- Junction tables: access if user can access the related entities
 CREATE POLICY "Org isolation" ON project_vendors
   FOR ALL USING (
-    EXISTS (SELECT 1 FROM projects p WHERE p.id = project_id AND p.org_id = auth.user_org_id())
+    EXISTS (SELECT 1 FROM projects p WHERE p.id = project_id AND p.org_id = public.user_org_id())
   );
 
 CREATE POLICY "Org isolation" ON meeting_projects
   FOR ALL USING (
-    EXISTS (SELECT 1 FROM meetings m WHERE m.id = meeting_id AND m.org_id = auth.user_org_id())
+    EXISTS (SELECT 1 FROM meetings m WHERE m.id = meeting_id AND m.org_id = public.user_org_id())
   );
 
 CREATE POLICY "Org isolation" ON meeting_attendees
   FOR ALL USING (
-    EXISTS (SELECT 1 FROM meetings m WHERE m.id = meeting_id AND m.org_id = auth.user_org_id())
+    EXISTS (SELECT 1 FROM meetings m WHERE m.id = meeting_id AND m.org_id = public.user_org_id())
   );
 
 CREATE POLICY "Org isolation" ON intake_entities
   FOR ALL USING (
-    EXISTS (SELECT 1 FROM intakes i WHERE i.id = intake_id AND i.org_id = auth.user_org_id())
+    EXISTS (SELECT 1 FROM intakes i WHERE i.id = intake_id AND i.org_id = public.user_org_id())
   );
 
 -- ============================================================
--- UPDATED_AT TRIGGER
+-- UPDATED_AT TRIGGERS
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION update_updated_at()
@@ -664,8 +643,10 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON intakes FOR EACH ROW EXECUTE FUNC
 
 -- ============================================================
 -- PROFILE AUTO-CREATE ON SIGNUP
+-- This requires superuser access. Run separately in Supabase
+-- Dashboard SQL Editor after migration completes:
 -- ============================================================
-
+/*
 CREATE OR REPLACE FUNCTION handle_new_user()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -678,7 +659,7 @@ BEGIN
     NEW.id,
     COALESCE(
       (NEW.raw_user_meta_data ->> 'org_id')::uuid,
-      (SELECT id FROM organizations LIMIT 1) -- default to first org for simplicity
+      (SELECT id FROM organizations LIMIT 1)
     ),
     COALESCE(NEW.raw_user_meta_data ->> 'full_name', NEW.email),
     NEW.email
@@ -690,3 +671,4 @@ $$;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION handle_new_user();
+*/
