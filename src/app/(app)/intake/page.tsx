@@ -18,6 +18,8 @@ export default function IntakePage() {
   const [source, setSource] = useState<IntakeSource>("manual");
   const [vendorId, setVendorId] = useState<string>("");
   const [projectId, setProjectId] = useState<string>("");
+  const [newVendorName, setNewVendorName] = useState("");
+  const [newProjectName, setNewProjectName] = useState("");
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(false);
@@ -44,7 +46,6 @@ export default function IntakePage() {
     setError(null);
 
     try {
-      // Create the intake record
       const { data: user } = await supabase.auth.getUser();
       const { data: profile } = await supabase
         .from("profiles")
@@ -52,13 +53,47 @@ export default function IntakePage() {
         .eq("id", user.user?.id)
         .single();
 
+      let resolvedVendorId: string | null = null;
+      let resolvedProjectId: string | null = null;
+
+      // Create new vendor if needed
+      if (vendorId === "new" && newVendorName.trim()) {
+        const { data: newVendor, error: vendorErr } = await supabase
+          .from("vendors")
+          .insert({ name: newVendorName.trim(), org_id: profile?.org_id })
+          .select()
+          .single();
+        if (vendorErr) throw vendorErr;
+        resolvedVendorId = newVendor.id;
+      } else if (vendorId && vendorId !== "none") {
+        resolvedVendorId = vendorId;
+      }
+
+      // Create new project if needed
+      if (projectId === "new" && newProjectName.trim()) {
+        const slug = newProjectName.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-");
+        const { data: newProject, error: projectErr } = await supabase
+          .from("projects")
+          .insert({
+            name: newProjectName.trim(),
+            slug,
+            org_id: profile?.org_id,
+          })
+          .select()
+          .single();
+        if (projectErr) throw projectErr;
+        resolvedProjectId = newProject.id;
+      } else if (projectId && projectId !== "none") {
+        resolvedProjectId = projectId;
+      }
+
       const { data: intake, error: insertError } = await supabase
         .from("intakes")
         .insert({
           raw_text: rawText.trim(),
           source,
-          vendor_id: vendorId && vendorId !== "none" ? vendorId : null,
-          project_id: projectId && projectId !== "none" ? projectId : null,
+          vendor_id: resolvedVendorId,
+          project_id: resolvedProjectId,
           submitted_by: user.user?.id || null,
           org_id: profile?.org_id,
           extraction_status: "processing",
@@ -68,15 +103,14 @@ export default function IntakePage() {
 
       if (insertError) throw insertError;
 
-      // Call extraction API
       const response = await fetch("/api/extract", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           intake_id: intake.id,
           raw_text: rawText.trim(),
-          vendor_id: vendorId && vendorId !== "none" ? vendorId : null,
-          project_id: projectId && projectId !== "none" ? projectId : null,
+          vendor_id: resolvedVendorId,
+          project_id: resolvedProjectId,
         }),
       });
 
@@ -130,17 +164,30 @@ export default function IntakePage() {
             </label>
             <select
               value={vendorId}
-              onChange={(e) => setVendorId(e.target.value)}
+              onChange={(e) => {
+                setVendorId(e.target.value);
+                if (e.target.value !== "new") setNewVendorName("");
+              }}
               className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
               <option value="">Any / Auto-detect</option>
               <option value="none">None</option>
+              <option value="new">+ New Vendor</option>
               {vendors.map((v) => (
                 <option key={v.id} value={v.id}>
                   {v.name}
                 </option>
               ))}
             </select>
+            {vendorId === "new" && (
+              <input
+                type="text"
+                value={newVendorName}
+                onChange={(e) => setNewVendorName(e.target.value)}
+                placeholder="Vendor name"
+                className="mt-2 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            )}
           </div>
 
           <div>
@@ -149,17 +196,30 @@ export default function IntakePage() {
             </label>
             <select
               value={projectId}
-              onChange={(e) => setProjectId(e.target.value)}
+              onChange={(e) => {
+                setProjectId(e.target.value);
+                if (e.target.value !== "new") setNewProjectName("");
+              }}
               className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
               <option value="">Any / Auto-detect</option>
               <option value="none">None</option>
+              <option value="new">+ New Project</option>
               {projects.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
                 </option>
               ))}
             </select>
+            {projectId === "new" && (
+              <input
+                type="text"
+                value={newProjectName}
+                onChange={(e) => setNewProjectName(e.target.value)}
+                placeholder="Project name"
+                className="mt-2 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            )}
           </div>
         </div>
 
