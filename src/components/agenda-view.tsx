@@ -42,7 +42,21 @@ export function AgendaView({
         .update({ escalation_count: item.escalation_count + 1 })
         .eq("id", item.entity_id);
     }
-    router.refresh();
+
+    // Move item up one spot in local state
+    setItems((prev) => {
+      const idx = prev.findIndex(
+        (i) => i.entity_type === item.entity_type && i.entity_id === item.entity_id
+      );
+      if (idx <= 0) return prev; // already at top or not found
+      const updated = [...prev];
+      // Update escalation count on the item
+      updated[idx] = { ...updated[idx], escalation_count: updated[idx].escalation_count + 1 };
+      // Swap with the item above
+      [updated[idx - 1], updated[idx]] = [updated[idx], updated[idx - 1]];
+      // Re-number ranks
+      return updated.map((it, i) => ({ ...it, rank: i + 1 }));
+    });
   }
 
   async function handleResolve(item: VendorAgendaRow) {
