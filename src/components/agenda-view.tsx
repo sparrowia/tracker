@@ -25,38 +25,23 @@ export function AgendaView({
   const router = useRouter();
   const supabase = createClient();
 
-  async function handleEscalate(item: VendorAgendaRow) {
-    if (item.entity_type === "agenda_item") {
-      await supabase
-        .from("agenda_items")
-        .update({ escalation_count: item.escalation_count + 1 })
-        .eq("id", item.entity_id);
-    } else if (item.entity_type === "blocker") {
-      await supabase
-        .from("blockers")
-        .update({ escalation_count: item.escalation_count + 1 })
-        .eq("id", item.entity_id);
-    } else if (item.entity_type === "action_item") {
-      await supabase
-        .from("action_items")
-        .update({ escalation_count: item.escalation_count + 1 })
-        .eq("id", item.entity_id);
-    }
-
-    // Move item up one spot in local state
+  function handleEscalate(item: VendorAgendaRow) {
+    // Optimistic: move up immediately
     setItems((prev) => {
       const idx = prev.findIndex(
         (i) => i.entity_type === item.entity_type && i.entity_id === item.entity_id
       );
-      if (idx <= 0) return prev; // already at top or not found
+      if (idx <= 0) return prev;
       const updated = [...prev];
-      // Update escalation count on the item
       updated[idx] = { ...updated[idx], escalation_count: updated[idx].escalation_count + 1 };
-      // Swap with the item above
       [updated[idx - 1], updated[idx]] = [updated[idx], updated[idx - 1]];
-      // Re-number ranks
       return updated.map((it, i) => ({ ...it, rank: i + 1 }));
     });
+
+    // Persist in background
+    const table = item.entity_type === "agenda_item" ? "agenda_items"
+      : item.entity_type === "blocker" ? "blockers" : "action_items";
+    supabase.from(table).update({ escalation_count: item.escalation_count + 1 }).eq("id", item.entity_id);
   }
 
   async function handleResolve(item: VendorAgendaRow) {
