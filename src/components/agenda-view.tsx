@@ -26,6 +26,11 @@ export function AgendaView({
   const supabase = createClient();
 
   function handleEscalate(item: VendorAgendaRow) {
+    const priorityRank: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+    const rankToPriority: PriorityLevel[] = ["critical", "high", "medium", "low"];
+
+    let newPriority: PriorityLevel | null = null;
+
     // Optimistic: move up immediately
     setItems((prev) => {
       const idx = prev.findIndex(
@@ -33,7 +38,18 @@ export function AgendaView({
       );
       if (idx <= 0) return prev;
       const updated = [...prev];
-      updated[idx] = { ...updated[idx], escalation_count: updated[idx].escalation_count + 1 };
+      const aboveItem = updated[idx - 1];
+      const currentPriRank = priorityRank[updated[idx].priority] ?? 2;
+      const abovePriRank = priorityRank[aboveItem.priority] ?? 2;
+
+      // If moving into a higher priority bracket, adopt that priority
+      if (abovePriRank < currentPriRank) {
+        newPriority = rankToPriority[abovePriRank];
+        updated[idx] = { ...updated[idx], escalation_count: updated[idx].escalation_count + 1, priority: newPriority };
+      } else {
+        updated[idx] = { ...updated[idx], escalation_count: updated[idx].escalation_count + 1 };
+      }
+
       [updated[idx - 1], updated[idx]] = [updated[idx], updated[idx - 1]];
       return updated.map((it, i) => ({ ...it, rank: i + 1 }));
     });
@@ -41,7 +57,9 @@ export function AgendaView({
     // Persist in background
     const table = item.entity_type === "agenda_item" ? "agenda_items"
       : item.entity_type === "blocker" ? "blockers" : "action_items";
-    supabase.from(table).update({ escalation_count: item.escalation_count + 1 }).eq("id", item.entity_id);
+    const updates: Record<string, unknown> = { escalation_count: item.escalation_count + 1 };
+    if (newPriority) updates.priority = newPriority;
+    supabase.from(table).update(updates).eq("id", item.entity_id);
   }
 
   async function handleResolve(item: VendorAgendaRow) {
@@ -293,11 +311,6 @@ export function AgendaView({
                       {item.owner_name && <span>Owner: {item.owner_name}</span>}
                       {item.project_name && <span>Project: {item.project_name}</span>}
                       <span>Age: {formatAge(item.age_days)}</span>
-                      {item.escalation_count > 0 && (
-                        <span className="text-orange-600 font-medium">
-                          Escalated {item.escalation_count}x
-                        </span>
-                      )}
                       <span className="text-gray-400">Score: {Math.round(item.score)}</span>
                     </div>
                     <div className="flex justify-end items-center gap-2 mt-2">
