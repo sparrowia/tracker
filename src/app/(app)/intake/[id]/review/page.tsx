@@ -484,7 +484,7 @@ export default function IntakeReviewPage() {
                           /* Edit mode */
                           <div className="space-y-2">
                             {categoryFields[category].map((fieldDef) => {
-                              const val = (item as Record<string, unknown>)[fieldDef.field] as string || "";
+                              const val = (item as unknown as Record<string, unknown>)[fieldDef.field] as string || "";
                               return (
                                 <div key={fieldDef.field} className="flex items-start gap-2">
                                   <label className="text-xs text-gray-500 w-16 flex-shrink-0 pt-1">{fieldDef.label}</label>
