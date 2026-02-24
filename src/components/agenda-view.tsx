@@ -4,7 +4,9 @@ import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { severityBadge, priorityColor, formatAge } from "@/lib/utils";
-import type { Vendor, VendorAgendaRow } from "@/lib/types";
+import type { Vendor, VendorAgendaRow, PriorityLevel } from "@/lib/types";
+
+const priorityOptions: PriorityLevel[] = ["critical", "high", "medium", "low"];
 
 export function AgendaView({
   vendor,
@@ -18,6 +20,8 @@ export function AgendaView({
   const [newTitle, setNewTitle] = useState("");
   const [newContext, setNewContext] = useState("");
   const [newAsk, setNewAsk] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editFields, setEditFields] = useState<{ title: string; context: string; ask: string; priority: PriorityLevel }>({ title: "", context: "", ask: "", priority: "medium" });
   const router = useRouter();
   const supabase = createClient();
 
@@ -78,6 +82,44 @@ export function AgendaView({
     setNewContext("");
     setNewAsk("");
     setShowAddForm(false);
+    router.refresh();
+  }
+
+  function startEdit(item: VendorAgendaRow) {
+    setEditingId(`${item.entity_type}-${item.entity_id}`);
+    setEditFields({
+      title: item.title,
+      context: item.context || "",
+      ask: item.ask || "",
+      priority: item.priority,
+    });
+  }
+
+  async function handleSaveEdit(item: VendorAgendaRow) {
+    const table = item.entity_type === "agenda_item" ? "agenda_items"
+      : item.entity_type === "blocker" ? "blockers" : "action_items";
+
+    const updates: Record<string, unknown> = { title: editFields.title, priority: editFields.priority };
+    if (item.entity_type === "agenda_item") {
+      updates.context = editFields.context || null;
+      updates.ask = editFields.ask || null;
+    } else if (item.entity_type === "action_item") {
+      updates.notes = editFields.context || null;
+    } else if (item.entity_type === "blocker") {
+      updates.impact_description = editFields.context || null;
+    }
+
+    await supabase.from(table).update(updates).eq("id", item.entity_id);
+    setEditingId(null);
+    router.refresh();
+  }
+
+  async function handleDelete(item: VendorAgendaRow) {
+    const table = item.entity_type === "agenda_item" ? "agenda_items"
+      : item.entity_type === "blocker" ? "blockers" : "action_items";
+
+    await supabase.from(table).delete().eq("id", item.entity_id);
+    setItems(items.filter((i) => i.entity_id !== item.entity_id));
     router.refresh();
   }
 
@@ -172,13 +214,61 @@ export function AgendaView({
         <div className="space-y-3">
           {items.map((item) => {
             const sev = severityBadge(item.severity);
+            const itemKey = `${item.entity_type}-${item.entity_id}`;
+            const isEditing = editingId === itemKey;
             return (
               <div
-                key={`${item.entity_type}-${item.entity_id}`}
+                key={itemKey}
                 className="bg-white rounded-lg border border-gray-200 p-4"
               >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1">
+                {isEditing ? (
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      value={editFields.title}
+                      onChange={(e) => setEditFields({ ...editFields, title: e.target.value })}
+                      className="w-full text-sm font-medium text-gray-900 rounded border border-gray-200 px-2 py-1 focus:border-blue-500 focus:outline-none"
+                    />
+                    <textarea
+                      value={editFields.context}
+                      onChange={(e) => setEditFields({ ...editFields, context: e.target.value })}
+                      placeholder="Context"
+                      rows={2}
+                      className="w-full text-sm text-gray-900 rounded border border-gray-200 px-2 py-1 focus:border-blue-500 focus:outline-none resize-y"
+                    />
+                    <textarea
+                      value={editFields.ask}
+                      onChange={(e) => setEditFields({ ...editFields, ask: e.target.value })}
+                      placeholder="Ask"
+                      rows={2}
+                      className="w-full text-sm text-gray-900 rounded border border-gray-200 px-2 py-1 focus:border-blue-500 focus:outline-none resize-y"
+                    />
+                    <select
+                      value={editFields.priority}
+                      onChange={(e) => setEditFields({ ...editFields, priority: e.target.value as PriorityLevel })}
+                      className="text-sm text-gray-900 rounded border border-gray-200 px-2 py-1 focus:border-blue-500 focus:outline-none"
+                    >
+                      {priorityOptions.map((p) => (
+                        <option key={p} value={p}>{p}</option>
+                      ))}
+                    </select>
+                    <div className="flex justify-end gap-2">
+                      <button
+                        onClick={() => setEditingId(null)}
+                        className="px-3 py-1 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded hover:bg-gray-50"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={() => handleSaveEdit(item)}
+                        className="px-3 py-1 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700"
+                      >
+                        Save
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
                     <div className="flex items-center gap-2 mb-1">
                       <span className="text-sm font-mono text-gray-400">#{item.rank}</span>
                       <span className={`inline-flex px-1.5 py-0.5 text-xs font-medium rounded ${sev.className}`}>
@@ -211,22 +301,53 @@ export function AgendaView({
                       )}
                       <span className="text-gray-400">Score: {Math.round(item.score)}</span>
                     </div>
-                  </div>
-                  <div className="flex gap-1 flex-shrink-0">
-                    <button
-                      onClick={() => handleEscalate(item)}
-                      className="px-2 py-1 text-xs font-medium text-orange-700 bg-orange-50 border border-orange-200 rounded hover:bg-orange-100"
-                    >
-                      Escalate
-                    </button>
-                    <button
-                      onClick={() => handleResolve(item)}
-                      className="px-2 py-1 text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded hover:bg-green-100"
-                    >
-                      Resolve
-                    </button>
-                  </div>
-                </div>
+                    <div className="flex justify-end items-center gap-2 mt-2">
+                      {/* Edit */}
+                      <button
+                        onClick={() => startEdit(item)}
+                        className="text-gray-400 hover:text-blue-600 transition-colors"
+                        title="Edit"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                        </svg>
+                      </button>
+                      {/* Delete */}
+                      <button
+                        onClick={() => handleDelete(item)}
+                        className="text-gray-400 hover:text-red-600 transition-colors"
+                        title="Delete"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="3 6 5 6 21 6"/>
+                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                        </svg>
+                      </button>
+                      {/* Escalate */}
+                      <button
+                        onClick={() => handleEscalate(item)}
+                        className="text-red-400 hover:text-red-600 transition-colors"
+                        title="Escalate"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="12" y1="19" x2="12" y2="5"/>
+                          <polyline points="5 12 12 5 19 12"/>
+                        </svg>
+                      </button>
+                      {/* Resolve */}
+                      <button
+                        onClick={() => handleResolve(item)}
+                        className="text-green-500 hover:text-green-700 transition-colors"
+                        title="Resolve"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             );
           })}
