@@ -492,21 +492,9 @@ export default function IntakeReviewPage() {
                               </div>
                             )}
                           </div>
-                          <div className="flex-shrink-0">
-                            <button
-                              onClick={() => toggleAccept(category, idx)}
-                              className={`px-2 py-1 text-xs rounded ${
-                                item._accepted
-                                  ? "bg-green-100 text-green-700 border border-green-200"
-                                  : "bg-gray-100 text-gray-500 border border-gray-200"
-                              }`}
-                            >
-                              {item._accepted ? "Accepted" : "Rejected"}
-                            </button>
-                          </div>
                         </div>
-                        {item.source_quote && (
-                          <div className="flex justify-end mt-1">
+                        <div className="flex justify-end items-center gap-2 mt-1">
+                          {item.source_quote && (
                             <button
                               onClick={() => scrollToSource(item.source_quote)}
                               className="text-gray-400 hover:text-blue-600 transition-colors"
@@ -517,8 +505,21 @@ export default function IntakeReviewPage() {
                                 <circle cx="12" cy="12" r="3"/>
                               </svg>
                             </button>
-                          </div>
-                        )}
+                          )}
+                          <button
+                            onClick={() => toggleAccept(category, idx)}
+                            className={`transition-colors ${
+                              item._accepted
+                                ? "text-green-600 hover:text-red-400"
+                                : "text-gray-300 hover:text-green-600"
+                            }`}
+                            title={item._accepted ? "Click to reject" : "Click to accept"}
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
