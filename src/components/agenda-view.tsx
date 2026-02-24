@@ -62,6 +62,40 @@ export function AgendaView({
     supabase.from(table).update(updates).eq("id", item.entity_id);
   }
 
+  function handleDeescalate(item: VendorAgendaRow) {
+    const priorityRank: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+    const rankToPriority: PriorityLevel[] = ["critical", "high", "medium", "low"];
+
+    let newPriority: PriorityLevel | null = null;
+
+    setItems((prev) => {
+      const idx = prev.findIndex(
+        (i) => i.entity_type === item.entity_type && i.entity_id === item.entity_id
+      );
+      if (idx < 0 || idx >= prev.length - 1) return prev; // already at bottom
+      const updated = [...prev];
+      const belowItem = updated[idx + 1];
+      const currentPriRank = priorityRank[updated[idx].priority] ?? 2;
+      const belowPriRank = priorityRank[belowItem.priority] ?? 2;
+
+      // If moving into a lower priority bracket, adopt that priority
+      if (belowPriRank > currentPriRank) {
+        newPriority = rankToPriority[belowPriRank];
+        updated[idx] = { ...updated[idx], priority: newPriority };
+      }
+
+      [updated[idx], updated[idx + 1]] = [updated[idx + 1], updated[idx]];
+      return updated.map((it, i) => ({ ...it, rank: i + 1 }));
+    });
+
+    // Persist in background
+    const table = item.entity_type === "agenda_item" ? "agenda_items"
+      : item.entity_type === "blocker" ? "blockers" : "action_items";
+    if (newPriority) {
+      supabase.from(table).update({ priority: newPriority }).eq("id", item.entity_id);
+    }
+  }
+
   async function handleResolve(item: VendorAgendaRow) {
     const now = new Date().toISOString();
     if (item.entity_type === "agenda_item") {
@@ -345,6 +379,17 @@ export function AgendaView({
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                           <line x1="12" y1="19" x2="12" y2="5"/>
                           <polyline points="5 12 12 5 19 12"/>
+                        </svg>
+                      </button>
+                      {/* De-escalate */}
+                      <button
+                        onClick={() => handleDeescalate(item)}
+                        className="text-blue-400 hover:text-blue-600 transition-colors"
+                        title="De-escalate"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="12" y1="5" x2="12" y2="19"/>
+                          <polyline points="19 12 12 19 5 12"/>
                         </svg>
                       </button>
                       {/* Resolve */}
