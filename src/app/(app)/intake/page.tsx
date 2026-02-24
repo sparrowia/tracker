@@ -23,6 +23,8 @@ export default function IntakePage() {
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(false);
+  const [progressStep, setProgressStep] = useState("");
+  const [elapsed, setElapsed] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
   const supabase = createClient();
@@ -44,8 +46,13 @@ export default function IntakePage() {
     if (!rawText.trim()) return;
     setLoading(true);
     setError(null);
+    setProgressStep("Preparing...");
+    setElapsed(0);
+
+    const timer = setInterval(() => setElapsed((s) => s + 1), 1000);
 
     try {
+      setProgressStep("Authenticating...");
       const { data: user } = await supabase.auth.getUser();
       const { data: profile } = await supabase
         .from("profiles")
@@ -58,6 +65,7 @@ export default function IntakePage() {
 
       // Create new vendor if needed
       if (vendorId === "new" && newVendorName.trim()) {
+        setProgressStep("Creating new vendor...");
         const { data: newVendor, error: vendorErr } = await supabase
           .from("vendors")
           .insert({ name: newVendorName.trim(), org_id: profile?.org_id })
@@ -71,6 +79,7 @@ export default function IntakePage() {
 
       // Create new project if needed
       if (projectId === "new" && newProjectName.trim()) {
+        setProgressStep("Creating new project...");
         const slug = newProjectName.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-");
         const { data: newProject, error: projectErr } = await supabase
           .from("projects")
@@ -87,6 +96,7 @@ export default function IntakePage() {
         resolvedProjectId = projectId;
       }
 
+      setProgressStep("Saving intake record...");
       const { data: intake, error: insertError } = await supabase
         .from("intakes")
         .insert({
@@ -103,6 +113,7 @@ export default function IntakePage() {
 
       if (insertError) throw insertError;
 
+      setProgressStep("Sending to DeepSeek for extraction...");
       const response = await fetch("/api/extract", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -119,10 +130,14 @@ export default function IntakePage() {
         throw new Error(err.error || "Extraction failed");
       }
 
+      setProgressStep("Extraction complete! Loading review...");
+      clearInterval(timer);
       router.push(`/intake/${intake.id}/review`);
     } catch (err) {
+      clearInterval(timer);
       setError(err instanceof Error ? err.message : "Something went wrong");
       setLoading(false);
+      setProgressStep("");
     }
   }
 
@@ -237,13 +252,31 @@ export default function IntakePage() {
           />
         </div>
 
-        <button
-          type="submit"
-          disabled={loading || !rawText.trim()}
-          className="w-full py-2.5 px-4 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {loading ? "Extracting..." : "Extract with DeepSeek"}
-        </button>
+        {loading ? (
+          <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 space-y-3">
+            <div className="flex items-center gap-3">
+              <svg className="animate-spin h-5 w-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+              <div>
+                <p className="text-sm font-medium text-blue-900">{progressStep}</p>
+                <p className="text-xs text-blue-600">{elapsed}s elapsed</p>
+              </div>
+            </div>
+            <div className="w-full bg-blue-100 rounded-full h-1.5 overflow-hidden">
+              <div className="bg-blue-600 h-1.5 rounded-full animate-pulse" style={{ width: "100%" }} />
+            </div>
+          </div>
+        ) : (
+          <button
+            type="submit"
+            disabled={!rawText.trim()}
+            className="w-full py-2.5 px-4 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Extract with DeepSeek
+          </button>
+        )}
       </form>
     </div>
   );
