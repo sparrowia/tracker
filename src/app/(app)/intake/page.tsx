@@ -57,8 +57,8 @@ export default function IntakePage() {
         .insert({
           raw_text: rawText.trim(),
           source,
-          vendor_id: vendorId || null,
-          project_id: projectId || null,
+          vendor_id: vendorId && vendorId !== "none" ? vendorId : null,
+          project_id: projectId && projectId !== "none" ? projectId : null,
           submitted_by: user.user?.id || null,
           org_id: profile?.org_id,
           extraction_status: "processing",
@@ -75,8 +75,8 @@ export default function IntakePage() {
         body: JSON.stringify({
           intake_id: intake.id,
           raw_text: rawText.trim(),
-          vendor_id: vendorId || null,
-          project_id: projectId || null,
+          vendor_id: vendorId && vendorId !== "none" ? vendorId : null,
+          project_id: projectId && projectId !== "none" ? projectId : null,
         }),
       });
 
@@ -134,6 +134,7 @@ export default function IntakePage() {
               className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
               <option value="">Any / Auto-detect</option>
+              <option value="none">None</option>
               {vendors.map((v) => (
                 <option key={v.id} value={v.id}>
                   {v.name}
@@ -152,6 +153,7 @@ export default function IntakePage() {
               className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
               <option value="">Any / Auto-detect</option>
+              <option value="none">None</option>
               {projects.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
