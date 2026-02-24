@@ -492,19 +492,7 @@ export default function IntakeReviewPage() {
                               </div>
                             )}
                           </div>
-                          <div className="flex flex-col gap-1 flex-shrink-0">
-                            {item.source_quote && (
-                              <button
-                                onClick={() => scrollToSource(item.source_quote)}
-                                className="px-2 py-1 text-xs rounded bg-white border border-gray-200 text-gray-500 hover:text-blue-600 hover:border-blue-300 transition-colors"
-                                title="View source in original text"
-                              >
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                                  <circle cx="12" cy="12" r="3"/>
-                                </svg>
-                              </button>
-                            )}
+                          <div className="flex-shrink-0">
                             <button
                               onClick={() => toggleAccept(category, idx)}
                               className={`px-2 py-1 text-xs rounded ${
@@ -517,6 +505,20 @@ export default function IntakeReviewPage() {
                             </button>
                           </div>
                         </div>
+                        {item.source_quote && (
+                          <div className="flex justify-end mt-1">
+                            <button
+                              onClick={() => scrollToSource(item.source_quote)}
+                              className="text-gray-400 hover:text-blue-600 transition-colors"
+                              title="View source in original text"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                                <circle cx="12" cy="12" r="3"/>
+                              </svg>
+                            </button>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
