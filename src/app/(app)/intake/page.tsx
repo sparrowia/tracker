@@ -113,7 +113,7 @@ export default function IntakePage() {
 
       if (insertError) throw insertError;
 
-      setProgressStep("Sending to DeepSeek for extraction...");
+      setProgressStep("Analyzing and extracting items...");
       const response = await fetch("/api/extract", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -145,7 +145,7 @@ export default function IntakePage() {
     <div className="max-w-3xl mx-auto">
       <h1 className="text-2xl font-bold text-gray-900 mb-2">Intake</h1>
       <p className="text-sm text-gray-500 mb-6">
-        Paste raw text from Slack, email, or meeting notes. DeepSeek will extract action items, decisions, issues, and more.
+        Paste raw text from Slack, email, or meeting notes. AI will extract action items, decisions, issues, and more.
       </p>
 
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -274,7 +274,7 @@ export default function IntakePage() {
             disabled={!rawText.trim()}
             className="w-full py-2.5 px-4 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Extract with DeepSeek
+            Extract
           </button>
         )}
       </form>

@@ -98,7 +98,7 @@ export async function POST(request: Request) {
         .update({ extraction_status: "failed" })
         .eq("id", intake_id);
       return NextResponse.json(
-        { error: "DeepSeek API key not configured" },
+        { error: "Extraction API key not configured" },
         { status: 500 }
       );
     }
@@ -127,7 +127,7 @@ export async function POST(request: Request) {
         .update({ extraction_status: "failed" })
         .eq("id", intake_id);
       return NextResponse.json(
-        { error: `DeepSeek API error: ${errBody}` },
+        { error: `Extraction API error: ${errBody}` },
         { status: 502 }
       );
     }
