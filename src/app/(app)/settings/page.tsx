@@ -14,6 +14,7 @@ export default function SettingsPage() {
   const [editWrong, setEditWrong] = useState("");
   const [editCorrect, setEditCorrect] = useState("");
   const [editNotes, setEditNotes] = useState("");
+  const [error, setError] = useState<string | null>(null);
   const supabase = createClient();
 
   useEffect(() => {
@@ -31,12 +32,16 @@ export default function SettingsPage() {
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
+    setError(null);
     if (!wrongTerm.trim() || !correctTerm.trim()) return;
 
-    const { data: profile } = await supabase.from("profiles").select("org_id").single();
-    if (!profile?.org_id) return;
+    const { data: profile, error: profileErr } = await supabase.from("profiles").select("org_id").single();
+    if (profileErr || !profile?.org_id) {
+      setError(`Could not load profile: ${profileErr?.message || "no org_id"}`);
+      return;
+    }
 
-    const { data, error } = await supabase
+    const { data, error: insertErr } = await supabase
       .from("term_corrections")
       .insert({
         org_id: profile.org_id,
@@ -47,7 +52,12 @@ export default function SettingsPage() {
       .select()
       .single();
 
-    if (!error && data) {
+    if (insertErr) {
+      setError(`Failed to add: ${insertErr.message}`);
+      return;
+    }
+
+    if (data) {
       setCorrections((prev) =>
         [...prev, data as TermCorrection].sort((a, b) =>
           a.wrong_term.localeCompare(b.wrong_term)
@@ -100,6 +110,12 @@ export default function SettingsPage() {
   return (
     <div className="max-w-3xl mx-auto">
       <h1 className="text-2xl font-bold text-gray-900 mb-2">Settings</h1>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded text-sm mt-4">
+          {error}
+        </div>
+      )}
 
       <section className="mt-6">
         <h2 className="text-lg font-semibold text-gray-800 mb-1">Term Corrections</h2>
