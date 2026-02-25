@@ -153,6 +153,7 @@ export default function IntakeReviewPage() {
   const [highlightedQuote, setHighlightedQuote] = useState<string | null>(null);
   const rawTextRef = useRef<HTMLDivElement>(null);
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const editSnapshotsRef = useRef<Map<string, ExtractedItem>>(new Map());
   const router = useRouter();
   const supabase = createClient();
 
@@ -272,11 +273,37 @@ export default function IntakeReviewPage() {
     }));
   }
 
-  function toggleEdit(category: EntityCategory, index: number) {
+  function startEdit(category: EntityCategory, index: number) {
+    const key = `${category}-${index}`;
+    const item = extracted[category][index];
+    editSnapshotsRef.current.set(key, { ...item });
     setExtracted((prev) => ({
       ...prev,
-      [category]: prev[category].map((item, i) =>
-        i === index ? { ...item, _editing: !item._editing } : item
+      [category]: prev[category].map((it, i) =>
+        i === index ? { ...it, _editing: true } : it
+      ),
+    }));
+  }
+
+  function cancelEdit(category: EntityCategory, index: number) {
+    const key = `${category}-${index}`;
+    const snapshot = editSnapshotsRef.current.get(key);
+    setExtracted((prev) => ({
+      ...prev,
+      [category]: prev[category].map((it, i) =>
+        i === index ? (snapshot ? { ...snapshot, _editing: false } : { ...it, _editing: false }) : it
+      ),
+    }));
+    editSnapshotsRef.current.delete(key);
+  }
+
+  function saveEdit(category: EntityCategory, index: number) {
+    const key = `${category}-${index}`;
+    editSnapshotsRef.current.delete(key);
+    setExtracted((prev) => ({
+      ...prev,
+      [category]: prev[category].map((it, i) =>
+        i === index ? { ...it, _editing: false } : it
       ),
     }));
   }
@@ -714,60 +741,75 @@ export default function IntakeReviewPage() {
                             )}
                           </div>
                         )}
-                        <div className="flex justify-end items-center gap-2 mt-1">
-                          {item.source_quote && (
-                            <button
-                              onClick={() => scrollToSource(item.source_quote)}
-                              className="text-gray-400 hover:text-blue-600 transition-colors"
-                              title="View source in original text"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                                <circle cx="12" cy="12" r="3"/>
-                              </svg>
-                            </button>
+                        <div className="flex justify-end items-center gap-2 mt-2">
+                          {item._editing ? (
+                            <>
+                              <button
+                                onClick={() => cancelEdit(category, idx)}
+                                className="px-3 py-1 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded hover:bg-gray-50 transition-colors"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                onClick={() => saveEdit(category, idx)}
+                                className="px-3 py-1 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 transition-colors"
+                              >
+                                Save
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              {item.source_quote && (
+                                <button
+                                  onClick={() => scrollToSource(item.source_quote)}
+                                  className="text-gray-400 hover:text-blue-600 transition-colors"
+                                  title="View source in original text"
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                                    <circle cx="12" cy="12" r="3"/>
+                                  </svg>
+                                </button>
+                              )}
+                              <button
+                                onClick={() => startEdit(category, idx)}
+                                className="text-gray-400 hover:text-blue-600 transition-colors"
+                                title="Edit"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                                </svg>
+                              </button>
+                              <button
+                                onClick={() => acceptItem(category, idx)}
+                                className={`transition-colors ${
+                                  item._accepted === true
+                                    ? "text-green-600"
+                                    : "text-gray-300 hover:text-green-600"
+                                }`}
+                                title="Accept"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                  <polyline points="20 6 9 17 4 12"/>
+                                </svg>
+                              </button>
+                              <button
+                                onClick={() => rejectItem(category, idx)}
+                                className={`transition-colors ${
+                                  item._accepted === false
+                                    ? "text-red-500"
+                                    : "text-gray-300 hover:text-red-500"
+                                }`}
+                                title="Reject"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                  <line x1="18" y1="6" x2="6" y2="18"/>
+                                  <line x1="6" y1="6" x2="18" y2="18"/>
+                                </svg>
+                              </button>
+                            </>
                           )}
-                          <button
-                            onClick={() => toggleEdit(category, idx)}
-                            className={`transition-colors ${
-                              item._editing
-                                ? "text-blue-600 hover:text-blue-800"
-                                : "text-gray-400 hover:text-blue-600"
-                            }`}
-                            title={item._editing ? "Done editing" : "Edit"}
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                            </svg>
-                          </button>
-                          <button
-                            onClick={() => acceptItem(category, idx)}
-                            className={`transition-colors ${
-                              item._accepted === true
-                                ? "text-green-600"
-                                : "text-gray-300 hover:text-green-600"
-                            }`}
-                            title="Accept"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                              <polyline points="20 6 9 17 4 12"/>
-                            </svg>
-                          </button>
-                          <button
-                            onClick={() => rejectItem(category, idx)}
-                            className={`transition-colors ${
-                              item._accepted === false
-                                ? "text-red-500"
-                                : "text-gray-300 hover:text-red-500"
-                            }`}
-                            title="Reject"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                              <line x1="18" y1="6" x2="6" y2="18"/>
-                              <line x1="6" y1="6" x2="18" y2="18"/>
-                            </svg>
-                          </button>
                         </div>
                       </div>
                     ))}
