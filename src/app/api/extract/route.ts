@@ -122,7 +122,7 @@ export async function POST(request: Request) {
           (c: { wrong_term: string; correct_term: string }) =>
             `- "${c.wrong_term}" should be "${c.correct_term}"`
         );
-        termCorrectionsPrompt = `\n\nTerm Corrections (apply these substitutions to names, products, and terms in your output):\n${lines.join("\n")}`;
+        termCorrectionsPrompt = `\n\nTerm Corrections — apply these to your output. Also apply them to obvious misspellings, phonetic variations, and alternate spellings of the same name/term (e.g. if "Shireen" → "Cheeren", then "Shereen", "Shirin", etc. should also become "Cheeren"):\n${lines.join("\n")}`;
       }
     }
 
