@@ -59,37 +59,31 @@ async function getProjects(supabase: SupabaseClient) {
 }
 
 async function getVendorSummary(supabase: SupabaseClient) {
-  const { data: vendors } = await supabase
-    .from("vendors")
-    .select("*")
-    .order("name");
+  const [{ data: vendors }, { data: actions }, { data: blockers }] = await Promise.all([
+    supabase.from("vendors").select("*").order("name"),
+    supabase.from("action_items").select("vendor_id").neq("status", "complete").not("vendor_id", "is", null),
+    supabase.from("blockers").select("vendor_id").is("resolved_at", null).not("vendor_id", "is", null),
+  ]);
 
   if (!vendors) return [];
 
-  const summaries = await Promise.all(
-    vendors.map(async (vendor: Vendor) => {
-      const { count: actionCount } = await supabase
-        .from("action_items")
-        .select("*", { count: "exact", head: true })
-        .eq("vendor_id", vendor.id)
-        .neq("status", "complete");
+  const actionCounts = new Map<string, number>();
+  const blockerCounts = new Map<string, number>();
+  for (const a of actions || []) {
+    actionCounts.set(a.vendor_id, (actionCounts.get(a.vendor_id) || 0) + 1);
+  }
+  for (const b of blockers || []) {
+    blockerCounts.set(b.vendor_id, (blockerCounts.get(b.vendor_id) || 0) + 1);
+  }
 
-      const { count: blockerCount } = await supabase
-        .from("blockers")
-        .select("*", { count: "exact", head: true })
-        .eq("vendor_id", vendor.id)
-        .is("resolved_at", null);
-
-      return {
-        vendor,
-        actionCount: actionCount || 0,
-        blockerCount: blockerCount || 0,
-        totalOpen: (actionCount || 0) + (blockerCount || 0),
-      };
+  return (vendors as Vendor[])
+    .map((vendor) => {
+      const actionCount = actionCounts.get(vendor.id) || 0;
+      const blockerCount = blockerCounts.get(vendor.id) || 0;
+      return { vendor, actionCount, blockerCount, totalOpen: actionCount + blockerCount };
     })
-  );
-
-  return summaries.filter((s) => s.totalOpen > 0).sort((a, b) => b.totalOpen - a.totalOpen);
+    .filter((s) => s.totalOpen > 0)
+    .sort((a, b) => b.totalOpen - a.totalOpen);
 }
 
 export default async function DashboardPage() {

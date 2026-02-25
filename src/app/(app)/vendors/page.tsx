@@ -4,48 +4,58 @@ import type { Vendor } from "@/lib/types";
 
 export default async function VendorsPage() {
   const supabase = await createClient();
-  const { data: vendors } = await supabase
-    .from("vendors")
-    .select("*")
-    .order("name");
 
-  const vendorsWithCounts = await Promise.all(
-    ((vendors || []) as Vendor[]).map(async (vendor) => {
-      const { count: actionCount } = await supabase
+  // Fetch all data in parallel with bulk queries instead of per-vendor
+  const [{ data: vendors }, { data: actions }, { data: blockers }, { data: people }] =
+    await Promise.all([
+      supabase.from("vendors").select("*").order("name"),
+      supabase
         .from("action_items")
-        .select("*", { count: "exact", head: true })
-        .eq("vendor_id", vendor.id)
-        .neq("status", "complete");
-
-      const { count: blockerCount } = await supabase
+        .select("vendor_id")
+        .neq("status", "complete")
+        .not("vendor_id", "is", null),
+      supabase
         .from("blockers")
-        .select("*", { count: "exact", head: true })
-        .eq("vendor_id", vendor.id)
-        .is("resolved_at", null);
-
-      const { count: peopleCount } = await supabase
+        .select("vendor_id")
+        .is("resolved_at", null)
+        .not("vendor_id", "is", null),
+      supabase
         .from("people")
-        .select("*", { count: "exact", head: true })
-        .eq("vendor_id", vendor.id);
+        .select("vendor_id")
+        .not("vendor_id", "is", null),
+    ]);
 
-      return {
-        ...vendor,
-        actionCount: actionCount || 0,
-        blockerCount: blockerCount || 0,
-        peopleCount: peopleCount || 0,
-      };
-    })
-  );
+  // Count per vendor client-side
+  const actionCounts = new Map<string, number>();
+  const blockerCounts = new Map<string, number>();
+  const peopleCounts = new Map<string, number>();
+
+  for (const a of actions || []) {
+    actionCounts.set(a.vendor_id, (actionCounts.get(a.vendor_id) || 0) + 1);
+  }
+  for (const b of blockers || []) {
+    blockerCounts.set(b.vendor_id, (blockerCounts.get(b.vendor_id) || 0) + 1);
+  }
+  for (const p of people || []) {
+    peopleCounts.set(p.vendor_id, (peopleCounts.get(p.vendor_id) || 0) + 1);
+  }
+
+  const vendorList = ((vendors || []) as Vendor[]).map((v) => ({
+    ...v,
+    actionCount: actionCounts.get(v.id) || 0,
+    blockerCount: blockerCounts.get(v.id) || 0,
+    peopleCount: peopleCounts.get(v.id) || 0,
+  }));
 
   return (
     <div className="max-w-5xl mx-auto">
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Vendors</h1>
 
-      {vendorsWithCounts.length === 0 ? (
+      {vendorList.length === 0 ? (
         <p className="text-sm text-gray-500">No vendors yet.</p>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {vendorsWithCounts.map((v) => (
+          {vendorList.map((v) => (
             <Link
               key={v.id}
               href={`/vendors/${v.id}`}
