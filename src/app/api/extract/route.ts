@@ -68,8 +68,8 @@ Rules:
 - Infer priority from language (urgent, ASAP, critical = high/critical; when possible = low)
 - Dates should be in YYYY-MM-DD format
 - Keep titles concise but descriptive
-- Do not fabricate information not present in the text
-- source_quote MUST be a verbatim substring copied exactly from the input text (5-15 words). It will be used for text search, so it must match exactly
+- Do not fabricate information not present in the text, EXCEPT for term corrections (see below) which MUST be applied
+- source_quote MUST be a verbatim substring copied exactly from the input text (5-15 words). It will be used for text search, so it must match exactly. Do NOT apply term corrections to source_quote — it must match the original text
 - Return ONLY valid JSON, no other text`;
 
 export async function POST(request: Request) {
@@ -122,7 +122,7 @@ export async function POST(request: Request) {
           (c: { wrong_term: string; correct_term: string }) =>
             `- "${c.wrong_term}" should be "${c.correct_term}"`
         );
-        termCorrectionsPrompt = `\n\nTerm Corrections — apply these to your output. Also apply them to obvious misspellings, phonetic variations, and alternate spellings of the same name/term (e.g. if "Shireen" → "Cheeren", then "Shereen", "Shirin", etc. should also become "Cheeren"):\n${lines.join("\n")}`;
+        termCorrectionsPrompt = `\n\nMANDATORY Term Corrections — you MUST replace these terms everywhere in your output (titles, owner_name, made_by, notes, details, etc.) but NOT in source_quote. Also correct obvious misspellings, phonetic variations, and alternate spellings of the same name/term (e.g. if "Shireen" → "Cheeren", then "Shereen", "Shirin", etc. should also become "Cheeren"). This overrides the "do not fabricate" rule — these corrections are authoritative:\n${lines.join("\n")}`;
       }
     }
 
