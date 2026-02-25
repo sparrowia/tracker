@@ -15,16 +15,16 @@ alter table term_corrections enable row level security;
 
 create policy "Users can view their org term corrections"
   on term_corrections for select
-  using (org_id = auth.user_org_id());
+  using (org_id = public.user_org_id());
 
 create policy "Users can insert their org term corrections"
   on term_corrections for insert
-  with check (org_id = auth.user_org_id());
+  with check (org_id = public.user_org_id());
 
 create policy "Users can update their org term corrections"
   on term_corrections for update
-  using (org_id = auth.user_org_id());
+  using (org_id = public.user_org_id());
 
 create policy "Users can delete their org term corrections"
   on term_corrections for delete
-  using (org_id = auth.user_org_id());
+  using (org_id = public.user_org_id());
