@@ -1,9 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import type { Vendor, Project, IntakeSource } from "@/lib/types";
+
+interface PastedImage {
+  id: string;
+  dataUrl: string;
+  file: File;
+}
 
 const sourceOptions: { value: IntakeSource; label: string }[] = [
   { value: "slack", label: "Slack Message" },
@@ -15,6 +21,7 @@ const sourceOptions: { value: IntakeSource; label: string }[] = [
 
 export default function IntakePage() {
   const [rawText, setRawText] = useState("");
+  const [pastedImages, setPastedImages] = useState<PastedImage[]>([]);
   const [source, setSource] = useState<IntakeSource>("manual");
   const [vendorId, setVendorId] = useState<string>("");
   const [projectId, setProjectId] = useState<string>("");
@@ -41,9 +48,102 @@ export default function IntakePage() {
     loadData();
   }, []);
 
+  const addImageFile = useCallback((file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      setPastedImages((prev) => [
+        ...prev,
+        { id: crypto.randomUUID(), dataUrl, file },
+      ]);
+    };
+    reader.readAsDataURL(file);
+  }, []);
+
+  // Global paste listener — catches image paste regardless of focus target
+  useEffect(() => {
+    function onPaste(e: ClipboardEvent) {
+      const clipboardData = e.clipboardData;
+      console.log("[paste] event fired", clipboardData);
+      if (!clipboardData) {
+        console.log("[paste] no clipboardData");
+        return;
+      }
+
+      // Log what's in the clipboard
+      console.log("[paste] items count:", clipboardData.items?.length);
+      console.log("[paste] files count:", clipboardData.files?.length);
+      if (clipboardData.items) {
+        for (let i = 0; i < clipboardData.items.length; i++) {
+          console.log("[paste] item", i, "kind:", clipboardData.items[i].kind, "type:", clipboardData.items[i].type);
+        }
+      }
+      if (clipboardData.files) {
+        for (let i = 0; i < clipboardData.files.length; i++) {
+          console.log("[paste] file", i, "type:", clipboardData.files[i].type, "size:", clipboardData.files[i].size);
+        }
+      }
+
+      // Check items (Chrome, Edge, modern browsers)
+      if (clipboardData.items) {
+        for (let i = 0; i < clipboardData.items.length; i++) {
+          const item = clipboardData.items[i];
+          if (item.type.startsWith("image/")) {
+            e.preventDefault();
+            const file = item.getAsFile();
+            console.log("[paste] got image file from items:", file);
+            if (file) addImageFile(file);
+            return;
+          }
+        }
+      }
+
+      // Fallback: check files (Safari, older browsers)
+      if (clipboardData.files && clipboardData.files.length > 0) {
+        for (let i = 0; i < clipboardData.files.length; i++) {
+          const file = clipboardData.files[i];
+          if (file.type.startsWith("image/")) {
+            e.preventDefault();
+            console.log("[paste] got image file from files:", file);
+            addImageFile(file);
+            return;
+          }
+        }
+      }
+
+      console.log("[paste] no image found in clipboard");
+    }
+
+    document.addEventListener("paste", onPaste);
+    return () => document.removeEventListener("paste", onPaste);
+  }, [addImageFile]);
+
+  function removeImage(id: string) {
+    setPastedImages((prev) => prev.filter((img) => img.id !== id));
+  }
+
+  async function ocrImages(images: PastedImage[]): Promise<string> {
+    const { createWorker } = await import("tesseract.js");
+    const worker = await createWorker("eng");
+    const texts: string[] = [];
+
+    for (let i = 0; i < images.length; i++) {
+      setProgressStep(`Reading image ${i + 1} of ${images.length}...`);
+      const { data } = await worker.recognize(images[i].dataUrl);
+      if (data.text.trim()) {
+        texts.push(data.text.trim());
+      }
+    }
+
+    await worker.terminate();
+    return texts.join("\n\n");
+  }
+
+  const hasContent = rawText.trim().length > 0 || pastedImages.length > 0;
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!rawText.trim()) return;
+    if (!hasContent) return;
     setLoading(true);
     setError(null);
     setProgressStep("Preparing...");
@@ -52,6 +152,21 @@ export default function IntakePage() {
     const timer = setInterval(() => setElapsed((s) => s + 1), 1000);
 
     try {
+      // OCR images first if any
+      let combinedText = rawText.trim();
+      if (pastedImages.length > 0) {
+        const ocrText = await ocrImages(pastedImages);
+        if (ocrText) {
+          combinedText = combinedText
+            ? `${combinedText}\n\n--- Text from pasted image ---\n${ocrText}`
+            : ocrText;
+        }
+      }
+
+      if (!combinedText) {
+        throw new Error("Could not extract any text from the pasted images. Please try typing the text manually.");
+      }
+
       setProgressStep("Authenticating...");
       const { data: user } = await supabase.auth.getUser();
       const { data: profile } = await supabase
@@ -100,7 +215,7 @@ export default function IntakePage() {
       const { data: intake, error: insertError } = await supabase
         .from("intakes")
         .insert({
-          raw_text: rawText.trim(),
+          raw_text: combinedText,
           source,
           vendor_id: resolvedVendorId,
           project_id: resolvedProjectId,
@@ -119,7 +234,7 @@ export default function IntakePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           intake_id: intake.id,
-          raw_text: rawText.trim(),
+          raw_text: combinedText,
           vendor_id: resolvedVendorId,
           project_id: resolvedProjectId,
         }),
@@ -145,7 +260,7 @@ export default function IntakePage() {
     <div className="max-w-3xl mx-auto">
       <h1 className="text-2xl font-bold text-gray-900 mb-2">Intake</h1>
       <p className="text-sm text-gray-500 mb-6">
-        Paste raw text from Slack, email, or meeting notes. AI will extract action items, decisions, issues, and more.
+        Paste raw text or screenshots from Slack, email, or meeting notes. AI will extract action items, decisions, issues, and more.
       </p>
 
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -246,10 +361,42 @@ export default function IntakePage() {
             value={rawText}
             onChange={(e) => setRawText(e.target.value)}
             rows={12}
-            required
-            placeholder="Paste Slack message, email, meeting notes, or any text here..."
+            required={pastedImages.length === 0}
+            placeholder="Paste Slack message, email, meeting notes, or any text here. You can also paste screenshots (Cmd+V)."
             className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-mono focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
+
+          {/* Pasted image previews */}
+          {pastedImages.length > 0 && (
+            <div className="mt-3 space-y-3">
+              {pastedImages.map((img) => (
+                <div
+                  key={img.id}
+                  className="relative inline-block border border-gray-200 rounded-lg overflow-hidden"
+                >
+                  <img
+                    src={img.dataUrl}
+                    alt="Pasted screenshot"
+                    className="max-w-full max-h-64 object-contain"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeImage(img.id)}
+                    className="absolute top-2 right-2 bg-white/90 hover:bg-red-50 text-gray-500 hover:text-red-600 rounded-full p-1 shadow transition-colors"
+                    title="Remove image"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="18" y1="6" x2="6" y2="18"/>
+                      <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                  </button>
+                  <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs px-2 py-1">
+                    Screenshot — will be OCR'd on extract
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {loading ? (
@@ -271,10 +418,10 @@ export default function IntakePage() {
         ) : (
           <button
             type="submit"
-            disabled={!rawText.trim()}
+            disabled={!hasContent}
             className="w-full py-2.5 px-4 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Extract
+            Extract{pastedImages.length > 0 ? ` (${pastedImages.length} image${pastedImages.length > 1 ? "s" : ""} will be OCR'd)` : ""}
           </button>
         )}
       </form>
