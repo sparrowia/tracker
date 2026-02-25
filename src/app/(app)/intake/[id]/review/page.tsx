@@ -297,9 +297,33 @@ export default function IntakeReviewPage() {
     editSnapshotsRef.current.delete(key);
   }
 
-  function saveEdit(category: EntityCategory, index: number) {
+  async function saveEdit(category: EntityCategory, index: number) {
     const key = `${category}-${index}`;
     editSnapshotsRef.current.delete(key);
+
+    const item = extracted[category][index];
+
+    // Check if any person fields have new names not in the people list
+    const personFields = categoryFields[category].filter((f) => f.type === "person");
+    for (const pf of personFields) {
+      const name = (item as unknown as Record<string, unknown>)[pf.field] as string | null;
+      if (name && name.trim() && !people.some((p) => p.full_name === name.trim())) {
+        // Create the person in Supabase
+        const { data: profile } = await supabase.from("profiles").select("org_id").single();
+        const orgId = profile?.org_id;
+        if (orgId) {
+          const { data: newPerson } = await supabase
+            .from("people")
+            .insert({ full_name: name.trim(), org_id: orgId, is_internal: false })
+            .select("*")
+            .single();
+          if (newPerson) {
+            setPeople((prev) => [...prev, newPerson as Person].sort((a, b) => a.full_name.localeCompare(b.full_name)));
+          }
+        }
+      }
+    }
+
     setExtracted((prev) => ({
       ...prev,
       [category]: prev[category].map((it, i) =>
