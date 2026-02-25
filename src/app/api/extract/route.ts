@@ -103,6 +103,29 @@ export async function POST(request: Request) {
       );
     }
 
+    // Fetch term corrections for this user's org
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("org_id")
+      .eq("id", user.id)
+      .single();
+
+    let termCorrectionsPrompt = "";
+    if (profile?.org_id) {
+      const { data: corrections } = await supabase
+        .from("term_corrections")
+        .select("wrong_term, correct_term")
+        .eq("org_id", profile.org_id);
+
+      if (corrections && corrections.length > 0) {
+        const lines = corrections.map(
+          (c: { wrong_term: string; correct_term: string }) =>
+            `- "${c.wrong_term}" should be "${c.correct_term}"`
+        );
+        termCorrectionsPrompt = `\n\nTerm Corrections (apply these substitutions to names, products, and terms in your output):\n${lines.join("\n")}`;
+      }
+    }
+
     const response = await fetch("https://api.deepseek.com/chat/completions", {
       method: "POST",
       headers: {
@@ -112,7 +135,7 @@ export async function POST(request: Request) {
       body: JSON.stringify({
         model: "deepseek-chat",
         messages: [
-          { role: "system", content: SYSTEM_PROMPT },
+          { role: "system", content: SYSTEM_PROMPT + termCorrectionsPrompt },
           { role: "user", content: raw_text },
         ],
         temperature: 0.1,

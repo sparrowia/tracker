@@ -249,6 +249,16 @@ export interface VendorAccountabilityRow {
   project?: Project;
 }
 
+export interface TermCorrection {
+  id: string;
+  org_id: string;
+  wrong_term: string;
+  correct_term: string;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface VendorAgendaRow {
   rank: number;
   entity_type: string;

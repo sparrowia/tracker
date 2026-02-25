@@ -11,6 +11,7 @@ import {
   AlertTriangle,
   Users,
   Calendar,
+  Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -22,6 +23,7 @@ const navigation = [
   { name: "Agendas", href: "/agendas", icon: Calendar },
   { name: "Intake", href: "/intake", icon: Inbox },
   { name: "People", href: "/people", icon: Users },
+  { name: "Settings", href: "/settings", icon: Settings },
 ];
 
 export function Sidebar() {
