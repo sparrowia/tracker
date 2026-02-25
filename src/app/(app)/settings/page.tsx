@@ -132,7 +132,7 @@ export default function SettingsPage() {
                 type="text"
                 value={wrongTerm}
                 onChange={(e) => setWrongTerm(e.target.value)}
-                placeholder="e.g. Shireen"
+                placeholder="e.g. Accelerate"
                 className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
@@ -142,7 +142,7 @@ export default function SettingsPage() {
                 type="text"
                 value={correctTerm}
                 onChange={(e) => setCorrectTerm(e.target.value)}
-                placeholder="e.g. Cheeren"
+                placeholder="e.g. Edcelerate"
                 className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
@@ -152,7 +152,7 @@ export default function SettingsPage() {
                 type="text"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="e.g. Person name"
+                placeholder="e.g. Product name"
                 className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
