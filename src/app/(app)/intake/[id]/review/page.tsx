@@ -671,7 +671,7 @@ export default function IntakeReviewPage() {
                                           value={isKnown ? val : showInput ? "__new__" : ""}
                                           onChange={(e) => {
                                             if (e.target.value === "__new__") {
-                                              updateItem(category, idx, fieldDef.field, val || " ");
+                                              updateItem(category, idx, fieldDef.field, " ");
                                             } else {
                                               updateItem(category, idx, fieldDef.field, e.target.value);
                                             }
