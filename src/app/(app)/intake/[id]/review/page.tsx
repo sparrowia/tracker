@@ -95,13 +95,33 @@ const categoryFields: Record<EntityCategory, { field: string; label: string; typ
 
 function renderHighlightedText(text: string, quote: string) {
   const lowerText = text.toLowerCase();
-  const lowerQuote = quote.toLowerCase();
-  const idx = lowerText.indexOf(lowerQuote);
-  if (idx === -1) return text;
+  const lowerQuote = quote.toLowerCase().trim();
+
+  // First try exact substring match (case-insensitive)
+  let idx = lowerText.indexOf(lowerQuote);
+  let matchLength = lowerQuote.length;
+
+  // If no exact match, try flexible whitespace matching via regex
+  if (idx === -1) {
+    const escaped = lowerQuote.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const flexPattern = escaped.replace(/\\?\s+/g, "\\s+");
+    try {
+      const regex = new RegExp(flexPattern, "i");
+      const result = regex.exec(text);
+      if (result && result.index !== undefined) {
+        idx = result.index;
+        matchLength = result[0].length;
+      }
+    } catch {
+      // regex failed, fall through
+    }
+  }
+
+  if (idx === -1) return <>{text}</>;
 
   const before = text.substring(0, idx);
-  const match = text.substring(idx, idx + quote.length);
-  const after = text.substring(idx + quote.length);
+  const match = text.substring(idx, idx + matchLength);
+  const after = text.substring(idx + matchLength);
 
   return (
     <>
@@ -132,37 +152,34 @@ export default function IntakeReviewPage() {
   const [error, setError] = useState<string | null>(null);
   const [highlightedQuote, setHighlightedQuote] = useState<string | null>(null);
   const rawTextRef = useRef<HTMLDivElement>(null);
+  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const router = useRouter();
   const supabase = createClient();
 
   const scrollToSource = useCallback((quote: string | null | undefined) => {
     if (!quote || !rawTextRef.current || !intake) return;
 
-    // Clear first so re-clicking the same quote still triggers a re-render
-    setHighlightedQuote(null);
+    // Clear any existing auto-clear timer
+    if (highlightTimerRef.current) {
+      clearTimeout(highlightTimerRef.current);
+    }
 
-    requestAnimationFrame(() => {
+    // Force a re-render even if the same quote is clicked again
+    setHighlightedQuote(null);
+    // Use a microtask to ensure the null render happens first
+    queueMicrotask(() => {
       setHighlightedQuote(quote);
 
-      const container = rawTextRef.current;
-      if (!container) return;
-
-      const text = intake.raw_text;
-      const lowerText = text.toLowerCase();
-      const lowerQuote = quote.toLowerCase();
-      const matchIndex = lowerText.indexOf(lowerQuote);
-
-      if (matchIndex === -1) return;
-
-      // Scroll the container to roughly the right position
-      const textBefore = text.substring(0, matchIndex);
-      const linesBefore = textBefore.split("\n").length - 1;
-      const lineHeight = 20;
-      const scrollTarget = linesBefore * lineHeight - container.clientHeight / 3;
-      container.scrollTo({ top: Math.max(0, scrollTarget), behavior: "smooth" });
+      // After React renders with the highlight, scroll to the <mark> element
+      setTimeout(() => {
+        const mark = rawTextRef.current?.querySelector("mark");
+        if (mark) {
+          mark.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      }, 50);
 
       // Auto-clear highlight after 4 seconds
-      setTimeout(() => setHighlightedQuote(null), 4000);
+      highlightTimerRef.current = setTimeout(() => setHighlightedQuote(null), 4000);
     });
   }, [intake]);
 
