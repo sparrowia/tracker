@@ -145,7 +145,7 @@ export default function VendorsPage() {
                   <circle cx="5" cy="12" r="1"/>
                 </svg>
               </button>
-              <h3 className="font-semibold text-gray-900 pr-6">{v.name}</h3>
+              <h3 className={`font-semibold pr-6 ${v.blockerCount > 0 ? "text-red-600" : "text-gray-900"}`}>{v.name}</h3>
               <div className="mt-3 space-y-1 text-sm">
                 <div className="flex justify-between">
                   <span className="text-gray-500">Open actions</span>
