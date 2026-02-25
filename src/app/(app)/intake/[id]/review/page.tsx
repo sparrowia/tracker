@@ -138,31 +138,32 @@ export default function IntakeReviewPage() {
   const scrollToSource = useCallback((quote: string | null | undefined) => {
     if (!quote || !rawTextRef.current || !intake) return;
 
-    // Clear any existing highlight
-    setHighlightedQuote(quote);
+    // Clear first so re-clicking the same quote still triggers a re-render
+    setHighlightedQuote(null);
 
-    const container = rawTextRef.current;
-    const text = intake.raw_text;
-    const lowerText = text.toLowerCase();
-    const lowerQuote = quote.toLowerCase();
-    const matchIndex = lowerText.indexOf(lowerQuote);
+    requestAnimationFrame(() => {
+      setHighlightedQuote(quote);
 
-    if (matchIndex === -1) return;
+      const container = rawTextRef.current;
+      if (!container) return;
 
-    // Find the text node and scroll to it using a temporary mark
-    // We'll use window.find or a range-based approach
-    const pre = container.querySelector("pre");
-    if (!pre) return;
+      const text = intake.raw_text;
+      const lowerText = text.toLowerCase();
+      const lowerQuote = quote.toLowerCase();
+      const matchIndex = lowerText.indexOf(lowerQuote);
 
-    // Scroll the container to roughly the right position
-    const textBefore = text.substring(0, matchIndex);
-    const linesBefore = textBefore.split("\n").length - 1;
-    const lineHeight = 20; // approximate line height for text-sm mono
-    const scrollTarget = linesBefore * lineHeight - container.clientHeight / 3;
-    container.scrollTo({ top: Math.max(0, scrollTarget), behavior: "smooth" });
+      if (matchIndex === -1) return;
 
-    // Auto-clear highlight after 4 seconds
-    setTimeout(() => setHighlightedQuote(null), 4000);
+      // Scroll the container to roughly the right position
+      const textBefore = text.substring(0, matchIndex);
+      const linesBefore = textBefore.split("\n").length - 1;
+      const lineHeight = 20;
+      const scrollTarget = linesBefore * lineHeight - container.clientHeight / 3;
+      container.scrollTo({ top: Math.max(0, scrollTarget), behavior: "smooth" });
+
+      // Auto-clear highlight after 4 seconds
+      setTimeout(() => setHighlightedQuote(null), 4000);
+    });
   }, [intake]);
 
   useEffect(() => {
@@ -508,9 +509,7 @@ export default function IntakeReviewPage() {
             Original Text
           </h2>
           <div ref={rawTextRef} className="bg-white rounded-lg border border-gray-200 p-4 max-h-[600px] overflow-y-auto">
-            <pre className="text-sm text-gray-700 whitespace-pre-wrap font-mono">
-              {highlightedQuote ? renderHighlightedText(intake.raw_text, highlightedQuote) : intake.raw_text}
-            </pre>
+            <pre className="text-sm text-gray-700 whitespace-pre-wrap font-mono">{highlightedQuote ? renderHighlightedText(intake.raw_text, highlightedQuote) : intake.raw_text}</pre>
           </div>
         </div>
 
