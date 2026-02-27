@@ -119,12 +119,12 @@ export default async function DashboardPage() {
         {criticalPath.length === 0 ? (
           <p className="text-sm text-gray-500">No critical items this week.</p>
         ) : (
-          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+          <div className="bg-white rounded-lg border border-gray-300 overflow-hidden">
+            <table className="min-w-full">
+              <thead className="bg-gray-50 border-b border-gray-300">
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Item</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Owner</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Responsible</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Project</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Priority</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Due</th>
@@ -132,13 +132,24 @@ export default async function DashboardPage() {
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200">
+              <tbody>
                 {criticalPath.map((item) => {
                   const badge = statusBadge(item.status);
                   return (
-                    <tr key={item.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-sm text-gray-900">{item.title}</td>
-                      <td className="px-4 py-3 text-sm text-gray-600">{item.owner?.full_name || "—"}</td>
+                    <tr key={item.id} className="border-b border-gray-200 hover:bg-gray-50">
+                      <td className="px-4 py-3 text-sm text-gray-900 font-semibold">{item.title}</td>
+                      <td className="px-4 py-3 text-sm">
+                        {item.owner ? (
+                          <div className="flex items-center gap-1.5">
+                            <span className="w-5 h-5 rounded-full bg-blue-100 text-[10px] font-medium text-blue-700 flex items-center justify-center flex-shrink-0">
+                              {item.owner.full_name.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
+                            </span>
+                            <span className="text-gray-700">{item.owner.full_name}</span>
+                          </div>
+                        ) : (
+                          <span className="text-gray-400 italic">Unassigned</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-sm text-gray-600">
                         {item.project ? (
                           <Link href={`/projects/${item.project.slug}`} className="text-blue-600 hover:underline">
@@ -173,9 +184,9 @@ export default async function DashboardPage() {
         {blockers.length === 0 ? (
           <p className="text-sm text-gray-500">No active blockers.</p>
         ) : (
-          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+          <div className="bg-white rounded-lg border border-gray-300 overflow-hidden">
+            <table className="min-w-full">
+              <thead className="bg-gray-50 border-b border-gray-300">
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Blocker</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Project</th>
@@ -185,10 +196,10 @@ export default async function DashboardPage() {
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Escalations</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200">
+              <tbody>
                 {blockers.map((b) => (
-                  <tr key={b.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 text-sm text-gray-900 font-medium">{b.title}</td>
+                  <tr key={b.id} className="border-b border-gray-200 hover:bg-gray-50">
+                    <td className="px-4 py-3 text-sm text-gray-900 font-semibold">{b.title}</td>
                     <td className="px-4 py-3 text-sm text-gray-600">
                       {b.project ? (
                         <Link href={`/projects/${b.project.slug}`} className="text-blue-600 hover:underline">
@@ -228,16 +239,16 @@ export default async function DashboardPage() {
           {supportTickets.length === 0 ? (
             <p className="text-sm text-gray-500">No open tickets.</p>
           ) : (
-            <div className="bg-white rounded-lg border border-gray-200 divide-y divide-gray-200">
+            <div className="bg-white rounded-lg border border-gray-300">
               {supportTickets.map((t) => (
-                <div key={t.id} className="px-4 py-3">
+                <div key={t.id} className="px-4 py-3 border-b border-gray-200 last:border-b-0">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-mono text-gray-500">{t.ticket_number}</span>
                     <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full border ${priorityColor(t.priority)}`}>
                       {t.priority}
                     </span>
                   </div>
-                  <p className="text-sm text-gray-900 mt-1">{t.title || t.description}</p>
+                  <p className="text-sm text-gray-900 font-semibold mt-1">{t.title || t.description}</p>
                   <p className="text-xs text-gray-500 mt-1">
                     {t.vendor?.name} {t.opened_at ? `· Opened ${formatDateShort(t.opened_at)}` : ""}
                   </p>
@@ -252,16 +263,16 @@ export default async function DashboardPage() {
           {decisions.length === 0 ? (
             <p className="text-sm text-gray-500">No pending decisions.</p>
           ) : (
-            <div className="bg-white rounded-lg border border-gray-200 divide-y divide-gray-200">
+            <div className="bg-white rounded-lg border border-gray-300">
               {decisions.map((d) => (
-                <div key={d.id} className="px-4 py-3">
+                <div key={d.id} className="px-4 py-3 border-b border-gray-200 last:border-b-0">
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-mono text-gray-400">{d.display_id}</span>
                     <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full border ${priorityColor(d.priority)}`}>
                       {d.priority}
                     </span>
                   </div>
-                  <p className="text-sm text-gray-900 mt-1">{d.title}</p>
+                  <p className="text-sm text-gray-900 font-semibold mt-1">{d.title}</p>
                   <p className="text-xs text-gray-500 mt-1">
                     {d.owner?.full_name || "Unassigned"} · {d.project?.name || "General"}
                   </p>

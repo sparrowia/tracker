@@ -114,28 +114,28 @@ export default function BlockersPage() {
       {blockers.length === 0 ? (
         <p className="text-sm text-gray-500">No active blockers.</p>
       ) : (
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+        <div className="bg-white rounded-lg border border-gray-300 overflow-hidden">
+          <table className="min-w-full">
+            <thead className="bg-gray-50 border-b border-gray-300">
               <tr>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-6"></th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Blocker</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Project</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vendor</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Owner</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Responsible</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Priority</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Age</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Impact</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
+            <tbody>
               {blockers.map((b) => {
                 const isExpanded = expandedId === b.id;
                 const isEditing = editingId === b.id;
                 return (
                   <Fragment key={b.id}>
                     <tr
-                      className="hover:bg-gray-50 cursor-pointer"
+                      className="border-b border-gray-200 hover:bg-gray-50 cursor-pointer"
                       onClick={() => toggleExpand(b.id)}
                     >
                       <td className="px-4 py-3 text-gray-400">
@@ -154,7 +154,7 @@ export default function BlockersPage() {
                           <polyline points="9 18 15 12 9 6" />
                         </svg>
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-900 font-medium">{b.title}</td>
+                      <td className="px-4 py-3 text-sm text-gray-900 font-semibold">{b.title}</td>
                       <td className="px-4 py-3 text-sm">
                         {b.project ? (
                           <Link
@@ -177,7 +177,18 @@ export default function BlockersPage() {
                           </Link>
                         ) : "—"}
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-600">{b.owner?.full_name || "—"}</td>
+                      <td className="px-4 py-3 text-sm">
+                        {b.owner ? (
+                          <div className="flex items-center gap-1.5">
+                            <span className="w-5 h-5 rounded-full bg-blue-100 text-[10px] font-medium text-blue-700 flex items-center justify-center flex-shrink-0">
+                              {b.owner.full_name.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
+                            </span>
+                            <span className="text-gray-700">{b.owner.full_name}</span>
+                          </div>
+                        ) : (
+                          <span className="text-gray-400 italic">Unassigned</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3">
                         <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full border ${priorityColor(b.priority)}`}>
                           {b.priority}
@@ -198,7 +209,7 @@ export default function BlockersPage() {
                     </tr>
                     {isExpanded && (
                       <tr>
-                        <td colSpan={8} className="bg-gray-50 px-8 py-4">
+                        <td colSpan={8} className="bg-gray-50 px-8 py-4 border-b border-gray-200">
                           {isEditing ? (
                             <div className="space-y-3 max-w-2xl">
                               <div>
@@ -285,8 +296,7 @@ export default function BlockersPage() {
                                   <p className="text-gray-900 mt-0.5">{b.escalation_count > 0 ? `${b.escalation_count}x` : "None"}</p>
                                 </div>
                               </div>
-                              <div className="flex justify-end items-center gap-3 pt-2 border-t border-gray-200 mt-3">
-                                {/* Edit */}
+                              <div className="flex justify-end items-center gap-3 pt-2 border-t border-gray-300 mt-3">
                                 <button
                                   onClick={(e) => { e.stopPropagation(); startEdit(b); }}
                                   className="text-gray-400 hover:text-blue-600 transition-colors"
@@ -297,7 +307,6 @@ export default function BlockersPage() {
                                     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
                                   </svg>
                                 </button>
-                                {/* Delete */}
                                 <button
                                   onClick={(e) => { e.stopPropagation(); handleDelete(b.id); }}
                                   className="text-gray-400 hover:text-red-600 transition-colors"
@@ -308,7 +317,6 @@ export default function BlockersPage() {
                                     <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
                                   </svg>
                                 </button>
-                                {/* Resolve */}
                                 <button
                                   onClick={(e) => { e.stopPropagation(); handleResolve(b.id); }}
                                   className="text-gray-400 hover:text-green-600 transition-colors"

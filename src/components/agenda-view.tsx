@@ -293,14 +293,14 @@ export function AgendaView({
       {items.length === 0 ? (
         <p className="text-sm text-gray-500">No agenda items. Add items or check vendor action items and blockers.</p>
       ) : (
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+        <div className="bg-white rounded-lg border border-gray-300 overflow-hidden">
           {/* Column headers */}
-          <div className="grid grid-cols-[2.5rem_1fr_5.5rem_5rem_7rem_4rem_4.5rem_6.5rem] gap-0 px-3 py-2 bg-gray-50 border-b border-gray-200 text-xs font-medium text-gray-500 uppercase tracking-wide">
+          <div className="grid grid-cols-[2.5rem_1fr_5.5rem_5rem_9rem_4rem_4.5rem_6.5rem] gap-0 px-3 py-2 bg-gray-50 border-b border-gray-300 text-xs font-medium text-gray-500 uppercase tracking-wide">
             <div></div>
             <div>Name</div>
             <div>Priority</div>
             <div>Type</div>
-            <div>Owner</div>
+            <div>Responsible</div>
             <div>Age</div>
             <div>Score</div>
             <div className="text-right">Actions</div>
@@ -317,7 +317,7 @@ export function AgendaView({
                 {/* Section header */}
                 <button
                   onClick={() => toggleGroup(priority)}
-                  className="w-full flex items-center gap-2 px-3 py-2 bg-gray-50/70 border-b border-gray-100 hover:bg-gray-100/80 transition-colors text-left"
+                  className="w-full flex items-center gap-2 px-3 py-2 bg-gray-50/70 border-b border-gray-300 hover:bg-gray-100/80 transition-colors text-left"
                 >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -347,7 +347,7 @@ export function AgendaView({
                   const isExpanded = expandedId === itemKey;
 
                   return (
-                    <div key={itemKey} className="border-b border-gray-100 last:border-b-0">
+                    <div key={itemKey} className="border-b border-gray-200 last:border-b-0">
                       {isEditing ? (
                         <div className="px-3 py-3 space-y-2 bg-blue-50/30">
                           <input
@@ -400,14 +400,14 @@ export function AgendaView({
                           {/* Main row */}
                           <div
                             onClick={() => toggleExpand(itemKey)}
-                            className="grid grid-cols-[2.5rem_1fr_5.5rem_5rem_7rem_4rem_4.5rem_6.5rem] gap-0 px-3 py-2.5 items-center hover:bg-gray-50/80 cursor-pointer transition-colors group"
+                            className="grid grid-cols-[2.5rem_1fr_5.5rem_5rem_9rem_4rem_4.5rem_6.5rem] gap-0 px-3 py-2.5 items-center hover:bg-gray-50/80 cursor-pointer transition-colors group"
                           >
                             {/* Rank */}
                             <span className="text-xs font-mono text-gray-400">#{item.rank}</span>
 
                             {/* Name */}
                             <div className="min-w-0 pr-3">
-                              <span className="text-sm text-gray-900 truncate block">{item.title}</span>
+                              <span className="text-sm font-semibold text-gray-900 truncate block">{item.title}</span>
                               {(item.context || item.ask) && (
                                 <svg
                                   xmlns="http://www.w3.org/2000/svg"
@@ -436,15 +436,17 @@ export function AgendaView({
                               {typeLabels[item.entity_type] || item.entity_type}
                             </span>
 
-                            {/* Owner */}
+                            {/* Responsible */}
                             <div className="flex items-center gap-1.5 min-w-0">
-                              {item.owner_name && (
+                              {item.owner_name ? (
                                 <>
-                                  <span className="w-5 h-5 rounded-full bg-gray-200 text-[10px] font-medium text-gray-600 flex items-center justify-center flex-shrink-0">
+                                  <span className="w-5 h-5 rounded-full bg-blue-100 text-[10px] font-medium text-blue-700 flex items-center justify-center flex-shrink-0">
                                     {item.owner_name.split(" ").map(n => n[0]).join("").slice(0, 2)}
                                   </span>
-                                  <span className="text-xs text-gray-600 truncate">{item.owner_name.split(" ")[0]}</span>
+                                  <span className="text-xs text-gray-700 truncate">{item.owner_name}</span>
                                 </>
+                              ) : (
+                                <span className="text-xs text-gray-400 italic">Unassigned</span>
                               )}
                             </div>
 
