@@ -131,7 +131,7 @@ export default function VendorsPage() {
             <Link
               key={v.id}
               href={`/vendors/${v.id}`}
-              className="relative bg-white rounded-lg border border-gray-200 p-5 hover:border-blue-300 transition-colors"
+              className="relative bg-white rounded-lg border border-gray-300 p-5 hover:border-blue-400 transition-colors"
             >
               {/* View icon */}
               <button

@@ -107,25 +107,27 @@ export default function BlockersPage() {
 
   return (
     <div className="max-w-6xl mx-auto">
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">
-        Active Blockers ({blockers.length})
-      </h1>
-
       {blockers.length === 0 ? (
-        <p className="text-sm text-gray-500">No active blockers.</p>
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-6">Active Blockers</h1>
+          <p className="text-sm text-gray-500">No active blockers.</p>
+        </div>
       ) : (
         <div className="bg-white rounded-lg border border-gray-300 overflow-hidden">
+          <div className="bg-gray-800 px-4 py-2.5">
+            <h1 className="text-xs font-semibold text-white uppercase tracking-wide">Active Blockers ({blockers.length})</h1>
+          </div>
           <table className="min-w-full">
             <thead className="bg-gray-50 border-b border-gray-300">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-6"></th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Blocker</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Project</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vendor</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Responsible</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Priority</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Age</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Impact</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase w-6"></th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Blocker</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Project</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Vendor</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Responsible</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Priority</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Age</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Impact</th>
               </tr>
             </thead>
             <tbody>

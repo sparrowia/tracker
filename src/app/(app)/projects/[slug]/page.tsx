@@ -95,22 +95,35 @@ export default async function ProjectDetailPage({
       {/* Blockers */}
       {typedBlockers.length > 0 && (
         <section>
-          <h2 className="text-lg font-semibold text-red-700 mb-3">Active Blockers</h2>
-          <div className="bg-red-50 rounded-lg border border-red-200 overflow-hidden">
-            <table className="min-w-full divide-y divide-red-200">
-              <thead className="bg-red-100/50">
+          <div className="bg-white rounded-lg border border-gray-300 overflow-hidden">
+            <div className="bg-red-800 px-4 py-2.5">
+              <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Active Blockers</h2>
+            </div>
+            <table className="min-w-full">
+              <thead className="bg-red-50 border-b border-gray-300">
                 <tr>
                   <th className="px-4 py-2 text-left text-xs font-medium text-red-700 uppercase">Blocker</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-red-700 uppercase">Owner</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-red-700 uppercase">Responsible</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-red-700 uppercase">Age</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-red-700 uppercase">Impact</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-red-200">
+              <tbody>
                 {typedBlockers.map((b) => (
-                  <tr key={b.id}>
-                    <td className="px-4 py-3 text-sm text-gray-900 font-medium">{b.title}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{b.owner?.full_name || "—"}</td>
+                  <tr key={b.id} className="border-b border-gray-200">
+                    <td className="px-4 py-3 text-sm text-gray-900 font-semibold">{b.title}</td>
+                    <td className="px-4 py-3 text-sm">
+                      {b.owner ? (
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-5 h-5 rounded-full bg-blue-100 text-[10px] font-medium text-blue-700 flex items-center justify-center flex-shrink-0">
+                            {b.owner.full_name.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
+                          </span>
+                          <span className="text-gray-700">{b.owner.full_name}</span>
+                        </div>
+                      ) : (
+                        <span className="text-gray-400 italic">Unassigned</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-sm text-red-700 font-medium">
                       {b.age_days != null ? formatAge(b.age_days) : "—"}
                     </td>
@@ -125,29 +138,45 @@ export default async function ProjectDetailPage({
 
       {/* Action Items */}
       <section>
-        <h2 className="text-lg font-semibold text-gray-900 mb-3">Action Items</h2>
         {typedActions.length === 0 ? (
-          <p className="text-sm text-gray-500">No action items.</p>
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900 mb-3">Action Items</h2>
+            <p className="text-sm text-gray-500">No action items.</p>
+          </div>
         ) : (
-          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+          <div className="bg-white rounded-lg border border-gray-300 overflow-hidden">
+            <div className="bg-gray-800 px-4 py-2.5">
+              <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Action Items</h2>
+            </div>
+            <table className="min-w-full">
+              <thead className="bg-gray-50 border-b border-gray-300">
                 <tr>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Item</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Owner</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Responsible</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Priority</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Due</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Age</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200">
+              <tbody>
                 {typedActions.map((ai) => {
                   const badge = statusBadge(ai.status);
                   return (
-                    <tr key={ai.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-sm text-gray-900">{ai.title}</td>
-                      <td className="px-4 py-3 text-sm text-gray-600">{ai.owner?.full_name || "—"}</td>
+                    <tr key={ai.id} className="border-b border-gray-200 hover:bg-gray-50">
+                      <td className="px-4 py-3 text-sm text-gray-900 font-semibold">{ai.title}</td>
+                      <td className="px-4 py-3 text-sm">
+                        {ai.owner ? (
+                          <div className="flex items-center gap-1.5">
+                            <span className="w-5 h-5 rounded-full bg-blue-100 text-[10px] font-medium text-blue-700 flex items-center justify-center flex-shrink-0">
+                              {ai.owner.full_name.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
+                            </span>
+                            <span className="text-gray-700">{ai.owner.full_name}</span>
+                          </div>
+                        ) : (
+                          <span className="text-gray-400 italic">Unassigned</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3">
                         <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full border ${priorityColor(ai.priority)}`}>
                           {ai.priority}
@@ -171,22 +200,26 @@ export default async function ProjectDetailPage({
 
       {/* RAID Log */}
       <section>
-        <h2 className="text-lg font-semibold text-gray-900 mb-3">RAID Log</h2>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-gray-800 px-4 py-2.5 rounded-t-lg">
+          <h2 className="text-xs font-semibold text-white uppercase tracking-wide">RAID Log</h2>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-3">
           {/* Risks */}
-          <div>
-            <h3 className="text-sm font-semibold text-gray-700 mb-2 uppercase tracking-wide">Risks ({risks.length})</h3>
+          <div className="rounded-lg border border-gray-300 overflow-hidden">
+            <div className="bg-gray-700 px-4 py-2">
+              <h3 className="text-xs font-semibold text-white uppercase tracking-wide">Risks ({risks.length})</h3>
+            </div>
             {risks.length === 0 ? (
-              <p className="text-sm text-gray-400">None</p>
+              <p className="text-sm text-gray-400 p-4">None</p>
             ) : (
-              <div className="space-y-2">
+              <div>
                 {risks.map((r) => (
-                  <div key={r.id} className="bg-white p-3 rounded-lg border border-gray-200">
+                  <div key={r.id} className="bg-white p-3 border-b border-gray-200 last:border-b-0">
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-mono text-gray-400">{r.display_id}</span>
                       <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border ${priorityColor(r.priority)}`}>{r.priority}</span>
                     </div>
-                    <p className="text-sm text-gray-900 mt-1">{r.title}</p>
+                    <p className="text-sm text-gray-900 font-semibold mt-1">{r.title}</p>
                     {r.impact && <p className="text-xs text-gray-500 mt-1">{r.impact}</p>}
                   </div>
                 ))}
@@ -195,19 +228,21 @@ export default async function ProjectDetailPage({
           </div>
 
           {/* Issues */}
-          <div>
-            <h3 className="text-sm font-semibold text-gray-700 mb-2 uppercase tracking-wide">Issues ({issues.length})</h3>
+          <div className="rounded-lg border border-gray-300 overflow-hidden">
+            <div className="bg-gray-700 px-4 py-2">
+              <h3 className="text-xs font-semibold text-white uppercase tracking-wide">Issues ({issues.length})</h3>
+            </div>
             {issues.length === 0 ? (
-              <p className="text-sm text-gray-400">None</p>
+              <p className="text-sm text-gray-400 p-4">None</p>
             ) : (
-              <div className="space-y-2">
+              <div>
                 {issues.map((i) => (
-                  <div key={i.id} className="bg-white p-3 rounded-lg border border-gray-200">
+                  <div key={i.id} className="bg-white p-3 border-b border-gray-200 last:border-b-0">
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-mono text-gray-400">{i.display_id}</span>
                       <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border ${priorityColor(i.priority)}`}>{i.priority}</span>
                     </div>
-                    <p className="text-sm text-gray-900 mt-1">{i.title}</p>
+                    <p className="text-sm text-gray-900 font-semibold mt-1">{i.title}</p>
                     {i.impact && <p className="text-xs text-gray-500 mt-1">{i.impact}</p>}
                   </div>
                 ))}
@@ -216,19 +251,21 @@ export default async function ProjectDetailPage({
           </div>
 
           {/* Decisions */}
-          <div>
-            <h3 className="text-sm font-semibold text-gray-700 mb-2 uppercase tracking-wide">Decisions ({decisions.length})</h3>
+          <div className="rounded-lg border border-gray-300 overflow-hidden">
+            <div className="bg-gray-700 px-4 py-2">
+              <h3 className="text-xs font-semibold text-white uppercase tracking-wide">Decisions ({decisions.length})</h3>
+            </div>
             {decisions.length === 0 ? (
-              <p className="text-sm text-gray-400">None</p>
+              <p className="text-sm text-gray-400 p-4">None</p>
             ) : (
-              <div className="space-y-2">
+              <div>
                 {decisions.map((d) => (
-                  <div key={d.id} className="bg-white p-3 rounded-lg border border-gray-200">
+                  <div key={d.id} className="bg-white p-3 border-b border-gray-200 last:border-b-0">
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-mono text-gray-400">{d.display_id}</span>
                       {d.decision_date && <span className="text-xs text-gray-500">{formatDateShort(d.decision_date)}</span>}
                     </div>
-                    <p className="text-sm text-gray-900 mt-1">{d.title}</p>
+                    <p className="text-sm text-gray-900 font-semibold mt-1">{d.title}</p>
                     {d.description && <p className="text-xs text-gray-500 mt-1">{d.description}</p>}
                   </div>
                 ))}
@@ -237,21 +274,23 @@ export default async function ProjectDetailPage({
           </div>
 
           {/* RAID Actions */}
-          <div>
-            <h3 className="text-sm font-semibold text-gray-700 mb-2 uppercase tracking-wide">Actions ({actions.length})</h3>
+          <div className="rounded-lg border border-gray-300 overflow-hidden">
+            <div className="bg-gray-700 px-4 py-2">
+              <h3 className="text-xs font-semibold text-white uppercase tracking-wide">Actions ({actions.length})</h3>
+            </div>
             {actions.length === 0 ? (
-              <p className="text-sm text-gray-400">None</p>
+              <p className="text-sm text-gray-400 p-4">None</p>
             ) : (
-              <div className="space-y-2">
+              <div>
                 {actions.map((a) => {
                   const badge = statusBadge(a.status);
                   return (
-                    <div key={a.id} className="bg-white p-3 rounded-lg border border-gray-200">
+                    <div key={a.id} className="bg-white p-3 border-b border-gray-200 last:border-b-0">
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-mono text-gray-400">{a.display_id}</span>
                         <span className={`inline-flex px-1.5 py-0.5 text-xs rounded ${badge.className}`}>{badge.label}</span>
                       </div>
-                      <p className="text-sm text-gray-900 mt-1">{a.title}</p>
+                      <p className="text-sm text-gray-900 font-semibold mt-1">{a.title}</p>
                       <p className="text-xs text-gray-500 mt-1">{a.owner?.full_name || "Unassigned"}</p>
                     </div>
                   );

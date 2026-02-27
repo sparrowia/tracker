@@ -20,15 +20,17 @@ export default async function PeoplePage() {
 
       {/* Internal Team */}
       <section>
-        <h2 className="text-lg font-semibold text-gray-900 mb-3">
-          Internal Team ({internal.length})
-        </h2>
+        <div className="bg-gray-800 px-4 py-2.5 rounded-t-lg">
+          <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Internal Team ({internal.length})</h2>
+        </div>
         {internal.length === 0 ? (
-          <p className="text-sm text-gray-500">No internal contacts.</p>
+          <div className="bg-white rounded-b-lg border border-t-0 border-gray-300 p-4">
+            <p className="text-sm text-gray-500">No internal contacts.</p>
+          </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-3">
             {internal.map((p) => (
-              <div key={p.id} className="bg-white rounded-lg border border-gray-200 p-4">
+              <div key={p.id} className="bg-white rounded-lg border border-gray-300 p-4">
                 <p className="font-medium text-gray-900">{p.full_name}</p>
                 {p.title && <p className="text-sm text-gray-500">{p.title}</p>}
                 {p.email && (
@@ -44,26 +46,29 @@ export default async function PeoplePage() {
 
       {/* External Contacts */}
       <section>
-        <h2 className="text-lg font-semibold text-gray-900 mb-3">
-          Vendor Contacts ({external.length})
-        </h2>
         {external.length === 0 ? (
-          <p className="text-sm text-gray-500">No vendor contacts.</p>
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900 mb-3">Vendor Contacts</h2>
+            <p className="text-sm text-gray-500">No vendor contacts.</p>
+          </div>
         ) : (
-          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+          <div className="bg-white rounded-lg border border-gray-300 overflow-hidden">
+            <div className="bg-gray-800 px-4 py-2.5">
+              <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Vendor Contacts ({external.length})</h2>
+            </div>
+            <table className="min-w-full">
+              <thead className="bg-gray-50 border-b border-gray-300">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Title</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vendor</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Title</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Vendor</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200">
+              <tbody>
                 {external.map((p) => (
-                  <tr key={p.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 text-sm font-medium text-gray-900">{p.full_name}</td>
+                  <tr key={p.id} className="border-b border-gray-200 hover:bg-gray-50">
+                    <td className="px-4 py-3 text-sm font-semibold text-gray-900">{p.full_name}</td>
                     <td className="px-4 py-3 text-sm text-gray-600">{p.title || "—"}</td>
                     <td className="px-4 py-3 text-sm">
                       {p.vendor ? (

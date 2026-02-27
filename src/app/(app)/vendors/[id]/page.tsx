@@ -82,10 +82,12 @@ export default async function VendorDetailPage({
       {/* Contacts */}
       {people.length > 0 && (
         <section>
-          <h2 className="text-lg font-semibold text-gray-900 mb-3">Contacts</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="bg-gray-800 px-4 py-2.5 rounded-t-lg">
+            <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Contacts</h2>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-3">
             {people.map((person) => (
-              <div key={person.id} className="bg-white rounded-lg border border-gray-200 p-3">
+              <div key={person.id} className="bg-white rounded-lg border border-gray-300 p-3">
                 <p className="font-medium text-gray-900 text-sm">{person.full_name}</p>
                 {person.title && <p className="text-xs text-gray-500">{person.title}</p>}
                 {person.email && (
@@ -102,8 +104,10 @@ export default async function VendorDetailPage({
       {/* Related Projects */}
       {vendorProjects.length > 0 && (
         <section>
-          <h2 className="text-lg font-semibold text-gray-900 mb-3">Related Projects</h2>
-          <div className="flex gap-2 flex-wrap">
+          <div className="bg-gray-800 px-4 py-2.5 rounded-t-lg">
+            <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Related Projects</h2>
+          </div>
+          <div className="flex gap-2 flex-wrap mt-3">
             {vendorProjects.map((proj) => (
               <Link
                 key={proj.id}
@@ -119,19 +123,22 @@ export default async function VendorDetailPage({
 
       {/* Accountability */}
       <section>
-        <h2 className="text-lg font-semibold text-gray-900 mb-3">
-          Open Items ({items.length})
-        </h2>
         {items.length === 0 ? (
-          <p className="text-sm text-gray-500">No open items for this vendor.</p>
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900 mb-3">Open Items</h2>
+            <p className="text-sm text-gray-500">No open items for this vendor.</p>
+          </div>
         ) : (
-          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+          <div className="bg-white rounded-lg border border-gray-300 overflow-hidden">
+            <div className="bg-gray-800 px-4 py-2.5">
+              <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Open Items ({items.length})</h2>
+            </div>
+            <table className="min-w-full">
+              <thead className="bg-gray-50 border-b border-gray-300">
                 <tr>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Item</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Owner</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Responsible</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Project</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Priority</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Due</th>
@@ -139,12 +146,13 @@ export default async function VendorDetailPage({
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200">
+              <tbody>
                 {items.map((item) => {
                   const badge = statusBadge(item.status);
                   const proj = item.project_id ? projectMap.get(item.project_id) : null;
+                  const ownerName = item.owner_id ? ownerMap.get(item.owner_id) : null;
                   return (
-                    <tr key={`${item.entity_type}-${item.entity_id}`} className="hover:bg-gray-50">
+                    <tr key={`${item.entity_type}-${item.entity_id}`} className="border-b border-gray-200 hover:bg-gray-50">
                       <td className="px-4 py-3">
                         <span className={`inline-flex px-1.5 py-0.5 text-xs rounded ${
                           item.entity_type === "blocker" ? "bg-red-100 text-red-700" : "bg-blue-100 text-blue-700"
@@ -152,9 +160,18 @@ export default async function VendorDetailPage({
                           {item.entity_type === "blocker" ? "Blocker" : "Action"}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-900">{item.title}</td>
-                      <td className="px-4 py-3 text-sm text-gray-600">
-                        {item.owner_id ? ownerMap.get(item.owner_id) || "—" : "—"}
+                      <td className="px-4 py-3 text-sm text-gray-900 font-semibold">{item.title}</td>
+                      <td className="px-4 py-3 text-sm">
+                        {ownerName ? (
+                          <div className="flex items-center gap-1.5">
+                            <span className="w-5 h-5 rounded-full bg-blue-100 text-[10px] font-medium text-blue-700 flex items-center justify-center flex-shrink-0">
+                              {ownerName.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
+                            </span>
+                            <span className="text-gray-700">{ownerName}</span>
+                          </div>
+                        ) : (
+                          <span className="text-gray-400 italic">Unassigned</span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-sm">
                         {proj ? (

@@ -118,8 +118,10 @@ export default function SettingsPage() {
       )}
 
       <section className="mt-6">
-        <h2 className="text-lg font-semibold text-gray-800 mb-1">Term Corrections</h2>
-        <p className="text-sm text-gray-500 mb-4">
+        <div className="bg-gray-800 px-4 py-2.5 rounded-t-lg">
+          <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Term Corrections</h2>
+        </div>
+        <p className="text-sm text-gray-500 my-3">
           Common mistranslations the AI should fix during extraction. For example, names that are frequently misspelled or products with alternate names.
         </p>
 
@@ -174,9 +176,9 @@ export default function SettingsPage() {
         ) : corrections.length === 0 ? (
           <p className="text-sm text-gray-500">No term corrections yet. Add one above.</p>
         ) : (
-          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+          <div className="bg-white rounded-lg border border-gray-300 overflow-hidden">
+            <table className="min-w-full">
+              <thead className="bg-gray-50 border-b border-gray-300">
                 <tr>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Wrong Term</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Correct Term</th>
@@ -184,9 +186,9 @@ export default function SettingsPage() {
                   <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase w-24"></th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody>
                 {corrections.map((c) => (
-                  <tr key={c.id}>
+                  <tr key={c.id} className="border-b border-gray-200">
                     {editingId === c.id ? (
                       <>
                         <td className="px-4 py-2">

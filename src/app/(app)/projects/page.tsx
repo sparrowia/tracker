@@ -12,26 +12,30 @@ export default async function ProjectsPage() {
 
   return (
     <div className="max-w-5xl mx-auto">
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Projects</h1>
-
       {!projects || projects.length === 0 ? (
-        <p className="text-sm text-gray-500">No projects yet.</p>
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-6">Projects</h1>
+          <p className="text-sm text-gray-500">No projects yet.</p>
+        </div>
       ) : (
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+        <div className="bg-white rounded-lg border border-gray-300 overflow-hidden">
+          <div className="bg-gray-800 px-4 py-2.5">
+            <h1 className="text-xs font-semibold text-white uppercase tracking-wide">Projects</h1>
+          </div>
+          <table className="min-w-full">
+            <thead className="bg-gray-50 border-b border-gray-300">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Project</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Health</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Platform Status</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Target</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Project</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Health</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Platform Status</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Target</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
+            <tbody>
               {(projects as Project[]).map((p) => (
-                <tr key={p.id} className="hover:bg-gray-50">
+                <tr key={p.id} className="border-b border-gray-200 hover:bg-gray-50">
                   <td className="px-4 py-3">
-                    <Link href={`/projects/${p.slug}`} className="text-sm font-medium text-blue-600 hover:underline">
+                    <Link href={`/projects/${p.slug}`} className="text-sm font-semibold text-blue-600 hover:underline">
                       {p.name}
                     </Link>
                     {p.description && <p className="text-xs text-gray-500 mt-0.5">{p.description}</p>}

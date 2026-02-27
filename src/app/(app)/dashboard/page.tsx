@@ -115,21 +115,26 @@ export default async function DashboardPage() {
 
       {/* Critical Path This Week */}
       <section>
-        <h2 className="text-lg font-semibold text-gray-900 mb-3">Critical Path This Week</h2>
         {criticalPath.length === 0 ? (
-          <p className="text-sm text-gray-500">No critical items this week.</p>
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900 mb-3">Critical Path This Week</h2>
+            <p className="text-sm text-gray-500">No critical items this week.</p>
+          </div>
         ) : (
           <div className="bg-white rounded-lg border border-gray-300 overflow-hidden">
+            <div className="bg-gray-800 px-4 py-2.5">
+              <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Critical Path This Week</h2>
+            </div>
             <table className="min-w-full">
               <thead className="bg-gray-50 border-b border-gray-300">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Item</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Responsible</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Project</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Priority</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Due</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Age</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Item</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Responsible</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Project</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Priority</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Due</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Age</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -180,20 +185,25 @@ export default async function DashboardPage() {
 
       {/* Active Blockers */}
       <section>
-        <h2 className="text-lg font-semibold text-gray-900 mb-3">Active Blockers</h2>
         {blockers.length === 0 ? (
-          <p className="text-sm text-gray-500">No active blockers.</p>
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900 mb-3">Active Blockers</h2>
+            <p className="text-sm text-gray-500">No active blockers.</p>
+          </div>
         ) : (
           <div className="bg-white rounded-lg border border-gray-300 overflow-hidden">
+            <div className="bg-gray-800 px-4 py-2.5">
+              <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Active Blockers</h2>
+            </div>
             <table className="min-w-full">
               <thead className="bg-gray-50 border-b border-gray-300">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Blocker</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Project</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vendor</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Age</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Impact</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Escalations</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Blocker</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Project</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Vendor</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Age</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Impact</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Escalations</th>
                 </tr>
               </thead>
               <tbody>
@@ -235,11 +245,16 @@ export default async function DashboardPage() {
       {/* Two-column: Support Tickets + Decisions Needed */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <section>
-          <h2 className="text-lg font-semibold text-gray-900 mb-3">Open Support Requests</h2>
           {supportTickets.length === 0 ? (
-            <p className="text-sm text-gray-500">No open tickets.</p>
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900 mb-3">Open Support Requests</h2>
+              <p className="text-sm text-gray-500">No open tickets.</p>
+            </div>
           ) : (
-            <div className="bg-white rounded-lg border border-gray-300">
+            <div className="bg-white rounded-lg border border-gray-300 overflow-hidden">
+              <div className="bg-gray-800 px-4 py-2.5">
+                <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Open Support Requests</h2>
+              </div>
               {supportTickets.map((t) => (
                 <div key={t.id} className="px-4 py-3 border-b border-gray-200 last:border-b-0">
                   <div className="flex items-center gap-2">
@@ -259,11 +274,16 @@ export default async function DashboardPage() {
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold text-gray-900 mb-3">Decisions Needed</h2>
           {decisions.length === 0 ? (
-            <p className="text-sm text-gray-500">No pending decisions.</p>
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900 mb-3">Decisions Needed</h2>
+              <p className="text-sm text-gray-500">No pending decisions.</p>
+            </div>
           ) : (
-            <div className="bg-white rounded-lg border border-gray-300">
+            <div className="bg-white rounded-lg border border-gray-300 overflow-hidden">
+              <div className="bg-gray-800 px-4 py-2.5">
+                <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Decisions Needed</h2>
+              </div>
               {decisions.map((d) => (
                 <div key={d.id} className="px-4 py-3 border-b border-gray-200 last:border-b-0">
                   <div className="flex items-center gap-2">
@@ -285,18 +305,22 @@ export default async function DashboardPage() {
 
       {/* Vendor Accountability Summary */}
       <section>
-        <h2 className="text-lg font-semibold text-gray-900 mb-3">Vendor Accountability</h2>
+        <div className="bg-gray-800 px-4 py-2.5 rounded-t-lg">
+          <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Vendor Accountability</h2>
+        </div>
         {vendorSummary.length === 0 ? (
-          <p className="text-sm text-gray-500">No open vendor items.</p>
+          <div className="bg-white rounded-b-lg border border-t-0 border-gray-300 p-4">
+            <p className="text-sm text-gray-500">No open vendor items.</p>
+          </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-3">
             {vendorSummary.map(({ vendor, actionCount, blockerCount, totalOpen }) => (
               <Link
                 key={vendor.id}
                 href={`/vendors/${vendor.id}`}
-                className="bg-white rounded-lg border border-gray-200 p-4 hover:border-blue-300 transition-colors"
+                className="bg-white rounded-lg border border-gray-300 p-4 hover:border-blue-400 transition-colors"
               >
-                <h3 className="font-medium text-gray-900">{vendor.name}</h3>
+                <h3 className="font-semibold text-gray-900">{vendor.name}</h3>
                 <div className="mt-2 flex gap-4 text-sm">
                   <span className="text-gray-600">{actionCount} actions</span>
                   {blockerCount > 0 && (
@@ -312,16 +336,20 @@ export default async function DashboardPage() {
 
       {/* Project Health */}
       <section>
-        <h2 className="text-lg font-semibold text-gray-900 mb-3">Project Health</h2>
+        <div className="bg-gray-800 px-4 py-2.5 rounded-t-lg">
+          <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Project Health</h2>
+        </div>
         {projects.length === 0 ? (
-          <p className="text-sm text-gray-500">No projects yet.</p>
+          <div className="bg-white rounded-b-lg border border-t-0 border-gray-300 p-4">
+            <p className="text-sm text-gray-500">No projects yet.</p>
+          </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-3">
             {projects.map((p) => (
               <Link
                 key={p.id}
                 href={`/projects/${p.slug}`}
-                className="bg-white rounded-lg border border-gray-200 p-4 hover:border-blue-300 transition-colors"
+                className="bg-white rounded-lg border border-gray-300 p-4 hover:border-blue-400 transition-colors"
               >
                 <div className="flex items-center justify-between">
                   <h3 className="font-medium text-gray-900">{p.name}</h3>
