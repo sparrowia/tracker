@@ -317,7 +317,7 @@ export function AgendaView({
                 {/* Section header */}
                 <button
                   onClick={() => toggleGroup(priority)}
-                  className="w-full flex items-center gap-2 px-3 py-2 bg-gray-50/70 border-b border-gray-300 hover:bg-gray-100/80 transition-colors text-left"
+                  className="w-full flex items-center gap-2 px-3 py-2.5 bg-gray-800 border-b border-gray-900 hover:bg-gray-700 transition-colors text-left"
                 >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -334,7 +334,7 @@ export function AgendaView({
                     <polyline points="9 18 15 12 9 6" />
                   </svg>
                   <span className={`w-2 h-2 rounded-full ${priorityDot(priority)}`} />
-                  <span className="text-xs font-semibold text-gray-700">
+                  <span className="text-xs font-semibold text-white uppercase tracking-wide">
                     {priorityLabels[priority]}
                   </span>
                   <span className="text-xs text-gray-400">{groupItems.length}</span>
