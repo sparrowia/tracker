@@ -419,16 +419,11 @@ export default function RaidLog({ initialEntries, project, people, vendors }: Ra
   }
 
   return (
-    <section>
-      <div className="bg-gray-800 px-4 py-2.5 rounded-t-lg">
-        <h2 className="text-xs font-semibold text-white uppercase tracking-wide">RAID Log</h2>
-      </div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-3">
-        {renderQuadrant("Risks", risks)}
-        {renderQuadrant("Issues", issues)}
-        {renderQuadrant("Decisions", decisions)}
-        {renderQuadrant("Actions", actions)}
-      </div>
-    </section>
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {renderQuadrant("Risks", risks)}
+      {renderQuadrant("Issues", issues)}
+      {renderQuadrant("Decisions", decisions)}
+      {renderQuadrant("Actions", actions)}
+    </div>
   );
 }

@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { healthColor, healthLabel, formatAge, formatDateShort } from "@/lib/utils";
+import { healthColor, healthLabel, formatDateShort } from "@/lib/utils";
 import type { Project, ActionItem, RaidEntry, Blocker, Person, Vendor, Initiative, ProjectAgendaRow } from "@/lib/types";
 import ProjectTabs from "@/components/project-tabs";
 
@@ -121,53 +121,10 @@ export default async function ProjectDetailPage({
         )}
       </div>
 
-      {/* Blockers */}
-      {typedBlockers.length > 0 && (
-        <section>
-          <div className="bg-white rounded-lg border border-gray-300 overflow-hidden">
-            <div className="bg-red-800 px-4 py-2.5">
-              <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Active Blockers</h2>
-            </div>
-            <table className="min-w-full">
-              <thead className="bg-red-50 border-b border-gray-300">
-                <tr>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-red-700 uppercase">Blocker</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-red-700 uppercase">Responsible</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-red-700 uppercase">Age</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-red-700 uppercase">Impact</th>
-                </tr>
-              </thead>
-              <tbody>
-                {typedBlockers.map((b) => (
-                  <tr key={b.id} className="border-b border-gray-200">
-                    <td className="px-4 py-3 text-sm text-gray-900 font-semibold">{b.title}</td>
-                    <td className="px-4 py-3 text-sm">
-                      {b.owner ? (
-                        <div className="flex items-center gap-1.5">
-                          <span className="w-5 h-5 rounded-full bg-blue-100 text-[10px] font-medium text-blue-700 flex items-center justify-center flex-shrink-0">
-                            {b.owner.full_name.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
-                          </span>
-                          <span className="text-gray-700">{b.owner.full_name}</span>
-                        </div>
-                      ) : (
-                        <span className="text-gray-400 italic">Unassigned</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-red-700 font-medium">
-                      {b.age_days != null ? formatAge(b.age_days) : "—"}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{b.impact_description || "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
-
-      {/* Tabbed content: Agenda, RAID, Action Items */}
+      {/* Tabbed content: Agenda, Blockers, RAID, Action Items */}
       <ProjectTabs
         project={p}
+        blockers={typedBlockers}
         actions={typedActions}
         raidEntries={typedRaid}
         people={typedPeople}
