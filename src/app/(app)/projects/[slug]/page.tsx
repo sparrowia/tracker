@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { healthColor, healthLabel, formatDateShort } from "@/lib/utils";
-import type { Project, ActionItem, RaidEntry, Blocker, Person, Vendor, Initiative, ProjectAgendaRow } from "@/lib/types";
+import type { Project, ActionItem, RaidEntry, Blocker, Person, Vendor, Initiative } from "@/lib/types";
 import ProjectTabs from "@/components/project-tabs";
 
 export default async function ProjectDetailPage({
@@ -23,13 +23,14 @@ export default async function ProjectDetailPage({
 
   const p = project as Project;
 
+  // All queries in a single parallel batch — including initiative breadcrumb
   const [
     { data: actionItems },
     { data: raidEntries },
     { data: blockers },
     { data: vendors },
     { data: allPeople },
-    { data: agendaRows },
+    { data: initiativeData },
   ] = await Promise.all([
     supabase
       .from("action_item_ages")
@@ -56,22 +57,12 @@ export default async function ProjectDetailPage({
       .from("people")
       .select("*")
       .order("full_name"),
-    supabase.rpc("generate_project_agenda", {
-      p_project_id: p.id,
-      p_limit: 20,
-    }),
+    p.initiative_id
+      ? supabase.from("initiatives").select("*").eq("id", p.initiative_id).single()
+      : Promise.resolve({ data: null }),
   ]);
 
-  // Fetch initiative if project has one
-  let initiative: Initiative | null = null;
-  if (p.initiative_id) {
-    const { data } = await supabase
-      .from("initiatives")
-      .select("*")
-      .eq("id", p.initiative_id)
-      .single();
-    initiative = data as Initiative | null;
-  }
+  const initiative = initiativeData as Initiative | null;
 
   const typedActions = (actionItems || []) as (ActionItem & { owner: Person | null; vendor: Vendor | null })[];
   const typedRaid = (raidEntries || []) as (RaidEntry & { owner: Person | null; vendor: Vendor | null })[];
@@ -79,7 +70,6 @@ export default async function ProjectDetailPage({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const typedVendors = ((vendors || []).map((v: any) => v.vendor).filter(Boolean)) as Vendor[];
   const typedPeople = (allPeople || []) as Person[];
-  const typedAgenda = (agendaRows || []) as ProjectAgendaRow[];
 
   return (
     <div className="max-w-6xl mx-auto space-y-8">
@@ -129,7 +119,7 @@ export default async function ProjectDetailPage({
         raidEntries={typedRaid}
         people={typedPeople}
         vendors={typedVendors}
-        agendaRows={typedAgenda}
+        agendaRows={[]}
       />
     </div>
   );

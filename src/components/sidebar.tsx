@@ -39,7 +39,9 @@ export function Sidebar() {
   const [initiativesOpen, setInitiativesOpen] = useState(isOnInitiatives);
   const [expandedInitiatives, setExpandedInitiatives] = useState<Set<string>>(new Set());
   const [initiatives, setInitiatives] = useState<SidebarInitiative[]>([]);
+  const [loaded, setLoaded] = useState(false);
 
+  // Fetch once on mount
   useEffect(() => {
     const supabase = createClient();
     async function load() {
@@ -56,26 +58,38 @@ export function Sidebar() {
       }));
 
       setInitiatives(result);
+      setLoaded(true);
+    }
+    load();
+  }, []);
 
-      // Auto-expand the initiative that contains the current project
-      if (pathname.startsWith("/projects/")) {
-        const currentSlug = pathname.split("/projects/")[1]?.split("/")[0];
-        const proj = projs.find((p) => p.slug === currentSlug);
-        if (proj?.initiative_id) {
-          setExpandedInitiatives(new Set([proj.initiative_id]));
-        }
-      }
-      // Auto-expand the current initiative
-      if (pathname.startsWith("/initiatives/")) {
-        const currentSlug = pathname.split("/initiatives/")[1]?.split("/")[0];
-        const init = inits.find((i) => i.slug === currentSlug);
-        if (init) {
-          setExpandedInitiatives(new Set([init.id]));
+  // Auto-expand based on current path (no re-fetch)
+  useEffect(() => {
+    if (!loaded || initiatives.length === 0) return;
+
+    if (pathname.startsWith("/projects/")) {
+      const currentSlug = pathname.split("/projects/")[1]?.split("/")[0];
+      for (const init of initiatives) {
+        if (init.projects.some((p) => p.slug === currentSlug)) {
+          setExpandedInitiatives((prev) => {
+            if (prev.has(init.id)) return prev;
+            return new Set([...prev, init.id]);
+          });
+          break;
         }
       }
     }
-    load();
-  }, [pathname]);
+    if (pathname.startsWith("/initiatives/")) {
+      const currentSlug = pathname.split("/initiatives/")[1]?.split("/")[0];
+      const init = initiatives.find((i) => i.slug === currentSlug);
+      if (init) {
+        setExpandedInitiatives((prev) => {
+          if (prev.has(init.id)) return prev;
+          return new Set([...prev, init.id]);
+        });
+      }
+    }
+  }, [pathname, loaded, initiatives]);
 
   function toggleInitiative(id: string) {
     setExpandedInitiatives((prev) => {
