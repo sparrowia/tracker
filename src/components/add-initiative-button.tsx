@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { useRouter } from "next/navigation";
 import { healthLabel } from "@/lib/utils";
 import type { ProjectHealth } from "@/lib/types";
 
@@ -12,8 +11,9 @@ function generateSlug(name: string) {
   return name.toLowerCase().replace(/[^a-z0-9\s-]/g, "").replace(/\s+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
 }
 
-export default function AddInitiativeButton() {
+export default function AddInitiativeButton({ onSaved }: { onSaved?: () => void } = {}) {
   const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     name: "",
     slug: "",
@@ -22,7 +22,6 @@ export default function AddInitiativeButton() {
     target_completion: "",
   });
   const supabase = createClient();
-  const router = useRouter();
 
   function close() {
     setOpen(false);
@@ -30,9 +29,10 @@ export default function AddInitiativeButton() {
   }
 
   async function save() {
-    if (!form.name.trim()) return;
+    if (!form.name.trim() || saving) return;
+    setSaving(true);
     const { data: profile } = await supabase.from("profiles").select("org_id").single();
-    if (!profile?.org_id) return;
+    if (!profile?.org_id) { setSaving(false); return; }
     const slug = form.slug.trim() || generateSlug(form.name);
     const { error } = await supabase.from("initiatives").insert({
       org_id: profile.org_id,
@@ -42,9 +42,10 @@ export default function AddInitiativeButton() {
       health: form.health,
       target_completion: form.target_completion || null,
     });
+    setSaving(false);
     if (!error) {
       close();
-      router.refresh();
+      onSaved?.();
     }
   }
 
@@ -141,9 +142,16 @@ export default function AddInitiativeButton() {
               </button>
               <button
                 onClick={save}
-                className="px-4 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+                disabled={saving}
+                className="px-4 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
-                Save
+                {saving && (
+                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                  </svg>
+                )}
+                {saving ? "Saving..." : "Save"}
               </button>
             </div>
           </div>

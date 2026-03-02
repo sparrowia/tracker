@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { healthColor, healthLabel, formatDateShort } from "@/lib/utils";
@@ -17,18 +17,17 @@ export default function InitiativesPage() {
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const supabase = createClient();
 
-  useEffect(() => {
-    async function load() {
-      const [{ data: initData }, { data: projData }] = await Promise.all([
-        supabase.from("initiatives").select("*").order("name"),
-        supabase.from("projects").select("*").order("name"),
-      ]);
-      setInitiatives((initData || []) as Initiative[]);
-      setProjects((projData || []) as Project[]);
-      setLoading(false);
-    }
-    load();
+  const reload = useCallback(async () => {
+    const [{ data: initData }, { data: projData }] = await Promise.all([
+      supabase.from("initiatives").select("*").order("name"),
+      supabase.from("projects").select("*").order("name"),
+    ]);
+    setInitiatives((initData || []) as Initiative[]);
+    setProjects((projData || []) as Project[]);
+    setLoading(false);
   }, []);
+
+  useEffect(() => { reload(); }, [reload]);
 
   // Group projects by initiative
   const projectsByInitiative = new Map<string, Project[]>();
@@ -113,7 +112,7 @@ export default function InitiativesPage() {
     <div className="max-w-5xl mx-auto space-y-8">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Initiatives</h1>
-        <AddInitiativeButton />
+        <AddInitiativeButton onSaved={reload} />
       </div>
 
       {initiatives.length === 0 && unassigned.length === 0 ? (
