@@ -18,11 +18,18 @@ import {
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 
+interface SidebarProject {
+  id: string;
+  name: string;
+  slug: string;
+  hasBlockers: boolean;
+}
+
 interface SidebarInitiative {
   id: string;
   name: string;
   slug: string;
-  projects: { id: string; name: string; slug: string }[];
+  projects: SidebarProject[];
 }
 
 const settingsItems = [
@@ -45,16 +52,20 @@ export function Sidebar() {
   useEffect(() => {
     const supabase = createClient();
     async function load() {
-      const [{ data: initData }, { data: projData }] = await Promise.all([
+      const [{ data: initData }, { data: projData }, { data: blockerData }] = await Promise.all([
         supabase.from("initiatives").select("id, name, slug").order("name"),
         supabase.from("projects").select("id, name, slug, initiative_id").order("name"),
+        supabase.from("blockers").select("project_id").eq("status", "pending"),
       ]);
       const inits = (initData || []) as { id: string; name: string; slug: string }[];
       const projs = (projData || []) as { id: string; name: string; slug: string; initiative_id: string | null }[];
+      const blockedProjectIds = new Set((blockerData || []).map((b: { project_id: string }) => b.project_id));
 
       const result: SidebarInitiative[] = inits.map((init) => ({
         ...init,
-        projects: projs.filter((p) => p.initiative_id === init.id),
+        projects: projs
+          .filter((p) => p.initiative_id === init.id)
+          .map((p) => ({ ...p, hasBlockers: blockedProjectIds.has(p.id) })),
       }));
 
       setInitiatives(result);
@@ -178,7 +189,9 @@ export function Sidebar() {
                                 "block px-2 py-1 text-xs rounded-md transition-colors truncate",
                                 isProjActive
                                   ? "text-blue-700 font-medium bg-blue-50"
-                                  : "text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                                  : proj.hasBlockers
+                                    ? "text-red-600 font-semibold hover:bg-red-50"
+                                    : "text-gray-500 hover:bg-gray-100 hover:text-gray-700"
                               )}
                             >
                               {proj.name}
