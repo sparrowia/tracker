@@ -69,14 +69,6 @@ export default async function VendorDetailPage({
             {v.website}
           </a>
         )}
-        <div className="flex gap-2 mt-3">
-          <Link
-            href={`/agendas/${v.slug}`}
-            className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
-          >
-            Generate Agenda
-          </Link>
-        </div>
       </div>
 
       {/* Contacts */}

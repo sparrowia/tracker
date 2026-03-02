@@ -72,7 +72,7 @@ export default async function PeoplePage() {
                     <td className="px-4 py-3 text-sm text-gray-600">{p.title || "—"}</td>
                     <td className="px-4 py-3 text-sm">
                       {p.vendor ? (
-                        <Link href={`/vendors/${p.vendor.id}`} className="text-blue-600 hover:underline">
+                        <Link href={`/settings/vendors/${p.vendor.id}`} className="text-blue-600 hover:underline">
                           {p.vendor.name}
                         </Link>
                       ) : "—"}

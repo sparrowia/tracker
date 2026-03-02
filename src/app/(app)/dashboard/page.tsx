@@ -219,7 +219,7 @@ export default async function DashboardPage() {
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-600">
                       {b.vendor ? (
-                        <Link href={`/vendors/${b.vendor.id}`} className="text-blue-600 hover:underline">
+                        <Link href={`/settings/vendors/${b.vendor.id}`} className="text-blue-600 hover:underline">
                           {b.vendor.name}
                         </Link>
                       ) : "—"}
@@ -317,7 +317,7 @@ export default async function DashboardPage() {
             {vendorSummary.map(({ vendor, actionCount, blockerCount, totalOpen }) => (
               <Link
                 key={vendor.id}
-                href={`/vendors/${vendor.id}`}
+                href={`/settings/vendors/${vendor.id}`}
                 className="bg-white rounded-lg border border-gray-300 p-4 hover:border-blue-400 transition-colors"
               >
                 <h3 className="font-semibold text-gray-900">{vendor.name}</h3>

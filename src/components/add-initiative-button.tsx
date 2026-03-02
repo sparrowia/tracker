@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
-import { healthColor, healthLabel } from "@/lib/utils";
-import type { ProjectHealth, Initiative } from "@/lib/types";
+import { healthLabel } from "@/lib/utils";
+import type { ProjectHealth } from "@/lib/types";
 
 const HEALTH_OPTIONS: ProjectHealth[] = ["on_track", "in_progress", "at_risk", "blocked", "paused", "complete"];
 
@@ -12,47 +12,32 @@ function generateSlug(name: string) {
   return name.toLowerCase().replace(/[^a-z0-9\s-]/g, "").replace(/\s+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
 }
 
-export default function AddProjectButton({ initiativeId }: { initiativeId?: string }) {
+export default function AddInitiativeButton() {
   const [open, setOpen] = useState(false);
-  const [initiatives, setInitiatives] = useState<Initiative[]>([]);
   const [form, setForm] = useState({
     name: "",
     slug: "",
     description: "",
     health: "on_track" as ProjectHealth,
-    platform_status: "",
-    start_date: "",
     target_completion: "",
-    initiative_id: initiativeId || "",
   });
   const supabase = createClient();
   const router = useRouter();
 
-  useEffect(() => {
-    if (!initiativeId && open) {
-      supabase.from("initiatives").select("*").order("name").then(({ data }) => {
-        setInitiatives((data || []) as Initiative[]);
-      });
-    }
-  }, [open, initiativeId]);
-
   function close() {
     setOpen(false);
-    setForm({ name: "", slug: "", description: "", health: "on_track", platform_status: "", start_date: "", target_completion: "", initiative_id: initiativeId || "" });
+    setForm({ name: "", slug: "", description: "", health: "on_track", target_completion: "" });
   }
 
   async function save() {
     if (!form.name.trim()) return;
     const slug = form.slug.trim() || generateSlug(form.name);
-    const { error } = await supabase.from("projects").insert({
+    const { error } = await supabase.from("initiatives").insert({
       name: form.name.trim(),
       slug,
       description: form.description.trim() || null,
       health: form.health,
-      platform_status: form.platform_status.trim() || null,
-      start_date: form.start_date || null,
       target_completion: form.target_completion || null,
-      initiative_id: form.initiative_id || null,
     });
     if (!error) {
       close();
@@ -66,7 +51,7 @@ export default function AddProjectButton({ initiativeId }: { initiativeId?: stri
         onClick={() => setOpen(true)}
         className="px-4 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
       >
-        + Add Project
+        + Add Initiative
       </button>
 
       {open && (
@@ -79,7 +64,7 @@ export default function AddProjectButton({ initiativeId }: { initiativeId?: stri
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-              <h2 className="text-lg font-semibold text-gray-900">New Project</h2>
+              <h2 className="text-lg font-semibold text-gray-900">New Initiative</h2>
               <button onClick={close} className="text-gray-400 hover:text-gray-600">
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="18" y1="6" x2="6" y2="18"/>
@@ -133,50 +118,14 @@ export default function AddProjectButton({ initiativeId }: { initiativeId?: stri
                   ))}
                 </select>
               </div>
-              {/* Initiative dropdown — only shown when not pre-set */}
-              {!initiativeId && (
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Initiative</label>
-                  <select
-                    value={form.initiative_id}
-                    onChange={(e) => setForm({ ...form, initiative_id: e.target.value })}
-                    className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  >
-                    <option value="">None</option>
-                    {initiatives.map((i) => (
-                      <option key={i.id} value={i.id}>{i.name}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Platform Status</label>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Target Completion</label>
                 <input
-                  type="text"
-                  value={form.platform_status}
-                  onChange={(e) => setForm({ ...form, platform_status: e.target.value })}
+                  type="date"
+                  value={form.target_completion}
+                  onChange={(e) => setForm({ ...form, target_completion: e.target.value })}
                   className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Start Date</label>
-                  <input
-                    type="date"
-                    value={form.start_date}
-                    onChange={(e) => setForm({ ...form, start_date: e.target.value })}
-                    className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Target Completion</label>
-                  <input
-                    type="date"
-                    value={form.target_completion}
-                    onChange={(e) => setForm({ ...form, target_completion: e.target.value })}
-                    className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  />
-                </div>
               </div>
             </div>
 

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { priorityColor, priorityDot, formatAge } from "@/lib/utils";
-import type { Vendor, VendorAgendaRow, PriorityLevel } from "@/lib/types";
+import type { Project, ProjectAgendaRow, PriorityLevel } from "@/lib/types";
 
 const priorityOptions: PriorityLevel[] = ["critical", "high", "medium", "low"];
 
@@ -21,8 +21,8 @@ const typeLabels: Record<string, string> = {
   agenda_item: "Agenda",
 };
 
-function groupByPriority(items: VendorAgendaRow[]) {
-  const groups: Record<PriorityLevel, VendorAgendaRow[]> = {
+function groupByPriority(items: ProjectAgendaRow[]) {
+  const groups: Record<PriorityLevel, ProjectAgendaRow[]> = {
     critical: [],
     high: [],
     medium: [],
@@ -35,11 +35,11 @@ function groupByPriority(items: VendorAgendaRow[]) {
 }
 
 export function AgendaView({
-  vendor,
+  project,
   initialItems,
 }: {
-  vendor: Vendor;
-  initialItems: VendorAgendaRow[];
+  project: Project;
+  initialItems: ProjectAgendaRow[];
 }) {
   const [items, setItems] = useState(initialItems);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -66,7 +66,7 @@ export function AgendaView({
     setExpandedId((prev) => (prev === key ? null : key));
   }
 
-  function handleEscalate(item: VendorAgendaRow) {
+  function handleEscalate(item: ProjectAgendaRow) {
     const priorityRank: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
     const rankToPriority: PriorityLevel[] = ["critical", "high", "medium", "low"];
 
@@ -100,7 +100,7 @@ export function AgendaView({
     supabase.from(table).update(updates).eq("id", item.entity_id);
   }
 
-  function handleDeescalate(item: VendorAgendaRow) {
+  function handleDeescalate(item: ProjectAgendaRow) {
     const priorityRank: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
     const rankToPriority: PriorityLevel[] = ["critical", "high", "medium", "low"];
 
@@ -132,7 +132,7 @@ export function AgendaView({
     }
   }
 
-  async function handleResolve(item: VendorAgendaRow) {
+  async function handleResolve(item: ProjectAgendaRow) {
     const now = new Date().toISOString();
     if (item.entity_type === "agenda_item") {
       await supabase.from("agenda_items").update({ status: "complete", resolved_at: now }).eq("id", item.entity_id);
@@ -148,13 +148,13 @@ export function AgendaView({
   async function handleAddItem() {
     if (!newTitle.trim()) return;
     await supabase.from("agenda_items").insert({
-      vendor_id: vendor.id,
+      project_id: project.id,
       title: newTitle.trim(),
       context: newContext.trim() || null,
       ask: newAsk.trim() || null,
       severity: "new",
       priority: "medium",
-      org_id: vendor.org_id,
+      org_id: project.org_id,
     });
     setNewTitle("");
     setNewContext("");
@@ -163,7 +163,7 @@ export function AgendaView({
     router.refresh();
   }
 
-  function startEdit(item: VendorAgendaRow) {
+  function startEdit(item: ProjectAgendaRow) {
     setEditingId(`${item.entity_type}-${item.entity_id}`);
     setEditFields({
       title: item.title,
@@ -173,7 +173,7 @@ export function AgendaView({
     });
   }
 
-  async function handleSaveEdit(item: VendorAgendaRow) {
+  async function handleSaveEdit(item: ProjectAgendaRow) {
     const table = item.entity_type === "agenda_item" ? "agenda_items"
       : item.entity_type === "blocker" ? "blockers" : "action_items";
 
@@ -192,7 +192,7 @@ export function AgendaView({
     router.refresh();
   }
 
-  async function handleDelete(item: VendorAgendaRow) {
+  async function handleDelete(item: ProjectAgendaRow) {
     const table = item.entity_type === "agenda_item" ? "agenda_items"
       : item.entity_type === "blocker" ? "blockers" : "action_items";
 
@@ -203,7 +203,7 @@ export function AgendaView({
 
   function exportMarkdown() {
     const lines = [
-      `# ${vendor.name} Meeting Agenda`,
+      `# ${project.name} Meeting Agenda`,
       `**Generated:** ${new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}`,
       "",
       "| # | Severity | Topic | Context | Ask | Owner |",
@@ -226,10 +226,10 @@ export function AgendaView({
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">
-            {vendor.name} Meeting Agenda
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">
+          <h2 className="text-lg font-semibold text-gray-900">
+            Meeting Agenda
+          </h2>
+          <p className="text-sm text-gray-500 mt-0.5">
             {items.length} items, ranked by priority + age + escalations
           </p>
         </div>
@@ -291,7 +291,7 @@ export function AgendaView({
       )}
 
       {items.length === 0 ? (
-        <p className="text-sm text-gray-500">No agenda items. Add items or check vendor action items and blockers.</p>
+        <p className="text-sm text-gray-500">No agenda items. Add items or check project action items and blockers.</p>
       ) : (
         <div className="bg-white rounded-lg border border-gray-300 overflow-hidden">
           {/* Column headers */}
@@ -497,8 +497,8 @@ export function AgendaView({
                                   <span className="font-medium">Ask:</span> {item.ask}
                                 </p>
                               )}
-                              {item.project_name && (
-                                <p className="text-xs text-gray-400">Project: {item.project_name}</p>
+                              {item.vendor_name && (
+                                <p className="text-xs text-gray-400">Vendor: {item.vendor_name}</p>
                               )}
                             </div>
                           )}

@@ -72,6 +72,21 @@ export interface Person {
   vendor?: Vendor;
 }
 
+export interface Initiative {
+  id: string;
+  org_id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  health: ProjectHealth;
+  owner_id: string | null;
+  target_completion: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  owner?: Person;
+}
+
 export interface Project {
   id: string;
   org_id: string;
@@ -83,9 +98,11 @@ export interface Project {
   start_date: string | null;
   target_completion: string | null;
   notes: string | null;
+  initiative_id: string | null;
   created_at: string;
   updated_at: string;
   vendors?: Vendor[];
+  initiative?: Initiative;
 }
 
 export interface ActionItem {
@@ -198,7 +215,8 @@ export interface Meeting {
 export interface AgendaItem {
   id: string;
   org_id: string;
-  vendor_id: string;
+  vendor_id: string | null;
+  project_id: string | null;
   title: string;
   severity: SeverityIndicator;
   context: string | null;
@@ -273,4 +291,20 @@ export interface VendorAgendaRow {
   score: number;
   owner_name: string | null;
   project_name: string | null;
+}
+
+export interface ProjectAgendaRow {
+  rank: number;
+  entity_type: string;
+  entity_id: string;
+  title: string;
+  severity: SeverityIndicator;
+  context: string | null;
+  ask: string | null;
+  priority: PriorityLevel;
+  age_days: number;
+  escalation_count: number;
+  score: number;
+  owner_name: string | null;
+  vendor_name: string | null;
 }

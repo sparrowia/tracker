@@ -2,8 +2,9 @@ import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { healthColor, healthLabel, priorityColor, statusBadge, formatAge, formatDateShort } from "@/lib/utils";
-import type { Project, ActionItem, RaidEntry, Blocker, Person, Vendor } from "@/lib/types";
+import type { Project, ActionItem, RaidEntry, Blocker, Person, Vendor, Initiative, ProjectAgendaRow } from "@/lib/types";
 import RaidLog from "@/components/raid-log";
+import { AgendaView } from "@/components/agenda-view";
 
 export default async function ProjectDetailPage({
   params,
@@ -29,6 +30,7 @@ export default async function ProjectDetailPage({
     { data: blockers },
     { data: vendors },
     { data: allPeople },
+    { data: agendaRows },
   ] = await Promise.all([
     supabase
       .from("action_item_ages")
@@ -55,7 +57,22 @@ export default async function ProjectDetailPage({
       .from("people")
       .select("*")
       .order("full_name"),
+    supabase.rpc("generate_project_agenda", {
+      p_project_id: p.id,
+      p_limit: 20,
+    }),
   ]);
+
+  // Fetch initiative if project has one
+  let initiative: Initiative | null = null;
+  if (p.initiative_id) {
+    const { data } = await supabase
+      .from("initiatives")
+      .select("*")
+      .eq("id", p.initiative_id)
+      .single();
+    initiative = data as Initiative | null;
+  }
 
   const typedActions = (actionItems || []) as (ActionItem & { owner: Person | null; vendor: Vendor | null })[];
   const typedRaid = (raidEntries || []) as (RaidEntry & { owner: Person | null; vendor: Vendor | null })[];
@@ -63,9 +80,20 @@ export default async function ProjectDetailPage({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const typedVendors = ((vendors || []).map((v: any) => v.vendor).filter(Boolean)) as Vendor[];
   const typedPeople = (allPeople || []) as Person[];
+  const typedAgenda = (agendaRows || []) as ProjectAgendaRow[];
 
   return (
     <div className="max-w-6xl mx-auto space-y-8">
+      {/* Breadcrumb */}
+      {initiative && (
+        <div className="text-sm text-gray-500">
+          <Link href="/initiatives" className="hover:text-blue-600">Initiatives</Link>
+          <span className="mx-1">/</span>
+          <Link href={`/initiatives/${initiative.slug}`} className="hover:text-blue-600">{initiative.name}</Link>
+          <span className="mx-1">/</span>
+        </div>
+      )}
+
       {/* Header */}
       <div>
         <div className="flex items-center gap-3 mb-2">
@@ -84,7 +112,7 @@ export default async function ProjectDetailPage({
             {typedVendors.map((v) => (
               <Link
                 key={v.id}
-                href={`/vendors/${v.id}`}
+                href={`/settings/vendors/${v.id}`}
                 className="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100"
               >
                 {v.name}
@@ -202,6 +230,11 @@ export default async function ProjectDetailPage({
 
       {/* RAID Log */}
       <RaidLog initialEntries={typedRaid} project={p} people={typedPeople} vendors={typedVendors} />
+
+      {/* Agenda */}
+      <section>
+        <AgendaView project={p} initialItems={typedAgenda} />
+      </section>
     </div>
   );
 }

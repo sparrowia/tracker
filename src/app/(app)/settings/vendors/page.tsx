@@ -173,7 +173,7 @@ export default function VendorsPage() {
           {vendors.map((v) => (
             <Link
               key={v.id}
-              href={`/vendors/${v.id}`}
+              href={`/settings/vendors/${v.id}`}
               className="relative bg-white rounded-lg border border-gray-300 p-5 hover:border-blue-400 transition-colors"
             >
               {/* View icon */}
@@ -438,7 +438,7 @@ export default function VendorsPage() {
                       Edit
                     </button>
                     <Link
-                      href={`/vendors/${modalVendor.id}`}
+                      href={`/settings/vendors/${modalVendor.id}`}
                       className="px-4 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
                     >
                       View Full Page
