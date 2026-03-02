@@ -1,8 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
-import Link from "next/link";
 import { healthColor, healthLabel, formatDateShort } from "@/lib/utils";
 import type { Project } from "@/lib/types";
 import AddProjectButton from "@/components/add-project-button";
+import EditableProjectName from "@/components/editable-project-name";
 
 export default async function ProjectsPage() {
   const supabase = await createClient();
@@ -40,10 +40,7 @@ export default async function ProjectsPage() {
               {(projects as Project[]).map((p) => (
                 <tr key={p.id} className="border-b border-gray-200 hover:bg-gray-50">
                   <td className="px-4 py-3">
-                    <Link href={`/projects/${p.slug}`} className="text-sm font-semibold text-blue-600 hover:underline">
-                      {p.name}
-                    </Link>
-                    {p.description && <p className="text-xs text-gray-500 mt-0.5">{p.description}</p>}
+                    <EditableProjectName id={p.id} slug={p.slug} name={p.name} description={p.description} />
                   </td>
                   <td className="px-4 py-3">
                     <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full border ${healthColor(p.health)}`}>
