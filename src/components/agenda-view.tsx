@@ -201,22 +201,17 @@ export function AgendaView({
     router.refresh();
   }
 
-  function exportMarkdown() {
-    const lines = [
-      `# ${project.name} Meeting Agenda`,
-      `**Generated:** ${new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}`,
-      "",
-      "| # | Severity | Topic | Context | Ask | Owner |",
-      "|---|----------|-------|---------|-----|-------|",
-    ];
+  const [generating, setGenerating] = useState(false);
 
-    items.forEach((item) => {
-      lines.push(
-        `| ${item.rank} | ${item.severity.toUpperCase()} | ${item.title} | ${item.context || "—"} | ${item.ask || "—"} | ${item.owner_name || "—"} |`
-      );
+  async function handleGenerate() {
+    if (generating) return;
+    setGenerating(true);
+    const { data } = await supabase.rpc("generate_project_agenda", {
+      p_project_id: project.id,
+      p_limit: 20,
     });
-
-    navigator.clipboard.writeText(lines.join("\n"));
+    setItems((data || []) as ProjectAgendaRow[]);
+    setGenerating(false);
   }
 
   const groups = groupByPriority(items);
@@ -241,10 +236,17 @@ export function AgendaView({
             Add Item
           </button>
           <button
-            onClick={exportMarkdown}
-            className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+            onClick={handleGenerate}
+            disabled={generating}
+            className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
-            Copy as Markdown
+            {generating && (
+              <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+              </svg>
+            )}
+            {generating ? "Generating..." : "Generate Agenda"}
           </button>
         </div>
       </div>
