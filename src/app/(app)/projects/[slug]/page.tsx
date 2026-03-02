@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { healthColor, healthLabel, priorityColor, statusBadge, formatAge, formatDateShort } from "@/lib/utils";
 import type { Project, ActionItem, RaidEntry, Blocker, Person, Vendor } from "@/lib/types";
+import RaidLog from "@/components/raid-log";
 
 export default async function ProjectDetailPage({
   params,
@@ -27,6 +28,7 @@ export default async function ProjectDetailPage({
     { data: raidEntries },
     { data: blockers },
     { data: vendors },
+    { data: allPeople },
   ] = await Promise.all([
     supabase
       .from("action_item_ages")
@@ -49,6 +51,10 @@ export default async function ProjectDetailPage({
       .from("project_vendors")
       .select("vendor:vendors(*)")
       .eq("project_id", p.id),
+    supabase
+      .from("people")
+      .select("*")
+      .order("full_name"),
   ]);
 
   const typedActions = (actionItems || []) as (ActionItem & { owner: Person | null; vendor: Vendor | null })[];
@@ -56,11 +62,7 @@ export default async function ProjectDetailPage({
   const typedBlockers = (blockers || []) as (Blocker & { owner: Person | null; vendor: Vendor | null })[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const typedVendors = ((vendors || []).map((v: any) => v.vendor).filter(Boolean)) as Vendor[];
-
-  const risks = typedRaid.filter((r) => r.raid_type === "risk");
-  const actions = typedRaid.filter((r) => r.raid_type === "action");
-  const issues = typedRaid.filter((r) => r.raid_type === "issue");
-  const decisions = typedRaid.filter((r) => r.raid_type === "decision");
+  const typedPeople = (allPeople || []) as Person[];
 
   return (
     <div className="max-w-6xl mx-auto space-y-8">
@@ -199,107 +201,7 @@ export default async function ProjectDetailPage({
       </section>
 
       {/* RAID Log */}
-      <section>
-        <div className="bg-gray-800 px-4 py-2.5 rounded-t-lg">
-          <h2 className="text-xs font-semibold text-white uppercase tracking-wide">RAID Log</h2>
-        </div>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-3">
-          {/* Risks */}
-          <div className="rounded-lg border border-gray-300 overflow-hidden">
-            <div className="bg-gray-700 px-4 py-2">
-              <h3 className="text-xs font-semibold text-white uppercase tracking-wide">Risks ({risks.length})</h3>
-            </div>
-            {risks.length === 0 ? (
-              <p className="text-sm text-gray-400 p-4">None</p>
-            ) : (
-              <div>
-                {risks.map((r) => (
-                  <div key={r.id} className="bg-white p-3 border-b border-gray-200 last:border-b-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-mono text-gray-400">{r.display_id}</span>
-                      <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border ${priorityColor(r.priority)}`}>{r.priority}</span>
-                    </div>
-                    <p className="text-sm text-gray-900 font-semibold mt-1">{r.title}</p>
-                    {r.impact && <p className="text-xs text-gray-500 mt-1">{r.impact}</p>}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Issues */}
-          <div className="rounded-lg border border-gray-300 overflow-hidden">
-            <div className="bg-gray-700 px-4 py-2">
-              <h3 className="text-xs font-semibold text-white uppercase tracking-wide">Issues ({issues.length})</h3>
-            </div>
-            {issues.length === 0 ? (
-              <p className="text-sm text-gray-400 p-4">None</p>
-            ) : (
-              <div>
-                {issues.map((i) => (
-                  <div key={i.id} className="bg-white p-3 border-b border-gray-200 last:border-b-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-mono text-gray-400">{i.display_id}</span>
-                      <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border ${priorityColor(i.priority)}`}>{i.priority}</span>
-                    </div>
-                    <p className="text-sm text-gray-900 font-semibold mt-1">{i.title}</p>
-                    {i.impact && <p className="text-xs text-gray-500 mt-1">{i.impact}</p>}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Decisions */}
-          <div className="rounded-lg border border-gray-300 overflow-hidden">
-            <div className="bg-gray-700 px-4 py-2">
-              <h3 className="text-xs font-semibold text-white uppercase tracking-wide">Decisions ({decisions.length})</h3>
-            </div>
-            {decisions.length === 0 ? (
-              <p className="text-sm text-gray-400 p-4">None</p>
-            ) : (
-              <div>
-                {decisions.map((d) => (
-                  <div key={d.id} className="bg-white p-3 border-b border-gray-200 last:border-b-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-mono text-gray-400">{d.display_id}</span>
-                      {d.decision_date && <span className="text-xs text-gray-500">{formatDateShort(d.decision_date)}</span>}
-                    </div>
-                    <p className="text-sm text-gray-900 font-semibold mt-1">{d.title}</p>
-                    {d.description && <p className="text-xs text-gray-500 mt-1">{d.description}</p>}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* RAID Actions */}
-          <div className="rounded-lg border border-gray-300 overflow-hidden">
-            <div className="bg-gray-700 px-4 py-2">
-              <h3 className="text-xs font-semibold text-white uppercase tracking-wide">Actions ({actions.length})</h3>
-            </div>
-            {actions.length === 0 ? (
-              <p className="text-sm text-gray-400 p-4">None</p>
-            ) : (
-              <div>
-                {actions.map((a) => {
-                  const badge = statusBadge(a.status);
-                  return (
-                    <div key={a.id} className="bg-white p-3 border-b border-gray-200 last:border-b-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-mono text-gray-400">{a.display_id}</span>
-                        <span className={`inline-flex px-1.5 py-0.5 text-xs rounded ${badge.className}`}>{badge.label}</span>
-                      </div>
-                      <p className="text-sm text-gray-900 font-semibold mt-1">{a.title}</p>
-                      <p className="text-xs text-gray-500 mt-1">{a.owner?.full_name || "Unassigned"}</p>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-      </section>
+      <RaidLog initialEntries={typedRaid} project={p} people={typedPeople} vendors={typedVendors} />
     </div>
   );
 }
