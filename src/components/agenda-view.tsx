@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { priorityColor, priorityDot, formatAge } from "@/lib/utils";
@@ -17,8 +17,11 @@ const priorityLabels: Record<PriorityLevel, string> = {
 
 const typeLabels: Record<string, string> = {
   blocker: "Blocker",
-  action_item: "Action",
+  action_item: "Action Item",
   agenda_item: "Agenda",
+  raid_risk: "Risk",
+  raid_issue: "Issue",
+  raid_action: "RAID Action",
 };
 
 function groupByPriority(items: ProjectAgendaRow[]) {
@@ -202,15 +205,30 @@ export function AgendaView({
   }
 
   const [generating, setGenerating] = useState(false);
+  const [hasGenerated, setHasGenerated] = useState(initialItems.length > 0);
+
+  // Auto-load agenda on mount if not provided
+  useEffect(() => {
+    if (initialItems.length > 0) return;
+    let cancelled = false;
+    supabase.rpc("generate_project_agenda", { p_project_id: project.id, p_limit: 30 }).then(({ data }) => {
+      if (!cancelled && data && (data as ProjectAgendaRow[]).length > 0) {
+        setItems(data as ProjectAgendaRow[]);
+        setHasGenerated(true);
+      }
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   async function handleGenerate() {
     if (generating) return;
     setGenerating(true);
     const { data } = await supabase.rpc("generate_project_agenda", {
       p_project_id: project.id,
-      p_limit: 20,
+      p_limit: 30,
     });
     setItems((data || []) as ProjectAgendaRow[]);
+    setHasGenerated(true);
     setGenerating(false);
   }
 
@@ -246,7 +264,7 @@ export function AgendaView({
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
               </svg>
             )}
-            {generating ? "Generating..." : "Generate Agenda"}
+            {generating ? "Generating..." : hasGenerated ? "Update Agenda" : "Generate Agenda"}
           </button>
         </div>
       </div>
