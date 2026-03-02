@@ -3,8 +3,19 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter, useParams } from "next/navigation";
-import { priorityColor } from "@/lib/utils";
-import type { Intake, PriorityLevel, Vendor, Project, Person } from "@/lib/types";
+import { priorityColor, statusBadge } from "@/lib/utils";
+import type { Intake, PriorityLevel, ItemStatus, Vendor, Project, Person } from "@/lib/types";
+
+interface MatchCandidate {
+  table: "action_items" | "blockers" | "raid_entries";
+  id: string;
+  title: string;
+  status: string;
+  priority: string;
+  raid_type?: string;
+  confidence: "high" | "medium";
+  reason: string;
+}
 
 interface ExtractedItem {
   title: string;
@@ -28,6 +39,7 @@ interface ExtractedItem {
   _editing?: boolean;
   _project_id?: string | null;
   _vendor_id?: string | null;
+  _linked_to?: MatchCandidate | null;
 }
 
 type EntityCategory = "action_items" | "decisions" | "issues" | "risks" | "blockers" | "status_updates";
@@ -151,6 +163,9 @@ export default function IntakeReviewPage() {
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [highlightedQuote, setHighlightedQuote] = useState<string | null>(null);
+  const [matchResults, setMatchResults] = useState<Record<string, MatchCandidate[]>>({});
+  const [matchLoading, setMatchLoading] = useState(false);
+  const [dismissedMatches, setDismissedMatches] = useState<Set<string>>(new Set());
   const rawTextRef = useRef<HTMLDivElement>(null);
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const editSnapshotsRef = useRef<Map<string, ExtractedItem>>(new Map());
@@ -251,6 +266,41 @@ export default function IntakeReviewPage() {
       }
 
       setLoading(false);
+
+      // Fetch matches (non-blocking — UI is already visible)
+      if (intakeData.extracted_data) {
+        setMatchLoading(true);
+        try {
+          const matchRes = await fetch("/api/match", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ intake_id: intakeId }),
+          });
+          if (matchRes.ok) {
+            const matchData = await matchRes.json();
+            const raw = matchData.matches || {};
+            // Convert API shape to MatchCandidate[]
+            const converted: Record<string, MatchCandidate[]> = {};
+            for (const [key, candidates] of Object.entries(raw)) {
+              converted[key] = (candidates as { existing_id: string; existing_table: string; title: string; status: string; priority: string; raid_type?: string; confidence: "high" | "medium"; reason: string }[]).map((c) => ({
+                table: c.existing_table as MatchCandidate["table"],
+                id: c.existing_id,
+                title: c.title,
+                status: c.status,
+                priority: c.priority,
+                raid_type: c.raid_type,
+                confidence: c.confidence,
+                reason: c.reason,
+              }));
+            }
+            setMatchResults(converted);
+          }
+        } catch {
+          // Matching is optional — silently fail
+        } finally {
+          setMatchLoading(false);
+        }
+      }
     }
     loadData();
   }, [intakeId]);
@@ -341,6 +391,28 @@ export default function IntakeReviewPage() {
     }));
   }
 
+  function linkItem(category: EntityCategory, index: number, candidate: MatchCandidate) {
+    setExtracted((prev) => ({
+      ...prev,
+      [category]: prev[category].map((item, i) =>
+        i === index ? { ...item, _linked_to: candidate, _accepted: true } : item
+      ),
+    }));
+  }
+
+  function unlinkItem(category: EntityCategory, index: number) {
+    setExtracted((prev) => ({
+      ...prev,
+      [category]: prev[category].map((item, i) =>
+        i === index ? { ...item, _linked_to: null } : item
+      ),
+    }));
+  }
+
+  function dismissMatch(category: EntityCategory, index: number, existingId: string) {
+    setDismissedMatches((prev) => new Set([...prev, `${category}-${index}-${existingId}`]));
+  }
+
   async function handleConfirm() {
     if (!intake) return;
     setConfirming(true);
@@ -416,8 +488,8 @@ export default function IntakeReviewPage() {
 
       const errors: string[] = [];
 
-      // Create accepted action items
-      const acceptedActions = extracted.action_items.filter((i) => i._accepted === true);
+      // Create accepted action items (new only)
+      const acceptedActions = extracted.action_items.filter((i) => i._accepted === true && !i._linked_to);
       if (acceptedActions.length > 0) {
         const { error: err } = await supabase.from("action_items").insert(
           acceptedActions.map((item) => ({
@@ -434,8 +506,8 @@ export default function IntakeReviewPage() {
         if (err) errors.push(`Action items: ${err.message}`);
       }
 
-      // Create accepted decisions as RAID entries
-      const acceptedDecisions = extracted.decisions.filter((i) => i._accepted === true);
+      // Create accepted decisions as RAID entries (new only)
+      const acceptedDecisions = extracted.decisions.filter((i) => i._accepted === true && !i._linked_to);
       if (acceptedDecisions.length > 0) {
         const { count } = await supabase
           .from("raid_entries")
@@ -459,8 +531,8 @@ export default function IntakeReviewPage() {
         if (err) errors.push(`Decisions: ${err.message}`);
       }
 
-      // Create accepted issues as RAID entries
-      const acceptedIssues = extracted.issues.filter((i) => i._accepted === true);
+      // Create accepted issues as RAID entries (new only)
+      const acceptedIssues = extracted.issues.filter((i) => i._accepted === true && !i._linked_to);
       if (acceptedIssues.length > 0) {
         const { count } = await supabase
           .from("raid_entries")
@@ -484,8 +556,8 @@ export default function IntakeReviewPage() {
         if (err) errors.push(`Issues: ${err.message}`);
       }
 
-      // Create accepted risks as RAID entries
-      const acceptedRisks = extracted.risks.filter((i) => i._accepted === true);
+      // Create accepted risks as RAID entries (new only)
+      const acceptedRisks = extracted.risks.filter((i) => i._accepted === true && !i._linked_to);
       if (acceptedRisks.length > 0) {
         const { count } = await supabase
           .from("raid_entries")
@@ -508,8 +580,8 @@ export default function IntakeReviewPage() {
         if (err) errors.push(`Risks: ${err.message}`);
       }
 
-      // Create accepted blockers
-      const acceptedBlockers = extracted.blockers.filter((i) => i._accepted === true);
+      // Create accepted blockers (new only)
+      const acceptedBlockers = extracted.blockers.filter((i) => i._accepted === true && !i._linked_to);
       if (acceptedBlockers.length > 0) {
         const { error: err } = await supabase.from("blockers").insert(
           acceptedBlockers.map((item) => ({
@@ -523,6 +595,71 @@ export default function IntakeReviewPage() {
           }))
         );
         if (err) errors.push(`Blockers: ${err.message}`);
+      }
+
+      // Update linked items
+      for (const [cat, items] of Object.entries(extracted) as [EntityCategory, ExtractedItem[]][]) {
+        for (const item of items) {
+          if (item._accepted !== true || !item._linked_to) continue;
+
+          const linkedTo = item._linked_to;
+          const table = linkedTo.table;
+          const id = linkedTo.id;
+
+          const payload: Record<string, unknown> = {
+            title: item.title || item.subject,
+          };
+
+          if (item.priority) payload.priority = item.priority;
+          if (item.due_date) payload.due_date = item.due_date;
+
+          // Owner — only update if extracted has one
+          const ownerName = cat === "decisions" ? item.made_by : item.owner_name;
+          if (ownerName) {
+            const ownerId = findPersonId(ownerName);
+            if (ownerId) payload.owner_id = ownerId;
+          }
+
+          // Notes/description append with datestamp
+          let appendField: string | null = null;
+          let appendContent: string | null = null;
+
+          if (table === "action_items") {
+            appendField = "notes";
+            appendContent = item.notes || null;
+          } else if (table === "blockers") {
+            appendField = "impact_description";
+            appendContent = item.impact_description || null;
+          } else if (table === "raid_entries") {
+            if (linkedTo.raid_type === "issue") {
+              appendField = "impact";
+              appendContent = item.impact || null;
+            } else if (linkedTo.raid_type === "risk") {
+              appendField = "description";
+              appendContent = item.mitigation || null;
+            } else if (linkedTo.raid_type === "decision") {
+              appendField = "description";
+              appendContent = item.rationale || null;
+            }
+          }
+
+          if (appendField && appendContent) {
+            const { data: current } = await supabase
+              .from(table)
+              .select(appendField)
+              .eq("id", id)
+              .single();
+
+            const existing = (current as Record<string, string | null> | null)?.[appendField] || "";
+            const today = new Date().toISOString().split("T")[0];
+            payload[appendField] = existing
+              ? `${existing}\n\n--- Update ${today} ---\n${appendContent}`
+              : appendContent;
+          }
+
+          const { error: err } = await supabase.from(table).update(payload).eq("id", id);
+          if (err) errors.push(`Update ${linkedTo.title}: ${err.message}`);
+        }
       }
 
       if (errors.length > 0) {
@@ -553,7 +690,10 @@ export default function IntakeReviewPage() {
   }
 
   const totalItems = Object.values(extracted).flat().length;
-  const totalAccepted = Object.values(extracted).flat().filter((i) => i._accepted === true).length;
+  const allAccepted = Object.values(extracted).flat().filter((i) => i._accepted === true);
+  const totalAccepted = allAccepted.length;
+  const totalLinked = allAccepted.filter((i) => i._linked_to).length;
+  const totalNew = totalAccepted - totalLinked;
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -587,6 +727,16 @@ export default function IntakeReviewPage() {
             Extracted Entities
           </h2>
 
+          {matchLoading && (
+            <div className="flex items-center gap-2 text-sm text-gray-500 py-1">
+              <svg className="animate-spin h-4 w-4 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+              </svg>
+              Checking for related existing items...
+            </div>
+          )}
+
           {(Object.entries(extracted) as [EntityCategory, ExtractedItem[]][]).map(
             ([category, items]) =>
               items.length > 0 && (
@@ -599,11 +749,13 @@ export default function IntakeReviewPage() {
                       <div
                         key={idx}
                         className={`rounded-lg border p-3 transition-all ${
-                          item._accepted === true
-                            ? "border-green-300 bg-green-50"
-                            : item._accepted === false
-                              ? "border-gray-200 bg-gray-100 opacity-50"
-                              : categoryColors[category]
+                          item._linked_to
+                            ? "border-amber-300 bg-amber-50"
+                            : item._accepted === true
+                              ? "border-green-300 bg-green-50"
+                              : item._accepted === false
+                                ? "border-gray-200 bg-gray-100 opacity-50"
+                                : categoryColors[category]
                         }`}
                       >
                         {item._editing ? (
@@ -765,6 +917,89 @@ export default function IntakeReviewPage() {
                             )}
                           </div>
                         )}
+                        {/* Linked indicator */}
+                        {item._linked_to && (
+                          <div className="flex items-center gap-1.5 mt-2 text-xs text-amber-700">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+                            </svg>
+                            <span className="font-medium">Will update:</span> {item._linked_to.title}
+                            <button
+                              onClick={() => unlinkItem(category, idx)}
+                              className="ml-1 text-amber-500 hover:text-amber-700 transition-colors"
+                              title="Unlink"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <line x1="18" y1="6" x2="6" y2="18"/>
+                                <line x1="6" y1="6" x2="18" y2="18"/>
+                              </svg>
+                            </button>
+                          </div>
+                        )}
+                        {/* Match suggestions */}
+                        {!item._editing && matchResults[`${category}-${idx}`] && (
+                          (() => {
+                            const candidates = matchResults[`${category}-${idx}`].filter(
+                              (c) => !dismissedMatches.has(`${category}-${idx}-${c.id}`)
+                            );
+                            if (candidates.length === 0) return null;
+                            return (
+                              <div className="ml-4 mt-2 space-y-1.5">
+                                <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Possibly related</span>
+                                {candidates.map((candidate) => {
+                                  const isLinked = item._linked_to?.id === candidate.id;
+                                  const sb = statusBadge(candidate.status as ItemStatus);
+                                  return (
+                                    <div
+                                      key={candidate.id}
+                                      className={`flex items-center gap-2 rounded border border-dashed p-2 text-xs ${
+                                        isLinked ? "border-amber-400 bg-amber-50" : "border-gray-300 bg-white"
+                                      }`}
+                                    >
+                                      <div className="flex-1 min-w-0">
+                                        <p className="font-medium text-gray-800 truncate">{candidate.title}</p>
+                                        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                                          <span className={`inline-flex px-1 py-0.5 rounded text-[10px] ${priorityColor(candidate.priority as PriorityLevel)}`}>
+                                            {candidate.priority}
+                                          </span>
+                                          <span className={`inline-flex px-1 py-0.5 rounded text-[10px] ${sb.className}`}>
+                                            {sb.label}
+                                          </span>
+                                          <span className={`text-[10px] ${candidate.confidence === "high" ? "text-green-600" : "text-yellow-600"}`}>
+                                            {candidate.confidence}
+                                          </span>
+                                          <span className="text-gray-400 text-[10px]">{candidate.reason}</span>
+                                        </div>
+                                      </div>
+                                      <button
+                                        onClick={() => linkItem(category, idx, candidate)}
+                                        className={`flex-shrink-0 transition-colors ${
+                                          isLinked ? "text-green-600" : "text-gray-300 hover:text-green-600"
+                                        }`}
+                                        title="Link as update"
+                                      >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                          <polyline points="20 6 9 17 4 12"/>
+                                        </svg>
+                                      </button>
+                                      <button
+                                        onClick={() => dismissMatch(category, idx, candidate.id)}
+                                        className="flex-shrink-0 text-gray-300 hover:text-red-500 transition-colors"
+                                        title="Dismiss suggestion"
+                                      >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                          <line x1="18" y1="6" x2="6" y2="18"/>
+                                          <line x1="6" y1="6" x2="18" y2="18"/>
+                                        </svg>
+                                      </button>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            );
+                          })()
+                        )}
                         <div className="flex justify-end items-center gap-2 mt-2">
                           {item._editing ? (
                             <>
@@ -854,7 +1089,9 @@ export default function IntakeReviewPage() {
         <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 -mx-6 px-6 py-4">
           <div className="max-w-6xl mx-auto flex justify-between items-center">
             <p className="text-sm text-gray-600">
-              {totalAccepted} items will be created
+              {totalLinked > 0
+                ? `${totalNew} new, ${totalLinked} update${totalLinked !== 1 ? "s" : ""}`
+                : `${totalAccepted} items will be created`}
             </p>
             <div className="flex gap-3">
               <button
@@ -868,7 +1105,7 @@ export default function IntakeReviewPage() {
                 disabled={confirming}
                 className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50"
               >
-                {confirming ? "Creating..." : `Confirm ${totalAccepted} Items`}
+                {confirming ? "Saving..." : `Confirm ${totalAccepted} Items`}
               </button>
             </div>
           </div>
