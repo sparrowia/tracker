@@ -1,19 +1,37 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { priorityColor, statusBadge, formatAge, formatDateShort } from "@/lib/utils";
 import type { Project, ActionItem, RaidEntry, Blocker, Person, Vendor, ProjectAgendaRow } from "@/lib/types";
 import RaidLog from "@/components/raid-log";
 import { AgendaView } from "@/components/agenda-view";
 
-type Tab = "agenda" | "blockers" | "raid" | "actions";
+type Tab = "actions" | "blockers" | "raid" | "agenda";
 
-const TABS: { key: Tab; label: string }[] = [
-  { key: "agenda", label: "Meeting Agenda" },
-  { key: "blockers", label: "Blockers" },
-  { key: "raid", label: "RAID Log" },
-  { key: "actions", label: "Action Items" },
-];
+const TAB_LABELS: Record<Tab, string> = {
+  actions: "Action Items",
+  blockers: "Blockers",
+  raid: "RAID Log",
+  agenda: "Meeting Agenda",
+};
+
+const DEFAULT_ORDER: Tab[] = ["actions", "blockers", "raid", "agenda"];
+const STORAGE_KEY = "project-tab-order";
+
+function loadTabOrder(): Tab[] {
+  if (typeof window === "undefined") return DEFAULT_ORDER;
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored) as Tab[];
+      // Validate: must contain exactly the same keys
+      if (parsed.length === DEFAULT_ORDER.length && DEFAULT_ORDER.every((t) => parsed.includes(t))) {
+        return parsed;
+      }
+    }
+  } catch {}
+  return DEFAULT_ORDER;
+}
 
 export default function ProjectTabs({
   project,
@@ -32,7 +50,11 @@ export default function ProjectTabs({
   vendors: Vendor[];
   agendaRows: ProjectAgendaRow[];
 }) {
-  const [active, setActive] = useState<Tab>("agenda");
+  const [tabOrder, setTabOrder] = useState<Tab[]>(loadTabOrder);
+  const [active, setActive] = useState<Tab>(tabOrder[0]);
+  const [dragTab, setDragTab] = useState<Tab | null>(null);
+  const [dragOverTab, setDragOverTab] = useState<Tab | null>(null);
+  const dragStartIndex = useRef<number>(-1);
 
   function countForTab(key: Tab) {
     switch (key) {
@@ -43,29 +65,79 @@ export default function ProjectTabs({
     }
   }
 
+  function onTabDragStart(e: React.DragEvent, tab: Tab, index: number) {
+    setDragTab(tab);
+    dragStartIndex.current = index;
+    e.dataTransfer.effectAllowed = "move";
+  }
+
+  function onTabDragOver(e: React.DragEvent, overTab: Tab) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (dragTab && overTab !== dragTab) {
+      setDragOverTab(overTab);
+    }
+  }
+
+  function onTabDrop(e: React.DragEvent, dropTab: Tab) {
+    e.preventDefault();
+    if (!dragTab || dragTab === dropTab) {
+      setDragTab(null);
+      setDragOverTab(null);
+      return;
+    }
+
+    setTabOrder((prev) => {
+      const next = [...prev];
+      const fromIdx = next.indexOf(dragTab);
+      const toIdx = next.indexOf(dropTab);
+      next.splice(fromIdx, 1);
+      next.splice(toIdx, 0, dragTab);
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+
+    setDragTab(null);
+    setDragOverTab(null);
+  }
+
+  function onTabDragEnd() {
+    setDragTab(null);
+    setDragOverTab(null);
+  }
+
   return (
     <div>
       {/* Tab bar */}
       <div className="flex border-b border-gray-300">
-        {TABS.map((tab) => {
-          const count = countForTab(tab.key);
-          const isBlockers = tab.key === "blockers";
+        {tabOrder.map((tabKey, idx) => {
+          const count = countForTab(tabKey);
+          const isBlockers = tabKey === "blockers";
+          const isDragging = dragTab === tabKey;
+          const isDropTarget = dragOverTab === tabKey && dragTab !== tabKey;
           return (
             <button
-              key={tab.key}
-              onClick={() => setActive(tab.key)}
-              className={`px-5 py-2.5 text-sm font-medium transition-colors relative ${
-                active === tab.key
+              key={tabKey}
+              draggable
+              onDragStart={(e) => onTabDragStart(e, tabKey, idx)}
+              onDragOver={(e) => onTabDragOver(e, tabKey)}
+              onDrop={(e) => onTabDrop(e, tabKey)}
+              onDragEnd={onTabDragEnd}
+              onClick={() => setActive(tabKey)}
+              className={`px-5 py-2.5 text-sm font-medium transition-colors relative cursor-grab active:cursor-grabbing select-none ${
+                active === tabKey
                   ? "text-blue-700 border-b-2 border-blue-600 -mb-px"
                   : "text-gray-500 hover:text-gray-700"
+              } ${isDragging ? "opacity-40" : ""} ${
+                isDropTarget ? "border-l-2 border-l-blue-400" : ""
               }`}
             >
-              {tab.label}
+              {TAB_LABELS[tabKey]}
               {count > 0 && (
                 <span className={`ml-2 text-xs px-1.5 py-0.5 rounded-full ${
                   isBlockers && count > 0
                     ? "bg-red-100 text-red-700"
-                    : active === tab.key
+                    : active === tabKey
                       ? "bg-blue-100 text-blue-700"
                       : "bg-gray-100 text-gray-500"
                 }`}>
