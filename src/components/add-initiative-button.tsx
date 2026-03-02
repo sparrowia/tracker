@@ -31,8 +31,11 @@ export default function AddInitiativeButton() {
 
   async function save() {
     if (!form.name.trim()) return;
+    const { data: profile } = await supabase.from("profiles").select("org_id").single();
+    if (!profile?.org_id) return;
     const slug = form.slug.trim() || generateSlug(form.name);
     const { error } = await supabase.from("initiatives").insert({
+      org_id: profile.org_id,
       name: form.name.trim(),
       slug,
       description: form.description.trim() || null,

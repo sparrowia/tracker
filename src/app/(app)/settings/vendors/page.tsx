@@ -80,10 +80,13 @@ export default function VendorsPage() {
 
   async function saveCreate() {
     if (!editForm.name.trim()) return;
+    const { data: profile } = await supabase.from("profiles").select("org_id").single();
+    if (!profile?.org_id) return;
     const slug = editForm.slug.trim() || generateSlug(editForm.name);
     const { data, error } = await supabase
       .from("vendors")
       .insert({
+        org_id: profile.org_id,
         name: editForm.name.trim(),
         slug,
         website: editForm.website.trim() || null,
