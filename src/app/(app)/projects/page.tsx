@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import { healthColor, healthLabel, formatDateShort } from "@/lib/utils";
 import type { Project } from "@/lib/types";
+import AddProjectButton from "@/components/add-project-button";
 
 export default async function ProjectsPage() {
   const supabase = await createClient();
@@ -14,13 +15,17 @@ export default async function ProjectsPage() {
     <div className="max-w-5xl mx-auto">
       {!projects || projects.length === 0 ? (
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-6">Projects</h1>
+          <div className="flex items-center justify-between mb-6">
+            <h1 className="text-2xl font-bold text-gray-900">Projects</h1>
+            <AddProjectButton />
+          </div>
           <p className="text-sm text-gray-500">No projects yet.</p>
         </div>
       ) : (
         <div className="bg-white rounded-lg border border-gray-300 overflow-hidden">
-          <div className="bg-gray-800 px-4 py-2.5">
+          <div className="bg-gray-800 px-4 py-2.5 flex items-center justify-between">
             <h1 className="text-xs font-semibold text-white uppercase tracking-wide">Projects</h1>
+            <AddProjectButton />
           </div>
           <table className="min-w-full">
             <thead className="bg-gray-50 border-b border-gray-300">
