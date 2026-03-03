@@ -2,7 +2,7 @@
 
 import { useState, Fragment } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { priorityColor, statusBadge, formatAge, formatDateShort } from "@/lib/utils";
+import { priorityColor, priorityLabel, statusBadge, formatAge, formatDateShort } from "@/lib/utils";
 import type { RaidEntry, RaidType, PriorityLevel, ItemStatus, Person, Vendor, Project } from "@/lib/types";
 import OwnerPicker from "@/components/owner-picker";
 
@@ -202,7 +202,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                         <polyline points="9 18 15 12 9 6" />
                       </svg>
                       <span className="text-xs font-mono text-gray-400">{entry.display_id}</span>
-                      <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border ${priorityColor(entry.priority)}`}>{entry.priority}</span>
+                      <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border ${priorityColor(entry.priority)}`}>{priorityLabel(entry.priority)}</span>
                       <span className={`inline-flex px-1.5 py-0.5 text-xs rounded ${badge.className}`}>{badge.label}</span>
                     </div>
                     <p className="text-sm text-gray-900 font-semibold mt-1 ml-5">{entry.title}</p>
@@ -256,7 +256,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                                 className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                               >
                                 {priorityOptions.map((p) => (
-                                  <option key={p} value={p}>{p}</option>
+                                  <option key={p} value={p}>{priorityLabel(p)}</option>
                                 ))}
                               </select>
                             </div>
@@ -364,7 +364,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                             </div>
                             <div>
                               <span className="text-xs font-medium text-gray-500 uppercase">Priority</span>
-                              <p className="text-gray-900 mt-0.5">{entry.priority}</p>
+                              <p className="text-gray-900 mt-0.5">{priorityLabel(entry.priority)}</p>
                             </div>
                             {entry.raid_type === "decision" && (
                               <div>

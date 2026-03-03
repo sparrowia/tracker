@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { priorityColor, statusBadge, formatAge, formatDateShort } from "@/lib/utils";
+import { priorityColor, priorityLabel, statusBadge, formatAge, formatDateShort } from "@/lib/utils";
 import type { Vendor, Person, VendorAccountabilityRow, Project } from "@/lib/types";
 
 export default async function VendorDetailPage({
@@ -174,7 +174,7 @@ export default async function VendorDetailPage({
                       </td>
                       <td className="px-4 py-3">
                         <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full border ${priorityColor(item.priority)}`}>
-                          {item.priority}
+                          {priorityLabel(item.priority)}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-600">{formatDateShort(item.due_date)}</td>

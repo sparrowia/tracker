@@ -14,6 +14,10 @@ export function formatAge(days: number): string {
   return `${Math.floor(days / 30)} months`;
 }
 
+export function priorityLabel(priority: PriorityLevel): string {
+  return priority.charAt(0).toUpperCase() + priority.slice(1);
+}
+
 export function priorityColor(priority: PriorityLevel): string {
   switch (priority) {
     case "critical": return "text-red-700 bg-red-50 border-red-200";

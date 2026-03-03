@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter, useParams } from "next/navigation";
-import { priorityColor, statusBadge } from "@/lib/utils";
+import { priorityColor, priorityLabel, statusBadge } from "@/lib/utils";
 import type { Intake, PriorityLevel, ItemStatus, Vendor, Project, Person } from "@/lib/types";
 
 interface MatchCandidate {
@@ -792,13 +792,11 @@ export default function IntakeReviewPage() {
                       <div
                         key={idx}
                         className={`rounded-lg border p-3 transition-all ${
-                          item._linked_to
-                            ? "border-amber-300 bg-amber-50"
-                            : item._accepted === true
-                              ? "border-green-300 bg-green-50"
-                              : item._accepted === false
-                                ? "border-gray-200 bg-gray-100 opacity-50"
-                                : categoryColors[category]
+                          item._accepted === true
+                            ? "border-green-300 bg-green-50"
+                            : item._accepted === false
+                              ? "border-gray-200 bg-gray-100 opacity-50"
+                              : categoryColors[category]
                         }`}
                       >
                         {item._editing ? (
@@ -841,7 +839,7 @@ export default function IntakeReviewPage() {
                                     >
                                       <option value="">—</option>
                                       {priorityOptions.map((p) => (
-                                        <option key={p} value={p}>{p}</option>
+                                        <option key={p} value={p}>{priorityLabel(p)}</option>
                                       ))}
                                     </select>
                                   )}
@@ -939,7 +937,7 @@ export default function IntakeReviewPage() {
                               )}
                               {item.priority && (
                                 <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border ${priorityColor(item.priority)}`}>
-                                  {item.priority}
+                                  {priorityLabel(item.priority)}
                                 </span>
                               )}
                               {item.new_status && (
@@ -1015,7 +1013,7 @@ export default function IntakeReviewPage() {
                                         <p className="font-medium text-gray-800 truncate">{candidate.title}</p>
                                         <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                                           <span className={`inline-flex px-1 py-0.5 rounded text-[10px] ${priorityColor(candidate.priority as PriorityLevel)}`}>
-                                            {candidate.priority}
+                                            {priorityLabel(candidate.priority as PriorityLevel)}
                                           </span>
                                           <span className={`inline-flex px-1 py-0.5 rounded text-[10px] ${sb.className}`}>
                                             {sb.label}

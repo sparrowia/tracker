@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
-import { priorityColor } from "@/lib/utils";
+import { priorityColor, priorityLabel } from "@/lib/utils";
 import type { Vendor, Project, PriorityLevel } from "@/lib/types";
 
 type ItemType = "action_items" | "decisions" | "issues" | "risks" | "blockers" | "status_updates";
@@ -579,7 +579,7 @@ export default function IntakeSetupPage() {
                           return (
                             <td key={f.value} className="px-4 py-2">
                               {colors ? (
-                                <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border ${colors}`}>{p}</span>
+                                <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border ${colors}`}>{priorityLabel(p)}</span>
                               ) : (
                                 <span className="text-gray-400">{val}</span>
                               )}

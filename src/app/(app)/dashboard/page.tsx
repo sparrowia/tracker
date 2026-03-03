@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { formatAge, priorityColor, statusBadge, healthColor, healthLabel, formatDateShort } from "@/lib/utils";
+import { formatAge, priorityColor, priorityLabel, statusBadge, healthColor, healthLabel, formatDateShort } from "@/lib/utils";
 import Link from "next/link";
 import type { ActionItem, Blocker, SupportTicket, RaidEntry, Project, Vendor, Person } from "@/lib/types";
 
@@ -164,7 +164,7 @@ export default async function DashboardPage() {
                       </td>
                       <td className="px-4 py-3">
                         <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full border ${priorityColor(item.priority)}`}>
-                          {item.priority}
+                          {priorityLabel(item.priority)}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-600">{formatDateShort(item.due_date)}</td>
@@ -260,7 +260,7 @@ export default async function DashboardPage() {
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-mono text-gray-500">{t.ticket_number}</span>
                     <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full border ${priorityColor(t.priority)}`}>
-                      {t.priority}
+                      {priorityLabel(t.priority)}
                     </span>
                   </div>
                   <p className="text-sm text-gray-900 font-semibold mt-1">{t.title || t.description}</p>
@@ -289,7 +289,7 @@ export default async function DashboardPage() {
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-mono text-gray-400">{d.display_id}</span>
                     <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full border ${priorityColor(d.priority)}`}>
-                      {d.priority}
+                      {priorityLabel(d.priority)}
                     </span>
                   </div>
                   <p className="text-sm text-gray-900 font-semibold mt-1">{d.title}</p>

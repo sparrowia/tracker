@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback, Fragment } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { priorityColor, statusBadge, formatAge, formatDateShort } from "@/lib/utils";
+import { priorityColor, priorityLabel, statusBadge, formatAge, formatDateShort } from "@/lib/utils";
 import type { Project, ActionItem, RaidEntry, Blocker, Person, Vendor, ProjectAgendaRow, PriorityLevel, ItemStatus } from "@/lib/types";
 import RaidLog from "@/components/raid-log";
 import { AgendaView } from "@/components/agenda-view";
@@ -338,7 +338,7 @@ function BlockersPanel({
                   >
                     <polyline points="9 18 15 12 9 6" />
                   </svg>
-                  <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border ${priorityColor(b.priority)}`}>{b.priority}</span>
+                  <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border ${priorityColor(b.priority)}`}>{priorityLabel(b.priority)}</span>
                   <span className={`inline-flex px-1.5 py-0.5 text-xs rounded ${badge.className}`}>{badge.label}</span>
                   {b.age_days != null && (
                     <span className="text-xs text-red-600 font-medium">{formatAge(b.age_days)}</span>
@@ -383,7 +383,7 @@ function BlockersPanel({
                             className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                           >
                             {blockerPriorityOptions.map((p) => (
-                              <option key={p} value={p}>{p}</option>
+                              <option key={p} value={p}>{priorityLabel(p)}</option>
                             ))}
                           </select>
                         </div>
@@ -489,7 +489,7 @@ function BlockersPanel({
                         </div>
                         <div>
                           <span className="text-xs font-medium text-gray-500 uppercase">Priority</span>
-                          <p className="text-gray-900 mt-0.5">{b.priority}</p>
+                          <p className="text-gray-900 mt-0.5">{priorityLabel(b.priority)}</p>
                         </div>
                         <div>
                           <span className="text-xs font-medium text-gray-500 uppercase">Due Date</span>
@@ -596,7 +596,7 @@ function ActionItemsPanel({
                 </td>
                 <td className="px-4 py-3">
                   <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full border ${priorityColor(ai.priority)}`}>
-                    {ai.priority}
+                    {priorityLabel(ai.priority)}
                   </span>
                 </td>
                 <td className="px-4 py-3 text-sm text-gray-600">{formatDateShort(ai.due_date)}</td>
