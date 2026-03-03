@@ -165,8 +165,35 @@ export default function IntakePage() {
         const json = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1, defval: "" });
         if (json.length === 0) return { name, headers: [] as string[], rows: [] as string[][] };
         const headers = json[0].map((h) => String(h).trim());
+
+        // Extract hyperlinks — Excel stores URLs as hyperlink metadata, not cell text
+        const hyperlinks: Record<string, string> = {};
+        for (const [addr, cell] of Object.entries(sheet)) {
+          if (addr.startsWith("!")) continue;
+          const c = cell as { l?: { Target?: string } };
+          if (c.l?.Target) {
+            hyperlinks[addr] = c.l.Target;
+          }
+        }
+
         const rows = json.slice(1).filter((r) => r.some((c) => String(c).trim() !== ""));
-        return { name, headers, rows: rows.map((r) => r.map((c) => String(c))) };
+        return {
+          name,
+          headers,
+          rows: rows.map((r, rowIdx) =>
+            r.map((c, colIdx) => {
+              const val = String(c);
+              // Check if this cell has a hyperlink URL that differs from the display text
+              const addr = XLSX.utils.encode_cell({ r: rowIdx + 1, c: colIdx });
+              const url = hyperlinks[addr];
+              if (url && !val.startsWith("http")) {
+                // Display text + URL (e.g. "SCREEN CAPTURE" becomes the actual link)
+                return val.trim() ? `${val.trim()} ${url}` : url;
+              }
+              return val;
+            })
+          ),
+        };
       });
 
       // Check if any sheet has data
