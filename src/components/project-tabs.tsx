@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useRef, Fragment } from "react";
+import { useState, useRef, useCallback, Fragment } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { priorityColor, statusBadge, formatAge, formatDateShort } from "@/lib/utils";
 import type { Project, ActionItem, RaidEntry, Blocker, Person, Vendor, ProjectAgendaRow, PriorityLevel, ItemStatus } from "@/lib/types";
 import RaidLog from "@/components/raid-log";
 import { AgendaView } from "@/components/agenda-view";
+import OwnerPicker from "@/components/owner-picker";
 
 type Tab = "actions" | "blockers" | "raid" | "agenda";
 
@@ -56,6 +57,14 @@ export default function ProjectTabs({
   const [dragTab, setDragTab] = useState<Tab | null>(null);
   const [dragOverTab, setDragOverTab] = useState<Tab | null>(null);
   const dragStartIndex = useRef<number>(-1);
+  const [peopleList, setPeopleList] = useState<Person[]>(people);
+
+  const addPerson = useCallback((person: Person) => {
+    setPeopleList((prev) => {
+      if (prev.some((p) => p.id === person.id)) return prev;
+      return [...prev, person].sort((a, b) => a.full_name.localeCompare(b.full_name));
+    });
+  }, []);
 
   function countForTab(key: Tab) {
     switch (key) {
@@ -157,11 +166,11 @@ export default function ProjectTabs({
         )}
 
         {active === "blockers" && (
-          <BlockersPanel blockers={blockers} people={people} vendors={vendors} />
+          <BlockersPanel blockers={blockers} people={peopleList} vendors={vendors} onPersonAdded={addPerson} />
         )}
 
         {active === "raid" && (
-          <RaidLog initialEntries={raidEntries} project={project} people={people} vendors={vendors} />
+          <RaidLog initialEntries={raidEntries} project={project} people={peopleList} vendors={vendors} onPersonAdded={addPerson} />
         )}
 
         {active === "actions" && (
@@ -192,10 +201,12 @@ function BlockersPanel({
   blockers: initialBlockers,
   people,
   vendors,
+  onPersonAdded,
 }: {
   blockers: BlockerRow[];
   people: Person[];
   vendors: Vendor[];
+  onPersonAdded: (person: Person) => void;
 }) {
   const [blockers, setBlockers] = useState<BlockerRow[]>(initialBlockers);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -370,16 +381,12 @@ function BlockersPanel({
                         </div>
                         <div>
                           <label className="block text-xs font-medium text-gray-500 mb-1">Owner</label>
-                          <select
+                          <OwnerPicker
                             value={editForm.owner_id}
-                            onChange={(e) => setEditForm({ ...editForm, owner_id: e.target.value })}
-                            className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                          >
-                            <option value="">Unassigned</option>
-                            {people.map((p) => (
-                              <option key={p.id} value={p.id}>{p.full_name}</option>
-                            ))}
-                          </select>
+                            onChange={(id) => setEditForm({ ...editForm, owner_id: id })}
+                            people={people}
+                            onPersonAdded={onPersonAdded}
+                          />
                         </div>
                         <div>
                           <label className="block text-xs font-medium text-gray-500 mb-1">Vendor</label>

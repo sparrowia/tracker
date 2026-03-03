@@ -4,6 +4,7 @@ import { useState, Fragment } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { priorityColor, statusBadge, formatAge, formatDateShort } from "@/lib/utils";
 import type { RaidEntry, RaidType, PriorityLevel, ItemStatus, Person, Vendor, Project } from "@/lib/types";
+import OwnerPicker from "@/components/owner-picker";
 
 type RaidRow = RaidEntry & { owner: Person | null; vendor: Vendor | null };
 
@@ -12,6 +13,7 @@ interface RaidLogProps {
   project: Project;
   people: Person[];
   vendors: Vendor[];
+  onPersonAdded: (person: Person) => void;
 }
 
 const raidTypes: RaidType[] = ["risk", "action", "issue", "decision"];
@@ -37,7 +39,7 @@ function ageFromDate(date: string): number {
   return Math.floor(diff / (1000 * 60 * 60 * 24));
 }
 
-export default function RaidLog({ initialEntries, project, people, vendors }: RaidLogProps) {
+export default function RaidLog({ initialEntries, project, people, vendors, onPersonAdded }: RaidLogProps) {
   const [entries, setEntries] = useState<RaidRow[]>(initialEntries);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -257,16 +259,12 @@ export default function RaidLog({ initialEntries, project, people, vendors }: Ra
                             </div>
                             <div>
                               <label className="block text-xs font-medium text-gray-500 mb-1">Owner</label>
-                              <select
+                              <OwnerPicker
                                 value={editForm.owner_id}
-                                onChange={(e) => setEditForm({ ...editForm, owner_id: e.target.value })}
-                                className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                              >
-                                <option value="">Unassigned</option>
-                                {people.map((p) => (
-                                  <option key={p.id} value={p.id}>{p.full_name}</option>
-                                ))}
-                              </select>
+                                onChange={(id) => setEditForm({ ...editForm, owner_id: id })}
+                                people={people}
+                                onPersonAdded={onPersonAdded}
+                              />
                             </div>
                           </div>
                           <div>
