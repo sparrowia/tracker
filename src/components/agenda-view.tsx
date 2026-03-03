@@ -228,9 +228,18 @@ export function AgendaView({
       updates.impact_description = editFields.context || null;
     }
 
-    await supabase.from(table).update(updates).eq("id", item.entity_id);
+    const { error } = await supabase.from(table).update(updates).eq("id", item.entity_id);
+    if (error) { console.error("Save failed:", error); return; }
+
+    // Update local state so changes are immediately visible
+    setItems((prev) =>
+      prev.map((i) =>
+        i.entity_id === item.entity_id
+          ? { ...i, title: editFields.title, priority: editFields.priority, context: editFields.context || null, ask: editFields.ask || null }
+          : i
+      )
+    );
     setEditingId(null);
-    router.refresh();
   }
 
   async function handleDelete(item: ProjectAgendaRow) {
