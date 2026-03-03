@@ -534,6 +534,7 @@ export default function IntakeReviewPage() {
             owner_id: findPersonId(item.made_by),
             project_id: item._project_id || null,
             decision_date: item.decision_date || null,
+            first_flagged_at: item.decision_date || new Date().toISOString().split("T")[0],
             priority: "medium" as const,
           }))
         );
@@ -570,7 +571,7 @@ export default function IntakeReviewPage() {
               owner_id: findPersonId(item.owner_name),
               project_id: item._project_id || null,
               vendor_id: item._vendor_id || null,
-              ...(item.date_reported ? { first_flagged_at: item.date_reported } : {}),
+              first_flagged_at: item.date_reported || new Date().toISOString().split("T")[0],
             };
           })
         );
@@ -596,6 +597,7 @@ export default function IntakeReviewPage() {
             description: item.mitigation || null,
             priority: item.priority || "medium",
             project_id: item._project_id || null,
+            first_flagged_at: new Date().toISOString().split("T")[0],
           }))
         );
         if (err) errors.push(`Risks: ${err.message}`);
