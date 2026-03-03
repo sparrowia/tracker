@@ -73,7 +73,7 @@ export async function POST(request: Request) {
       existingMap.set(b.id, { title: b.title, status: b.status, priority: b.priority, table: "blockers" });
     }
     for (const r of (raids || [])) {
-      const prefix = r.raid_type === "risk" ? "R" : r.raid_type === "issue" ? "I" : "D";
+      const prefix = r.raid_type === "risk" ? "R" : r.raid_type === "issue" ? "I" : r.raid_type === "assumption" ? "A" : "D";
       existingLines.push(`[${prefix}] ${r.id}: "${r.title}" (${r.status}, ${r.priority})`);
       existingMap.set(r.id, { title: r.title, status: r.status, priority: r.priority, table: "raid_entries", raid_type: r.raid_type });
     }

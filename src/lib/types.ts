@@ -17,7 +17,7 @@ export type ProjectHealth =
   | "paused"
   | "complete";
 
-export type RaidType = "risk" | "action" | "issue" | "decision";
+export type RaidType = "risk" | "assumption" | "issue" | "decision";
 
 export type SeverityIndicator = "critical" | "high" | "new" | "normal";
 

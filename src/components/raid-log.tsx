@@ -17,11 +17,11 @@ interface RaidLogProps {
   addUndo: (label: string, undo: () => Promise<void>) => void;
 }
 
-const raidTypes: RaidType[] = ["risk", "action", "issue", "decision"];
+const raidTypes: RaidType[] = ["risk", "assumption", "issue", "decision"];
 const priorityOptions: PriorityLevel[] = ["critical", "high", "medium", "low"];
 const statusOptions: ItemStatus[] = ["pending", "in_progress", "complete", "needs_verification", "paused", "at_risk", "blocked"];
 
-const typePrefix: Record<RaidType, string> = { risk: "R", action: "A", issue: "I", decision: "D" };
+const typePrefix: Record<RaidType, string> = { risk: "R", assumption: "A", issue: "I", decision: "D" };
 
 interface EditFormState {
   title: string;
@@ -51,7 +51,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
   const supabase = createClient();
 
   const risks = entries.filter((r) => r.raid_type === "risk");
-  const actions = entries.filter((r) => r.raid_type === "action");
+  const assumptions = entries.filter((r) => r.raid_type === "assumption");
   const issues = entries.filter((r) => r.raid_type === "issue");
   const decisions = entries.filter((r) => r.raid_type === "decision");
 
@@ -436,7 +436,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
       {renderQuadrant("Risks", risks)}
       {renderQuadrant("Issues", issues)}
       {renderQuadrant("Decisions", decisions)}
-      {renderQuadrant("Actions", actions)}
+      {renderQuadrant("Assumptions", assumptions)}
     </div>
   );
 }
