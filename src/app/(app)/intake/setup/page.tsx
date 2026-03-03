@@ -102,6 +102,16 @@ function normalizeDate(val: string): string | null {
   if (!val) return null;
   // Already YYYY-MM-DD
   if (/^\d{4}-\d{2}-\d{2}$/.test(val)) return val;
+  // Excel serial date number (e.g. 46042 = a date in 2026)
+  const num = Number(val);
+  if (!isNaN(num) && num > 30000 && num < 100000) {
+    // Excel epoch is Jan 0, 1900 (with the Lotus 1-2-3 leap year bug)
+    const excelEpoch = new Date(1899, 11, 30);
+    const d = new Date(excelEpoch.getTime() + num * 86400000);
+    if (!isNaN(d.getTime())) {
+      return d.toISOString().split("T")[0];
+    }
+  }
   // Try Date parse
   const d = new Date(val);
   if (!isNaN(d.getTime())) {
@@ -390,7 +400,8 @@ export default function IntakeSetupPage() {
 
       router.push(`/intake/${intake.id}/review`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      const msg = err instanceof Error ? err.message : typeof err === "object" && err !== null ? JSON.stringify(err) : "Something went wrong";
+      setError(msg);
       setSubmitting(false);
     }
   }
@@ -406,7 +417,7 @@ export default function IntakeSetupPage() {
   const availableFields = TARGET_FIELDS[itemType];
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="max-w-4xl mx-auto space-y-6 pb-20">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Set Up Import</h1>
