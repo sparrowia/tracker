@@ -83,16 +83,22 @@ export default function OwnerPicker({ value, onChange, people, onPersonAdded }: 
         <button
           onClick={handleAdd}
           disabled={saving || !name.trim()}
-          className="px-2 py-1.5 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50"
+          className="p-1.5 text-green-600 hover:text-green-700 disabled:opacity-50 flex-shrink-0"
+          title="Add"
         >
-          {saving ? "..." : "Add"}
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
         </button>
         <button
           onClick={handleCancel}
           disabled={saving}
-          className="px-2 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded hover:bg-gray-50"
+          className="p-1.5 text-gray-400 hover:text-red-500 flex-shrink-0"
+          title="Cancel"
         >
-          Cancel
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
         </button>
       </div>
     );
