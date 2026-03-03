@@ -44,6 +44,7 @@ interface ExtractedItem {
   _project_id?: string | null;
   _vendor_id?: string | null;
   _linked_to?: MatchCandidate | null;
+  _save_as?: EntityCategory;
 }
 
 type EntityCategory = "action_items" | "decisions" | "issues" | "risks" | "blockers" | "status_updates";
@@ -65,6 +66,8 @@ const categoryColors: Record<EntityCategory, string> = {
   blockers: "border-red-200 bg-red-50",
   status_updates: "border-gray-200 bg-gray-50",
 };
+
+const reassignableCategories: EntityCategory[] = ["action_items", "decisions", "issues", "risks", "blockers"];
 
 const priorityOptions: PriorityLevel[] = ["critical", "high", "medium", "low"];
 const statusOptions = ["pending", "in_progress", "complete", "needs_verification", "paused", "at_risk", "blocked"];
@@ -497,28 +500,38 @@ export default function IntakeReviewPage() {
 
       const errors: string[] = [];
 
-      // Create accepted action items (new only)
-      const acceptedActions = extracted.action_items.filter((i) => i._accepted === true && !i._linked_to);
-      if (acceptedActions.length > 0) {
+      // Collect all accepted new items, grouped by effective type
+      const byEffectiveType: Record<EntityCategory, ExtractedItem[]> = {
+        action_items: [], decisions: [], issues: [], risks: [], blockers: [], status_updates: [],
+      };
+      for (const [cat, items] of Object.entries(extracted) as [EntityCategory, ExtractedItem[]][]) {
+        for (const item of items) {
+          if (item._accepted !== true || item._linked_to) continue;
+          const effectiveType = item._save_as || cat;
+          byEffectiveType[effectiveType].push(item);
+        }
+      }
+
+      // Create action items
+      if (byEffectiveType.action_items.length > 0) {
         const { error: err } = await supabase.from("action_items").insert(
-          acceptedActions.map((item) => ({
+          byEffectiveType.action_items.map((item) => ({
             org_id: orgId,
-            title: item.title,
+            title: item.title || item.subject,
             owner_id: findPersonId(item.owner_name),
             vendor_id: item._vendor_id || null,
             project_id: item._project_id || null,
             priority: item.priority || "medium",
             due_date: item.due_date || null,
             first_flagged_at: new Date().toISOString().split("T")[0],
-            notes: item.notes || null,
+            notes: item.notes || item.details || item.rationale || item.impact_description || null,
           }))
         );
         if (err) errors.push(`Action items: ${err.message}`);
       }
 
-      // Create accepted decisions as RAID entries (new only)
-      const acceptedDecisions = extracted.decisions.filter((i) => i._accepted === true && !i._linked_to);
-      if (acceptedDecisions.length > 0) {
+      // Create decisions as RAID entries
+      if (byEffectiveType.decisions.length > 0) {
         const { count } = await supabase
           .from("raid_entries")
           .select("*", { count: "exact", head: true })
@@ -526,13 +539,13 @@ export default function IntakeReviewPage() {
           .eq("raid_type", "decision");
 
         const { error: err } = await supabase.from("raid_entries").insert(
-          acceptedDecisions.map((item, idx) => ({
+          byEffectiveType.decisions.map((item, idx) => ({
             org_id: orgId,
             raid_type: "decision" as const,
             display_id: `D${(count || 0) + idx + 1}`,
-            title: item.title,
-            description: item.rationale || null,
-            owner_id: findPersonId(item.made_by),
+            title: item.title || item.subject,
+            description: item.rationale || item.notes || item.details || null,
+            owner_id: findPersonId(item.made_by || item.owner_name),
             project_id: item._project_id || null,
             decision_date: item.decision_date || null,
             first_flagged_at: item.decision_date || new Date().toISOString().split("T")[0],
@@ -542,9 +555,8 @@ export default function IntakeReviewPage() {
         if (err) errors.push(`Decisions: ${err.message}`);
       }
 
-      // Create accepted issues as RAID entries (new only)
-      const acceptedIssues = extracted.issues.filter((i) => i._accepted === true && !i._linked_to);
-      if (acceptedIssues.length > 0) {
+      // Create issues as RAID entries
+      if (byEffectiveType.issues.length > 0) {
         const { count } = await supabase
           .from("raid_entries")
           .select("*", { count: "exact", head: true })
@@ -552,21 +564,20 @@ export default function IntakeReviewPage() {
           .eq("raid_type", "issue");
 
         const { error: err } = await supabase.from("raid_entries").insert(
-          acceptedIssues.map((item, idx) => {
-            // Build description from reporter, notes, updates, and attachments
+          byEffectiveType.issues.map((item, idx) => {
             const descParts: string[] = [];
             if (item.reporter_name) descParts.push(`Reporter: ${item.reporter_name}`);
             if (item.notes) descParts.push(item.notes);
             if (item.updates) descParts.push(`--- Updates ---\n${item.updates}`);
             if (item.attachments) descParts.push(`--- Screenshots/Videos ---\n${item.attachments}`);
-            const description = descParts.length > 0 ? descParts.join("\n\n") : null;
+            const description = descParts.length > 0 ? descParts.join("\n\n") : (item.details || item.rationale || null);
 
             return {
               org_id: orgId,
               raid_type: "issue" as const,
               display_id: `I${(count || 0) + idx + 1}`,
-              title: item.title,
-              impact: item.impact || null,
+              title: item.title || item.subject,
+              impact: item.impact || item.impact_description || null,
               description,
               priority: item.priority || "medium",
               owner_id: findPersonId(item.owner_name),
@@ -579,9 +590,8 @@ export default function IntakeReviewPage() {
         if (err) errors.push(`Issues: ${err.message}`);
       }
 
-      // Create accepted risks as RAID entries (new only)
-      const acceptedRisks = extracted.risks.filter((i) => i._accepted === true && !i._linked_to);
-      if (acceptedRisks.length > 0) {
+      // Create risks as RAID entries
+      if (byEffectiveType.risks.length > 0) {
         const { count } = await supabase
           .from("raid_entries")
           .select("*", { count: "exact", head: true })
@@ -589,13 +599,13 @@ export default function IntakeReviewPage() {
           .eq("raid_type", "risk");
 
         const { error: err } = await supabase.from("raid_entries").insert(
-          acceptedRisks.map((item, idx) => ({
+          byEffectiveType.risks.map((item, idx) => ({
             org_id: orgId,
             raid_type: "risk" as const,
             display_id: `R${(count || 0) + idx + 1}`,
-            title: item.title,
-            impact: item.impact || null,
-            description: item.mitigation || null,
+            title: item.title || item.subject,
+            impact: item.impact || item.impact_description || null,
+            description: item.mitigation || item.notes || item.details || null,
             priority: item.priority || "medium",
             project_id: item._project_id || null,
             first_flagged_at: new Date().toISOString().split("T")[0],
@@ -604,14 +614,13 @@ export default function IntakeReviewPage() {
         if (err) errors.push(`Risks: ${err.message}`);
       }
 
-      // Create accepted blockers (new only)
-      const acceptedBlockers = extracted.blockers.filter((i) => i._accepted === true && !i._linked_to);
-      if (acceptedBlockers.length > 0) {
+      // Create blockers
+      if (byEffectiveType.blockers.length > 0) {
         const { error: err } = await supabase.from("blockers").insert(
-          acceptedBlockers.map((item) => ({
+          byEffectiveType.blockers.map((item) => ({
             org_id: orgId,
-            title: item.title,
-            impact_description: item.impact_description || null,
+            title: item.title || item.subject,
+            impact_description: item.impact_description || item.impact || item.notes || item.details || null,
             owner_id: findPersonId(item.owner_name),
             vendor_id: item._vendor_id || null,
             project_id: item._project_id || null,
@@ -809,7 +818,37 @@ export default function IntakeReviewPage() {
                         {item._editing ? (
                           /* Edit mode */
                           <div className="space-y-2">
-                            {categoryFields[category].map((fieldDef) => {
+                            {/* Type reassignment dropdown */}
+                            {category !== "status_updates" && (
+                              <div className="flex items-start gap-2">
+                                <label className="text-xs text-gray-500 w-16 flex-shrink-0 pt-1">Type</label>
+                                <select
+                                  value={item._save_as || category}
+                                  onChange={(e) => {
+                                    const newType = e.target.value as EntityCategory;
+                                    setExtracted((prev) => ({
+                                      ...prev,
+                                      [category]: prev[category].map((it, i) =>
+                                        i === idx
+                                          ? {
+                                              ...it,
+                                              _save_as: newType === category ? undefined : newType,
+                                              _linked_to: newType !== (it._save_as || category) ? null : it._linked_to,
+                                              _edited: true,
+                                            }
+                                          : it
+                                      ),
+                                    }));
+                                  }}
+                                  className="flex-1 text-sm text-gray-900 bg-white/60 rounded border border-gray-200 px-2 py-0.5 focus:border-blue-500 focus:outline-none"
+                                >
+                                  {reassignableCategories.map((cat) => (
+                                    <option key={cat} value={cat}>{categoryLabels[cat]}</option>
+                                  ))}
+                                </select>
+                              </div>
+                            )}
+                            {((item._save_as && item._save_as !== category ? categoryFields[item._save_as] : categoryFields[category])).map((fieldDef) => {
                               const val = (item as unknown as Record<string, unknown>)[fieldDef.field] as string || "";
                               return (
                                 <div key={fieldDef.field} className="flex items-start gap-2">
@@ -988,6 +1027,11 @@ export default function IntakeReviewPage() {
                                 <span className="font-medium">Updates:</span>
                                 <p className="whitespace-pre-line">{item.updates}</p>
                               </div>
+                            )}
+                            {item._save_as && item._save_as !== category && (
+                              <p className="text-xs text-blue-600 mt-1.5 font-medium">
+                                → Saving as {categoryLabels[item._save_as]}
+                              </p>
                             )}
                           </div>
                         )}
