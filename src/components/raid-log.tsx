@@ -44,6 +44,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
   const [entries, setEntries] = useState<RaidRow[]>(initialEntries);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<RaidType>("risk");
   const [editForm, setEditForm] = useState<EditFormState>({
     title: "", raid_type: "risk", priority: "medium", status: "pending",
     owner_id: "", vendor_id: "", impact: "", description: "", decision_date: "",
@@ -431,12 +432,44 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
     );
   }
 
+  const tabs: { type: RaidType; label: string; items: RaidRow[] }[] = [
+    { type: "risk", label: "Risks", items: risks },
+    { type: "assumption", label: "Assumptions", items: assumptions },
+    { type: "issue", label: "Issues", items: issues },
+    { type: "decision", label: "Decisions", items: decisions },
+  ];
+
+  const activeItems = tabs.find((t) => t.type === activeTab)!;
+
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      {renderQuadrant("Risks", risks)}
-      {renderQuadrant("Issues", issues)}
-      {renderQuadrant("Decisions", decisions)}
-      {renderQuadrant("Assumptions", assumptions)}
+    <div className="flex gap-0">
+      {/* Left sidebar tabs */}
+      <div className="flex flex-col w-[140px] flex-shrink-0">
+        {tabs.map((tab, i) => (
+          <button
+            key={tab.type}
+            onClick={() => setActiveTab(tab.type)}
+            className={`px-3 py-2.5 text-sm font-medium text-left border border-gray-300 transition-colors ${
+              i > 0 ? "-mt-px" : ""
+            } ${
+              i === 0 ? "rounded-tl-lg" : ""
+            } ${
+              i === tabs.length - 1 ? "rounded-bl-lg" : ""
+            } ${
+              activeTab === tab.type
+                ? "bg-gray-800 text-white border-gray-800 z-10 relative"
+                : "bg-white text-gray-700 hover:bg-gray-100"
+            }`}
+          >
+            {tab.label} ({tab.items.length})
+          </button>
+        ))}
+      </div>
+
+      {/* Right panel */}
+      <div className="flex-1 -ml-px">
+        {renderQuadrant(activeItems.label, activeItems.items)}
+      </div>
     </div>
   );
 }
