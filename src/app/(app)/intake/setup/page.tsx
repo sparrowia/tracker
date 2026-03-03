@@ -417,7 +417,7 @@ export default function IntakeSetupPage() {
   const availableFields = TARGET_FIELDS[itemType];
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 pb-20">
+    <div className="max-w-4xl mx-auto space-y-6 pb-24">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Set Up Import</h1>
@@ -602,8 +602,8 @@ export default function IntakeSetupPage() {
         </div>
       </div>
 
-      {/* Footer */}
-      <div className="sticky bottom-0 z-10 bg-gray-50 border-t border-gray-200 -mx-6 px-6 py-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
+      {/* Footer — fixed to bottom of the scrollable main area */}
+      <div className="fixed bottom-0 left-0 right-0 z-10 bg-gray-50 border-t border-gray-200 px-6 py-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
         <div className="max-w-4xl mx-auto flex justify-between items-center">
           <div>
             <p className="text-sm text-gray-600">
