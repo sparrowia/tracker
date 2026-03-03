@@ -509,6 +509,7 @@ export default function IntakeReviewPage() {
             project_id: item._project_id || null,
             priority: item.priority || "medium",
             due_date: item.due_date || null,
+            first_flagged_at: new Date().toISOString().split("T")[0],
             notes: item.notes || null,
           }))
         );
@@ -615,6 +616,7 @@ export default function IntakeReviewPage() {
             vendor_id: item._vendor_id || null,
             project_id: item._project_id || null,
             priority: item.priority || "high",
+            first_flagged_at: new Date().toISOString().split("T")[0],
           }))
         );
         if (err) errors.push(`Blockers: ${err.message}`);
