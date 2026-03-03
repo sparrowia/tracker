@@ -177,7 +177,7 @@ export default function ProjectTabs({
         )}
 
         {active === "actions" && (
-          <ActionItemsPanel actions={actions} />
+          <ActionItemsPanel actions={actions} people={peopleList} vendors={vendors} onPersonAdded={addPerson} addUndo={addUndo} />
         )}
       </div>
       <UndoToast stack={undoStack} onUndo={performUndo} onDismiss={dismissUndo} />
@@ -551,11 +551,122 @@ function BlockersPanel({
   );
 }
 
+const actionPriorityOptions: PriorityLevel[] = ["critical", "high", "medium", "low"];
+const actionStatusOptions: ItemStatus[] = ["pending", "in_progress", "complete", "needs_verification", "paused", "at_risk", "blocked"];
+
+interface ActionEditForm {
+  title: string;
+  description: string;
+  notes: string;
+  priority: PriorityLevel;
+  status: ItemStatus;
+  owner_id: string;
+  vendor_id: string;
+  due_date: string;
+}
+
+type ActionRow = ActionItem & { owner: Person | null; vendor: Vendor | null };
+
 function ActionItemsPanel({
-  actions,
+  actions: initialActions,
+  people,
+  vendors,
+  onPersonAdded,
+  addUndo,
 }: {
-  actions: (ActionItem & { owner: Person | null; vendor: Vendor | null })[];
+  actions: ActionRow[];
+  people: Person[];
+  vendors: Vendor[];
+  onPersonAdded: (person: Person) => void;
+  addUndo: (label: string, undo: () => Promise<void>) => void;
 }) {
+  const [actions, setActions] = useState<ActionRow[]>(initialActions);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<ActionEditForm>({
+    title: "", description: "", notes: "", priority: "medium", status: "pending",
+    owner_id: "", vendor_id: "", due_date: "",
+  });
+  const supabase = createClient();
+
+  function toggleExpand(id: string) {
+    setExpandedId((prev) => (prev === id ? null : id));
+    if (editingId && editingId !== id) setEditingId(null);
+  }
+
+  function startEdit(a: ActionRow) {
+    setEditingId(a.id);
+    setEditForm({
+      title: a.title,
+      description: a.description || "",
+      notes: a.notes || "",
+      priority: a.priority,
+      status: a.status,
+      owner_id: a.owner_id || "",
+      vendor_id: a.vendor_id || "",
+      due_date: a.due_date || "",
+    });
+  }
+
+  async function saveEdit(id: string) {
+    const updates = {
+      title: editForm.title,
+      description: editForm.description || null,
+      notes: editForm.notes || null,
+      priority: editForm.priority,
+      status: editForm.status,
+      owner_id: editForm.owner_id || null,
+      vendor_id: editForm.vendor_id || null,
+      due_date: editForm.due_date || null,
+    };
+
+    const { error } = await supabase.from("action_items").update(updates).eq("id", id);
+
+    if (!error) {
+      const newOwner = people.find((p) => p.id === editForm.owner_id) || null;
+      const newVendor = vendors.find((v) => v.id === editForm.vendor_id) || null;
+      setActions((prev) =>
+        prev.map((a) =>
+          a.id === id
+            ? { ...a, ...updates, owner: newOwner, vendor: newVendor } as ActionRow
+            : a
+        )
+      );
+      setEditingId(null);
+    }
+  }
+
+  async function handleResolve(id: string) {
+    const action = actions.find((a) => a.id === id);
+    if (!action) return;
+    const prevStatus = action.status;
+    const now = new Date().toISOString();
+    const { error } = await supabase.from("action_items").update({ status: "complete", resolved_at: now }).eq("id", id);
+    if (!error) {
+      setActions((prev) => prev.filter((a) => a.id !== id));
+      if (expandedId === id) setExpandedId(null);
+      addUndo(`Resolved "${action.title}"`, async () => {
+        const { error: err } = await supabase.from("action_items").update({ status: prevStatus, resolved_at: null }).eq("id", id);
+        if (!err) setActions((prev) => [...prev, { ...action, status: prevStatus, resolved_at: null }]);
+      });
+    }
+  }
+
+  async function handleDelete(id: string) {
+    const action = actions.find((a) => a.id === id);
+    if (!action) return;
+    const { error } = await supabase.from("action_items").delete().eq("id", id);
+    if (!error) {
+      setActions((prev) => prev.filter((a) => a.id !== id));
+      if (expandedId === id) setExpandedId(null);
+      const { owner: _o, vendor: _v, age_days: _a, days_overdue: _d, urgency: _u, ...dbFields } = action;
+      addUndo(`Deleted "${action.title}"`, async () => {
+        const { error: err } = await supabase.from("action_items").insert(dbFields);
+        if (!err) setActions((prev) => [...prev, action]);
+      });
+    }
+  }
+
   if (actions.length === 0) {
     return <p className="text-sm text-gray-500">No action items.</p>;
   }
@@ -563,54 +674,245 @@ function ActionItemsPanel({
   return (
     <div className="bg-white rounded-lg border border-gray-300 overflow-hidden">
       <div className="bg-gray-800 px-4 py-2.5">
-        <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Action Items</h2>
+        <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Action Items ({actions.length})</h2>
       </div>
-      <table className="min-w-full">
-        <thead className="bg-gray-50 border-b border-gray-300">
-          <tr>
-            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Item</th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Responsible</th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Priority</th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Due</th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Age</th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {actions.map((ai) => {
-            const badge = statusBadge(ai.status);
-            return (
-              <tr key={ai.id} className="border-b border-gray-200 hover:bg-gray-50">
-                <td className="px-4 py-3 text-sm text-gray-900 font-semibold">{ai.title}</td>
-                <td className="px-4 py-3 text-sm">
-                  {ai.owner ? (
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-5 h-5 rounded-full bg-blue-100 text-[10px] font-medium text-blue-700 flex items-center justify-center flex-shrink-0">
-                        {ai.owner.full_name.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
+      <div>
+        {actions.map((a) => {
+          const isExpanded = expandedId === a.id;
+          const isEditing = editingId === a.id;
+          const badge = statusBadge(a.status);
+
+          return (
+            <Fragment key={a.id}>
+              {/* Collapsed row */}
+              <div
+                className="bg-white p-3 border-b border-gray-200 last:border-b-0 cursor-pointer hover:bg-gray-50"
+                onClick={() => toggleExpand(a.id)}
+              >
+                <div className="flex items-center gap-2 flex-wrap">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className={`text-gray-400 transition-transform flex-shrink-0 ${isExpanded ? "rotate-90" : ""}`}
+                  >
+                    <polyline points="9 18 15 12 9 6" />
+                  </svg>
+                  <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border ${priorityColor(a.priority)}`}>{priorityLabel(a.priority)}</span>
+                  <span className={`inline-flex px-1.5 py-0.5 text-xs rounded ${badge.className}`}>{badge.label}</span>
+                  {a.age_days != null && (
+                    <span className="text-xs text-gray-500 font-medium">{formatAge(a.age_days)}</span>
+                  )}
+                </div>
+                <p className="text-sm text-gray-900 font-semibold mt-1 ml-5">{a.title}</p>
+                <div className="flex items-center gap-3 mt-1 ml-5 text-xs text-gray-500">
+                  {a.owner ? (
+                    <div className="flex items-center gap-1">
+                      <span className="w-4 h-4 rounded-full bg-blue-100 text-[9px] font-medium text-blue-700 flex items-center justify-center flex-shrink-0">
+                        {a.owner.full_name.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
                       </span>
-                      <span className="text-gray-700">{ai.owner.full_name}</span>
+                      <span>{a.owner.full_name}</span>
                     </div>
                   ) : (
                     <span className="text-gray-400 italic">Unassigned</span>
                   )}
-                </td>
-                <td className="px-4 py-3">
-                  <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full border ${priorityColor(ai.priority)}`}>
-                    {priorityLabel(ai.priority)}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-sm text-gray-600">{formatDateShort(ai.due_date)}</td>
-                <td className="px-4 py-3 text-sm text-gray-600">{ai.age_days != null ? formatAge(ai.age_days) : "—"}</td>
-                <td className="px-4 py-3">
-                  <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${badge.className}`}>
-                    {badge.label}
-                  </span>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+                  {a.vendor && <span className="text-gray-400">| {a.vendor.name}</span>}
+                </div>
+              </div>
+
+              {/* Expanded detail */}
+              {isExpanded && (
+                <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+                  {isEditing ? (
+                    <div className="space-y-3 max-w-lg">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Title</label>
+                        <input
+                          type="text"
+                          value={editForm.title}
+                          onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                          className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 mb-1">Priority</label>
+                          <select
+                            value={editForm.priority}
+                            onChange={(e) => setEditForm({ ...editForm, priority: e.target.value as PriorityLevel })}
+                            className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          >
+                            {actionPriorityOptions.map((p) => (
+                              <option key={p} value={p}>{priorityLabel(p)}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 mb-1">Status</label>
+                          <select
+                            value={editForm.status}
+                            onChange={(e) => setEditForm({ ...editForm, status: e.target.value as ItemStatus })}
+                            className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          >
+                            {actionStatusOptions.map((s) => (
+                              <option key={s} value={s}>{s.replace(/_/g, " ")}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 mb-1">Owner</label>
+                          <OwnerPicker
+                            value={editForm.owner_id}
+                            onChange={(id) => setEditForm({ ...editForm, owner_id: id })}
+                            people={people}
+                            onPersonAdded={onPersonAdded}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 mb-1">Vendor</label>
+                          <select
+                            value={editForm.vendor_id}
+                            onChange={(e) => setEditForm({ ...editForm, vendor_id: e.target.value })}
+                            className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          >
+                            <option value="">None</option>
+                            {vendors.map((v) => (
+                              <option key={v.id} value={v.id}>{v.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Due Date</label>
+                        <input
+                          type="date"
+                          value={editForm.due_date}
+                          onChange={(e) => setEditForm({ ...editForm, due_date: e.target.value })}
+                          className="w-48 rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Description</label>
+                        <textarea
+                          value={editForm.description}
+                          onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                          rows={2}
+                          className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Notes</label>
+                        <textarea
+                          value={editForm.notes}
+                          onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                          rows={2}
+                          className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
+                        />
+                      </div>
+                      <div className="flex gap-2 justify-end">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setEditingId(null); }}
+                          className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded hover:bg-gray-50"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); saveEdit(a.id); }}
+                          className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700"
+                        >
+                          Save
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div>
+                          <span className="text-xs font-medium text-gray-500 uppercase">Description</span>
+                          <p className="text-gray-900 mt-0.5">{a.description || "—"}</p>
+                        </div>
+                        <div>
+                          <span className="text-xs font-medium text-gray-500 uppercase">Notes</span>
+                          <p className="text-gray-900 mt-0.5">{a.notes || "—"}</p>
+                        </div>
+                        <div>
+                          <span className="text-xs font-medium text-gray-500 uppercase">Owner</span>
+                          <p className="text-gray-900 mt-0.5">{a.owner?.full_name || "Unassigned"}</p>
+                        </div>
+                        <div>
+                          <span className="text-xs font-medium text-gray-500 uppercase">Vendor</span>
+                          <p className="text-gray-900 mt-0.5">{a.vendor?.name || "—"}</p>
+                        </div>
+                        <div>
+                          <span className="text-xs font-medium text-gray-500 uppercase">Status</span>
+                          <p className="text-gray-900 mt-0.5">{a.status.replace(/_/g, " ")}</p>
+                        </div>
+                        <div>
+                          <span className="text-xs font-medium text-gray-500 uppercase">Priority</span>
+                          <p className="text-gray-900 mt-0.5">{priorityLabel(a.priority)}</p>
+                        </div>
+                        <div>
+                          <span className="text-xs font-medium text-gray-500 uppercase">Due Date</span>
+                          <p className="text-gray-900 mt-0.5">{a.due_date ? formatDateShort(a.due_date) : "—"}</p>
+                        </div>
+                        <div>
+                          <span className="text-xs font-medium text-gray-500 uppercase">First Flagged</span>
+                          <p className="text-gray-900 mt-0.5">{new Date(a.first_flagged_at).toLocaleDateString()}</p>
+                        </div>
+                        <div>
+                          <span className="text-xs font-medium text-gray-500 uppercase">Age</span>
+                          <p className="text-gray-600 font-medium mt-0.5">{a.age_days != null ? formatAge(a.age_days) : "—"}</p>
+                        </div>
+                        <div>
+                          <span className="text-xs font-medium text-gray-500 uppercase">Escalations</span>
+                          <p className="text-gray-900 mt-0.5">{a.escalation_count > 0 ? `${a.escalation_count}x` : "None"}</p>
+                        </div>
+                      </div>
+                      <div className="flex justify-end items-center gap-3 pt-2 border-t border-gray-300 mt-3">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); startEdit(a); }}
+                          className="text-gray-400 hover:text-blue-600 transition-colors"
+                          title="Edit"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                          </svg>
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleDelete(a.id); }}
+                          className="text-gray-400 hover:text-red-600 transition-colors"
+                          title="Delete"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="3 6 5 6 21 6"/>
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                          </svg>
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleResolve(a.id); }}
+                          className="text-gray-400 hover:text-green-600 transition-colors"
+                          title="Resolve"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="20 6 9 17 4 12"/>
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </Fragment>
+          );
+        })}
+      </div>
     </div>
   );
 }
