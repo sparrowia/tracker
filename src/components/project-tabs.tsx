@@ -7,6 +7,7 @@ import type { Project, ActionItem, RaidEntry, Blocker, Person, Vendor, ProjectAg
 import RaidLog from "@/components/raid-log";
 import { AgendaView } from "@/components/agenda-view";
 import OwnerPicker from "@/components/owner-picker";
+import { useUndo, UndoToast } from "@/components/undo-toast";
 
 type Tab = "actions" | "blockers" | "raid" | "agenda";
 
@@ -65,6 +66,8 @@ export default function ProjectTabs({
       return [...prev, person].sort((a, b) => a.full_name.localeCompare(b.full_name));
     });
   }, []);
+
+  const { stack: undoStack, addUndo, removeAction: dismissUndo, performUndo } = useUndo();
 
   function countForTab(key: Tab) {
     switch (key) {
@@ -166,17 +169,18 @@ export default function ProjectTabs({
         )}
 
         {active === "blockers" && (
-          <BlockersPanel blockers={blockers} people={peopleList} vendors={vendors} onPersonAdded={addPerson} />
+          <BlockersPanel blockers={blockers} people={peopleList} vendors={vendors} onPersonAdded={addPerson} addUndo={addUndo} />
         )}
 
         {active === "raid" && (
-          <RaidLog initialEntries={raidEntries} project={project} people={peopleList} vendors={vendors} onPersonAdded={addPerson} />
+          <RaidLog initialEntries={raidEntries} project={project} people={peopleList} vendors={vendors} onPersonAdded={addPerson} addUndo={addUndo} />
         )}
 
         {active === "actions" && (
           <ActionItemsPanel actions={actions} />
         )}
       </div>
+      <UndoToast stack={undoStack} onUndo={performUndo} onDismiss={dismissUndo} />
     </div>
   );
 }
@@ -202,11 +206,13 @@ function BlockersPanel({
   people,
   vendors,
   onPersonAdded,
+  addUndo,
 }: {
   blockers: BlockerRow[];
   people: Person[];
   vendors: Vendor[];
   onPersonAdded: (person: Person) => void;
+  addUndo: (label: string, undo: () => Promise<void>) => void;
 }) {
   const [blockers, setBlockers] = useState<BlockerRow[]>(initialBlockers);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -265,19 +271,33 @@ function BlockersPanel({
   }
 
   async function handleResolve(id: string) {
+    const blocker = blockers.find((b) => b.id === id);
+    if (!blocker) return;
+    const prevStatus = blocker.status;
     const now = new Date().toISOString();
     const { error } = await supabase.from("blockers").update({ status: "complete", resolved_at: now }).eq("id", id);
     if (!error) {
       setBlockers((prev) => prev.filter((b) => b.id !== id));
       if (expandedId === id) setExpandedId(null);
+      addUndo(`Resolved "${blocker.title}"`, async () => {
+        const { error: err } = await supabase.from("blockers").update({ status: prevStatus, resolved_at: null }).eq("id", id);
+        if (!err) setBlockers((prev) => [...prev, { ...blocker, status: prevStatus, resolved_at: null }]);
+      });
     }
   }
 
   async function handleDelete(id: string) {
+    const blocker = blockers.find((b) => b.id === id);
+    if (!blocker) return;
     const { error } = await supabase.from("blockers").delete().eq("id", id);
     if (!error) {
       setBlockers((prev) => prev.filter((b) => b.id !== id));
       if (expandedId === id) setExpandedId(null);
+      const { owner: _o, vendor: _v, age_days: _a, age_severity: _s, ...dbFields } = blocker;
+      addUndo(`Deleted "${blocker.title}"`, async () => {
+        const { error: err } = await supabase.from("blockers").insert(dbFields);
+        if (!err) setBlockers((prev) => [...prev, blocker]);
+      });
     }
   }
 

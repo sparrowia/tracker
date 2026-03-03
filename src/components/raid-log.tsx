@@ -14,6 +14,7 @@ interface RaidLogProps {
   people: Person[];
   vendors: Vendor[];
   onPersonAdded: (person: Person) => void;
+  addUndo: (label: string, undo: () => Promise<void>) => void;
 }
 
 const raidTypes: RaidType[] = ["risk", "action", "issue", "decision"];
@@ -39,7 +40,7 @@ function ageFromDate(date: string): number {
   return Math.floor(diff / (1000 * 60 * 60 * 24));
 }
 
-export default function RaidLog({ initialEntries, project, people, vendors, onPersonAdded }: RaidLogProps) {
+export default function RaidLog({ initialEntries, project, people, vendors, onPersonAdded, addUndo }: RaidLogProps) {
   const [entries, setEntries] = useState<RaidRow[]>(initialEntries);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -132,19 +133,33 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
   }
 
   async function handleResolve(id: string) {
+    const entry = entries.find((e) => e.id === id);
+    if (!entry) return;
+    const prevStatus = entry.status;
     const now = new Date().toISOString();
     const { error } = await supabase.from("raid_entries").update({ status: "complete", resolved_at: now }).eq("id", id);
     if (!error) {
       setEntries((prev) => prev.filter((e) => e.id !== id));
       if (expandedId === id) setExpandedId(null);
+      addUndo(`Resolved "${entry.title}"`, async () => {
+        const { error: err } = await supabase.from("raid_entries").update({ status: prevStatus, resolved_at: null }).eq("id", id);
+        if (!err) setEntries((prev) => [...prev, { ...entry, status: prevStatus, resolved_at: null }]);
+      });
     }
   }
 
   async function handleDelete(id: string) {
+    const entry = entries.find((e) => e.id === id);
+    if (!entry) return;
     const { error } = await supabase.from("raid_entries").delete().eq("id", id);
     if (!error) {
       setEntries((prev) => prev.filter((e) => e.id !== id));
       if (expandedId === id) setExpandedId(null);
+      const { owner: _o, vendor: _v, ...dbFields } = entry;
+      addUndo(`Deleted "${entry.title}"`, async () => {
+        const { error: err } = await supabase.from("raid_entries").insert(dbFields);
+        if (!err) setEntries((prev) => [...prev, entry]);
+      });
     }
   }
 
