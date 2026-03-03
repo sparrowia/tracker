@@ -221,6 +221,8 @@ function BlockersPanel({
     title: "", priority: "high", status: "pending",
     owner_id: "", vendor_id: "", impact_description: "", description: "", due_date: "",
   });
+  const [callNotes, setCallNotes] = useState("");
+  const [savingNotes, setSavingNotes] = useState(false);
   const supabase = createClient();
 
   function toggleExpand(id: string) {
@@ -240,9 +242,64 @@ function BlockersPanel({
       description: b.description || "",
       due_date: b.due_date || "",
     });
+    setCallNotes("");
   }
 
   async function saveEdit(id: string) {
+    // If call notes present, process through AI
+    if (callNotes.trim()) {
+      setSavingNotes(true);
+      try {
+        const res = await fetch("/api/agenda-notes", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            entity_type: "blocker",
+            current: {
+              title: editForm.title,
+              impact_description: editForm.impact_description,
+              description: editForm.description,
+              priority: editForm.priority,
+              status: editForm.status,
+            },
+            notes: callNotes,
+          }),
+        });
+        if (res.ok) {
+          const { updates: aiUpdates } = await res.json();
+          // Merge AI updates into form
+          const merged = {
+            title: aiUpdates.title || editForm.title,
+            priority: aiUpdates.priority || editForm.priority,
+            status: aiUpdates.status || editForm.status,
+            owner_id: editForm.owner_id || null,
+            vendor_id: editForm.vendor_id || null,
+            impact_description: aiUpdates.impact_description !== undefined ? aiUpdates.impact_description : editForm.impact_description || null,
+            description: aiUpdates.description !== undefined ? aiUpdates.description : editForm.description || null,
+            due_date: editForm.due_date || null,
+          };
+          const { error } = await supabase.from("blockers").update(merged).eq("id", id);
+          if (!error) {
+            const newOwner = people.find((p) => p.id === editForm.owner_id) || null;
+            const newVendor = vendors.find((v) => v.id === editForm.vendor_id) || null;
+            setBlockers((prev) =>
+              prev.map((b) =>
+                b.id === id ? { ...b, ...merged, owner: newOwner, vendor: newVendor } as BlockerRow : b
+              )
+            );
+            setCallNotes("");
+            setEditingId(null);
+          }
+        }
+      } catch (err) {
+        console.error("AI save failed:", err);
+      } finally {
+        setSavingNotes(false);
+      }
+      return;
+    }
+
+    // No notes — save form fields directly
     const updates = {
       title: editForm.title,
       priority: editForm.priority,
@@ -364,103 +421,131 @@ function BlockersPanel({
               {isExpanded && (
                 <div className="bg-red-50/30 px-4 py-3 border-b border-gray-200">
                   {isEditing ? (
-                    <div className="space-y-3 max-w-lg">
-                      <div>
-                        <label className="block text-xs font-medium text-gray-500 mb-1">Title</label>
-                        <input
-                          type="text"
-                          value={editForm.title}
-                          onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
-                          className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        />
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-xs font-medium text-gray-500 mb-1">Priority</label>
-                          <select
-                            value={editForm.priority}
-                            onChange={(e) => setEditForm({ ...editForm, priority: e.target.value as PriorityLevel })}
-                            className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                          >
-                            {blockerPriorityOptions.map((p) => (
-                              <option key={p} value={p}>{priorityLabel(p)}</option>
-                            ))}
-                          </select>
+                    <div>
+                      <div className="flex gap-4">
+                        <div className="flex-1 space-y-3 min-w-0">
+                          <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1">Title</label>
+                            <input
+                              type="text"
+                              value={editForm.title}
+                              onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                              className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            />
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-xs font-medium text-gray-500 mb-1">Priority</label>
+                              <select
+                                value={editForm.priority}
+                                onChange={(e) => setEditForm({ ...editForm, priority: e.target.value as PriorityLevel })}
+                                className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              >
+                                {blockerPriorityOptions.map((p) => (
+                                  <option key={p} value={p}>{priorityLabel(p)}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-500 mb-1">Status</label>
+                              <select
+                                value={editForm.status}
+                                onChange={(e) => setEditForm({ ...editForm, status: e.target.value as ItemStatus })}
+                                className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              >
+                                {blockerStatusOptions.map((s) => (
+                                  <option key={s} value={s}>{s.replace(/_/g, " ")}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-500 mb-1">Owner</label>
+                              <OwnerPicker
+                                value={editForm.owner_id}
+                                onChange={(id) => setEditForm({ ...editForm, owner_id: id })}
+                                people={people}
+                                onPersonAdded={onPersonAdded}
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-500 mb-1">Vendor</label>
+                              <select
+                                value={editForm.vendor_id}
+                                onChange={(e) => setEditForm({ ...editForm, vendor_id: e.target.value })}
+                                className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              >
+                                <option value="">None</option>
+                                {vendors.map((v) => (
+                                  <option key={v.id} value={v.id}>{v.name}</option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1">Due Date</label>
+                            <input
+                              type="date"
+                              value={editForm.due_date}
+                              onChange={(e) => setEditForm({ ...editForm, due_date: e.target.value })}
+                              className="w-48 rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1">Impact</label>
+                            <textarea
+                              value={editForm.impact_description}
+                              onChange={(e) => setEditForm({ ...editForm, impact_description: e.target.value })}
+                              rows={2}
+                              className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1">Description</label>
+                            <textarea
+                              value={editForm.description}
+                              onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                              rows={2}
+                              className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
+                            />
+                          </div>
                         </div>
-                        <div>
-                          <label className="block text-xs font-medium text-gray-500 mb-1">Status</label>
-                          <select
-                            value={editForm.status}
-                            onChange={(e) => setEditForm({ ...editForm, status: e.target.value as ItemStatus })}
-                            className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                          >
-                            {blockerStatusOptions.map((s) => (
-                              <option key={s} value={s}>{s.replace(/_/g, " ")}</option>
-                            ))}
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-xs font-medium text-gray-500 mb-1">Owner</label>
-                          <OwnerPicker
-                            value={editForm.owner_id}
-                            onChange={(id) => setEditForm({ ...editForm, owner_id: id })}
-                            people={people}
-                            onPersonAdded={onPersonAdded}
+                        <div className="w-72 flex-shrink-0 space-y-1.5">
+                          <label className="block text-xs font-medium text-gray-500 mb-1">Call Notes</label>
+                          <textarea
+                            value={callNotes}
+                            onChange={(e) => setCallNotes(e.target.value)}
+                            placeholder="Take notes during the call..."
+                            rows={12}
+                            className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
                           />
                         </div>
-                        <div>
-                          <label className="block text-xs font-medium text-gray-500 mb-1">Vendor</label>
-                          <select
-                            value={editForm.vendor_id}
-                            onChange={(e) => setEditForm({ ...editForm, vendor_id: e.target.value })}
-                            className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                          >
-                            <option value="">None</option>
-                            {vendors.map((v) => (
-                              <option key={v.id} value={v.id}>{v.name}</option>
-                            ))}
-                          </select>
-                        </div>
                       </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-500 mb-1">Due Date</label>
-                        <input
-                          type="date"
-                          value={editForm.due_date}
-                          onChange={(e) => setEditForm({ ...editForm, due_date: e.target.value })}
-                          className="w-48 rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-500 mb-1">Impact</label>
-                        <textarea
-                          value={editForm.impact_description}
-                          onChange={(e) => setEditForm({ ...editForm, impact_description: e.target.value })}
-                          rows={2}
-                          className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-500 mb-1">Description</label>
-                        <textarea
-                          value={editForm.description}
-                          onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-                          rows={2}
-                          className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
-                        />
-                      </div>
-                      <div className="flex gap-2 justify-end">
+                      <div className="flex items-center gap-2 mt-3">
                         <button
                           onClick={(e) => { e.stopPropagation(); setEditingId(null); }}
                           className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded hover:bg-gray-50"
                         >
                           Cancel
                         </button>
+                        <div className="flex-1" />
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleResolve(b.id); }}
+                          className="px-3 py-1.5 text-xs font-medium text-green-700 bg-white border border-green-300 rounded hover:bg-green-50"
+                        >
+                          Resolve
+                        </button>
                         <button
                           onClick={(e) => { e.stopPropagation(); saveEdit(b.id); }}
-                          className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700"
+                          disabled={savingNotes}
+                          className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5"
                         >
-                          Save
+                          {savingNotes && (
+                            <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                            </svg>
+                          )}
+                          {savingNotes ? "Updating..." : "Save"}
                         </button>
                       </div>
                     </div>
@@ -587,6 +672,8 @@ function ActionItemsPanel({
     title: "", description: "", notes: "", priority: "medium", status: "pending",
     owner_id: "", vendor_id: "", due_date: "",
   });
+  const [callNotes, setCallNotes] = useState("");
+  const [savingNotes, setSavingNotes] = useState(false);
   const supabase = createClient();
 
   function toggleExpand(id: string) {
@@ -606,9 +693,63 @@ function ActionItemsPanel({
       vendor_id: a.vendor_id || "",
       due_date: a.due_date || "",
     });
+    setCallNotes("");
   }
 
   async function saveEdit(id: string) {
+    // If call notes present, process through AI
+    if (callNotes.trim()) {
+      setSavingNotes(true);
+      try {
+        const res = await fetch("/api/agenda-notes", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            entity_type: "action_item",
+            current: {
+              title: editForm.title,
+              description: editForm.description,
+              notes: editForm.notes,
+              priority: editForm.priority,
+              status: editForm.status,
+            },
+            notes: callNotes,
+          }),
+        });
+        if (res.ok) {
+          const { updates: aiUpdates } = await res.json();
+          const merged = {
+            title: aiUpdates.title || editForm.title,
+            priority: aiUpdates.priority || editForm.priority,
+            status: aiUpdates.status || editForm.status,
+            owner_id: editForm.owner_id || null,
+            vendor_id: editForm.vendor_id || null,
+            description: aiUpdates.description !== undefined ? aiUpdates.description : editForm.description || null,
+            notes: aiUpdates.notes !== undefined ? aiUpdates.notes : editForm.notes || null,
+            due_date: editForm.due_date || null,
+          };
+          const { error } = await supabase.from("action_items").update(merged).eq("id", id);
+          if (!error) {
+            const newOwner = people.find((p) => p.id === editForm.owner_id) || null;
+            const newVendor = vendors.find((v) => v.id === editForm.vendor_id) || null;
+            setActions((prev) =>
+              prev.map((a) =>
+                a.id === id ? { ...a, ...merged, owner: newOwner, vendor: newVendor } as ActionRow : a
+              )
+            );
+            setCallNotes("");
+            setEditingId(null);
+          }
+        }
+      } catch (err) {
+        console.error("AI save failed:", err);
+      } finally {
+        setSavingNotes(false);
+      }
+      return;
+    }
+
+    // No notes — save form fields directly
     const updates = {
       title: editForm.title,
       description: editForm.description || null,
@@ -730,103 +871,131 @@ function ActionItemsPanel({
               {isExpanded && (
                 <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
                   {isEditing ? (
-                    <div className="space-y-3 max-w-lg">
-                      <div>
-                        <label className="block text-xs font-medium text-gray-500 mb-1">Title</label>
-                        <input
-                          type="text"
-                          value={editForm.title}
-                          onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
-                          className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        />
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-xs font-medium text-gray-500 mb-1">Priority</label>
-                          <select
-                            value={editForm.priority}
-                            onChange={(e) => setEditForm({ ...editForm, priority: e.target.value as PriorityLevel })}
-                            className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                          >
-                            {actionPriorityOptions.map((p) => (
-                              <option key={p} value={p}>{priorityLabel(p)}</option>
-                            ))}
-                          </select>
+                    <div>
+                      <div className="flex gap-4">
+                        <div className="flex-1 space-y-3 min-w-0">
+                          <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1">Title</label>
+                            <input
+                              type="text"
+                              value={editForm.title}
+                              onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                              className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            />
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-xs font-medium text-gray-500 mb-1">Priority</label>
+                              <select
+                                value={editForm.priority}
+                                onChange={(e) => setEditForm({ ...editForm, priority: e.target.value as PriorityLevel })}
+                                className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              >
+                                {actionPriorityOptions.map((p) => (
+                                  <option key={p} value={p}>{priorityLabel(p)}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-500 mb-1">Status</label>
+                              <select
+                                value={editForm.status}
+                                onChange={(e) => setEditForm({ ...editForm, status: e.target.value as ItemStatus })}
+                                className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              >
+                                {actionStatusOptions.map((s) => (
+                                  <option key={s} value={s}>{s.replace(/_/g, " ")}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-500 mb-1">Owner</label>
+                              <OwnerPicker
+                                value={editForm.owner_id}
+                                onChange={(id) => setEditForm({ ...editForm, owner_id: id })}
+                                people={people}
+                                onPersonAdded={onPersonAdded}
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-500 mb-1">Vendor</label>
+                              <select
+                                value={editForm.vendor_id}
+                                onChange={(e) => setEditForm({ ...editForm, vendor_id: e.target.value })}
+                                className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              >
+                                <option value="">None</option>
+                                {vendors.map((v) => (
+                                  <option key={v.id} value={v.id}>{v.name}</option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1">Due Date</label>
+                            <input
+                              type="date"
+                              value={editForm.due_date}
+                              onChange={(e) => setEditForm({ ...editForm, due_date: e.target.value })}
+                              className="w-48 rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1">Description</label>
+                            <textarea
+                              value={editForm.description}
+                              onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                              rows={2}
+                              className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1">Notes</label>
+                            <textarea
+                              value={editForm.notes}
+                              onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                              rows={2}
+                              className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
+                            />
+                          </div>
                         </div>
-                        <div>
-                          <label className="block text-xs font-medium text-gray-500 mb-1">Status</label>
-                          <select
-                            value={editForm.status}
-                            onChange={(e) => setEditForm({ ...editForm, status: e.target.value as ItemStatus })}
-                            className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                          >
-                            {actionStatusOptions.map((s) => (
-                              <option key={s} value={s}>{s.replace(/_/g, " ")}</option>
-                            ))}
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-xs font-medium text-gray-500 mb-1">Owner</label>
-                          <OwnerPicker
-                            value={editForm.owner_id}
-                            onChange={(id) => setEditForm({ ...editForm, owner_id: id })}
-                            people={people}
-                            onPersonAdded={onPersonAdded}
+                        <div className="w-72 flex-shrink-0 space-y-1.5">
+                          <label className="block text-xs font-medium text-gray-500 mb-1">Call Notes</label>
+                          <textarea
+                            value={callNotes}
+                            onChange={(e) => setCallNotes(e.target.value)}
+                            placeholder="Take notes during the call..."
+                            rows={14}
+                            className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
                           />
                         </div>
-                        <div>
-                          <label className="block text-xs font-medium text-gray-500 mb-1">Vendor</label>
-                          <select
-                            value={editForm.vendor_id}
-                            onChange={(e) => setEditForm({ ...editForm, vendor_id: e.target.value })}
-                            className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                          >
-                            <option value="">None</option>
-                            {vendors.map((v) => (
-                              <option key={v.id} value={v.id}>{v.name}</option>
-                            ))}
-                          </select>
-                        </div>
                       </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-500 mb-1">Due Date</label>
-                        <input
-                          type="date"
-                          value={editForm.due_date}
-                          onChange={(e) => setEditForm({ ...editForm, due_date: e.target.value })}
-                          className="w-48 rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-500 mb-1">Description</label>
-                        <textarea
-                          value={editForm.description}
-                          onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-                          rows={2}
-                          className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-500 mb-1">Notes</label>
-                        <textarea
-                          value={editForm.notes}
-                          onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
-                          rows={2}
-                          className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
-                        />
-                      </div>
-                      <div className="flex gap-2 justify-end">
+                      <div className="flex items-center gap-2 mt-3">
                         <button
                           onClick={(e) => { e.stopPropagation(); setEditingId(null); }}
                           className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded hover:bg-gray-50"
                         >
                           Cancel
                         </button>
+                        <div className="flex-1" />
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleResolve(a.id); }}
+                          className="px-3 py-1.5 text-xs font-medium text-green-700 bg-white border border-green-300 rounded hover:bg-green-50"
+                        >
+                          Resolve
+                        </button>
                         <button
                           onClick={(e) => { e.stopPropagation(); saveEdit(a.id); }}
-                          className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700"
+                          disabled={savingNotes}
+                          className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5"
                         >
-                          Save
+                          {savingNotes && (
+                            <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                            </svg>
+                          )}
+                          {savingNotes ? "Updating..." : "Save"}
                         </button>
                       </div>
                     </div>

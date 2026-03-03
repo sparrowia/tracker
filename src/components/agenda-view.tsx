@@ -88,6 +88,8 @@ export function AgendaView({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editFields, setEditFields] = useState<{ title: string; context: string; ask: string; priority: PriorityLevel }>({ title: "", context: "", ask: "", priority: "medium" });
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [notesText, setNotesText] = useState("");
+  const [savingNotes, setSavingNotes] = useState(false);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<PriorityLevel>>(new Set());
   const [sortField, setSortField] = useState<SortField | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
@@ -212,12 +214,80 @@ export function AgendaView({
       ask: item.ask || "",
       priority: item.priority,
     });
+    setNotesText("");
   }
 
   async function handleSaveEdit(item: ProjectAgendaRow) {
     const table = item.entity_type === "agenda_item" ? "agenda_items"
       : item.entity_type === "blocker" ? "blockers" : "action_items";
 
+    // If notes present, process through AI
+    if (notesText.trim()) {
+      setSavingNotes(true);
+      try {
+        const res = await fetch("/api/agenda-notes", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            entity_type: item.entity_type,
+            current: {
+              title: editFields.title,
+              context: editFields.context,
+              ask: editFields.ask,
+              priority: editFields.priority,
+            },
+            notes: notesText,
+          }),
+        });
+
+        if (!res.ok) {
+          console.error("AI processing failed");
+          setSavingNotes(false);
+          return;
+        }
+
+        const { updates: aiUpdates } = await res.json();
+
+        // Merge AI updates with current form values
+        const merged = {
+          title: aiUpdates.title || editFields.title,
+          context: aiUpdates.context !== undefined ? aiUpdates.context : editFields.context,
+          ask: aiUpdates.ask !== undefined ? aiUpdates.ask : editFields.ask,
+          priority: aiUpdates.priority || editFields.priority,
+        };
+
+        const dbUpdates: Record<string, unknown> = { title: merged.title, priority: merged.priority };
+        if (item.entity_type === "agenda_item") {
+          dbUpdates.context = merged.context || null;
+          dbUpdates.ask = merged.ask || null;
+        } else if (item.entity_type === "action_item") {
+          dbUpdates.notes = merged.context || null;
+        } else if (item.entity_type === "blocker") {
+          dbUpdates.impact_description = merged.context || null;
+        }
+        if (aiUpdates.status) dbUpdates.status = aiUpdates.status;
+
+        const { error } = await supabase.from(table).update(dbUpdates).eq("id", item.entity_id);
+        if (error) { console.error("Save failed:", error); setSavingNotes(false); return; }
+
+        setItems((prev) =>
+          prev.map((i) =>
+            i.entity_id === item.entity_id
+              ? { ...i, title: merged.title, priority: merged.priority as PriorityLevel, context: merged.context || null, ask: merged.ask || null }
+              : i
+          )
+        );
+        setNotesText("");
+        setEditingId(null);
+      } catch (err) {
+        console.error("Save notes failed:", err);
+      } finally {
+        setSavingNotes(false);
+      }
+      return;
+    }
+
+    // No notes — save form field changes directly
     const updates: Record<string, unknown> = { title: editFields.title, priority: editFields.priority };
     if (item.entity_type === "agenda_item") {
       updates.context = editFields.context || null;
@@ -231,7 +301,6 @@ export function AgendaView({
     const { error } = await supabase.from(table).update(updates).eq("id", item.entity_id);
     if (error) { console.error("Save failed:", error); return; }
 
-    // Update local state so changes are immediately visible
     setItems((prev) =>
       prev.map((i) =>
         i.entity_id === item.entity_id
@@ -406,17 +475,29 @@ export function AgendaView({
               return (
                 <div key={itemKey} className="border-b border-gray-200 last:border-b-0">
                   {isEditing ? (
-                    <div className="px-3 py-3 space-y-2 bg-blue-50/30">
-                      <input type="text" value={editFields.title} onChange={(e) => setEditFields({ ...editFields, title: e.target.value })} className="w-full text-sm font-medium text-gray-900 rounded border border-gray-300 px-2 py-1.5 focus:border-blue-500 focus:outline-none" />
-                      <textarea value={editFields.context} onChange={(e) => setEditFields({ ...editFields, context: e.target.value })} placeholder="Context" rows={2} className="w-full text-sm text-gray-900 rounded border border-gray-300 px-2 py-1.5 focus:border-blue-500 focus:outline-none resize-y" />
-                      <textarea value={editFields.ask} onChange={(e) => setEditFields({ ...editFields, ask: e.target.value })} placeholder="Ask" rows={2} className="w-full text-sm text-gray-900 rounded border border-gray-300 px-2 py-1.5 focus:border-blue-500 focus:outline-none resize-y" />
-                      <div className="flex items-center gap-3">
-                        <select value={editFields.priority} onChange={(e) => setEditFields({ ...editFields, priority: e.target.value as PriorityLevel })} className="text-sm text-gray-900 rounded border border-gray-300 px-2 py-1.5 focus:border-blue-500 focus:outline-none">
-                          {priorityOptions.map((p) => (<option key={p} value={p}>{priorityLabels[p]}</option>))}
-                        </select>
-                        <div className="flex-1" />
+                    <div className="px-3 py-3 bg-blue-50/30">
+                      <div className="flex gap-4">
+                        <div className="flex-1 space-y-2 min-w-0">
+                          <input type="text" value={editFields.title} onChange={(e) => setEditFields({ ...editFields, title: e.target.value })} className="w-full text-sm font-medium text-gray-900 rounded border border-gray-300 px-2 py-1.5 focus:border-blue-500 focus:outline-none" />
+                          <textarea value={editFields.context} onChange={(e) => setEditFields({ ...editFields, context: e.target.value })} placeholder="Context" rows={2} className="w-full text-sm text-gray-900 rounded border border-gray-300 px-2 py-1.5 focus:border-blue-500 focus:outline-none resize-y" />
+                          <textarea value={editFields.ask} onChange={(e) => setEditFields({ ...editFields, ask: e.target.value })} placeholder="Ask" rows={2} className="w-full text-sm text-gray-900 rounded border border-gray-300 px-2 py-1.5 focus:border-blue-500 focus:outline-none resize-y" />
+                          <select value={editFields.priority} onChange={(e) => setEditFields({ ...editFields, priority: e.target.value as PriorityLevel })} className="text-sm text-gray-900 rounded border border-gray-300 px-2 py-1.5 focus:border-blue-500 focus:outline-none">
+                            {priorityOptions.map((p) => (<option key={p} value={p}>{priorityLabels[p]}</option>))}
+                          </select>
+                        </div>
+                        <div className="w-72 flex-shrink-0 space-y-1.5">
+                          <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Call Notes</label>
+                          <textarea value={notesText} onChange={(e) => setNotesText(e.target.value)} placeholder="Take notes during the call..." rows={6} className="w-full text-sm text-gray-900 rounded border border-gray-300 px-2 py-1.5 focus:border-blue-500 focus:outline-none resize-y" />
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 mt-3">
                         <button onClick={() => setEditingId(null)} className="px-3 py-1 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded hover:bg-gray-50">Cancel</button>
-                        <button onClick={() => handleSaveEdit(item)} className="px-3 py-1 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700">Save</button>
+                        <div className="flex-1" />
+                        <button onClick={() => handleResolve(item)} className="px-3 py-1.5 text-xs font-medium text-green-700 bg-white border border-green-300 rounded hover:bg-green-50">Resolve</button>
+                        <button onClick={() => handleSaveEdit(item)} disabled={savingNotes} className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5">
+                          {savingNotes && <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>}
+                          {savingNotes ? "Updating..." : "Save"}
+                        </button>
                       </div>
                     </div>
                   ) : (
@@ -505,49 +586,76 @@ export function AgendaView({
                   return (
                     <div key={itemKey} className="border-b border-gray-200 last:border-b-0">
                       {isEditing ? (
-                        <div className="px-3 py-3 space-y-2 bg-blue-50/30">
-                          <input
-                            type="text"
-                            value={editFields.title}
-                            onChange={(e) => setEditFields({ ...editFields, title: e.target.value })}
-                            className="w-full text-sm font-medium text-gray-900 rounded border border-gray-300 px-2 py-1.5 focus:border-blue-500 focus:outline-none"
-                          />
-                          <textarea
-                            value={editFields.context}
-                            onChange={(e) => setEditFields({ ...editFields, context: e.target.value })}
-                            placeholder="Context"
-                            rows={2}
-                            className="w-full text-sm text-gray-900 rounded border border-gray-300 px-2 py-1.5 focus:border-blue-500 focus:outline-none resize-y"
-                          />
-                          <textarea
-                            value={editFields.ask}
-                            onChange={(e) => setEditFields({ ...editFields, ask: e.target.value })}
-                            placeholder="Ask"
-                            rows={2}
-                            className="w-full text-sm text-gray-900 rounded border border-gray-300 px-2 py-1.5 focus:border-blue-500 focus:outline-none resize-y"
-                          />
-                          <div className="flex items-center gap-3">
-                            <select
-                              value={editFields.priority}
-                              onChange={(e) => setEditFields({ ...editFields, priority: e.target.value as PriorityLevel })}
-                              className="text-sm text-gray-900 rounded border border-gray-300 px-2 py-1.5 focus:border-blue-500 focus:outline-none"
-                            >
-                              {priorityOptions.map((p) => (
-                                <option key={p} value={p}>{priorityLabels[p]}</option>
-                              ))}
-                            </select>
-                            <div className="flex-1" />
+                        <div className="px-3 py-3 bg-blue-50/30">
+                          <div className="flex gap-4">
+                            <div className="flex-1 space-y-2 min-w-0">
+                              <input
+                                type="text"
+                                value={editFields.title}
+                                onChange={(e) => setEditFields({ ...editFields, title: e.target.value })}
+                                className="w-full text-sm font-medium text-gray-900 rounded border border-gray-300 px-2 py-1.5 focus:border-blue-500 focus:outline-none"
+                              />
+                              <textarea
+                                value={editFields.context}
+                                onChange={(e) => setEditFields({ ...editFields, context: e.target.value })}
+                                placeholder="Context"
+                                rows={2}
+                                className="w-full text-sm text-gray-900 rounded border border-gray-300 px-2 py-1.5 focus:border-blue-500 focus:outline-none resize-y"
+                              />
+                              <textarea
+                                value={editFields.ask}
+                                onChange={(e) => setEditFields({ ...editFields, ask: e.target.value })}
+                                placeholder="Ask"
+                                rows={2}
+                                className="w-full text-sm text-gray-900 rounded border border-gray-300 px-2 py-1.5 focus:border-blue-500 focus:outline-none resize-y"
+                              />
+                              <select
+                                value={editFields.priority}
+                                onChange={(e) => setEditFields({ ...editFields, priority: e.target.value as PriorityLevel })}
+                                className="text-sm text-gray-900 rounded border border-gray-300 px-2 py-1.5 focus:border-blue-500 focus:outline-none"
+                              >
+                                {priorityOptions.map((p) => (
+                                  <option key={p} value={p}>{priorityLabels[p]}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div className="w-72 flex-shrink-0 space-y-1.5">
+                              <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Call Notes</label>
+                              <textarea
+                                value={notesText}
+                                onChange={(e) => setNotesText(e.target.value)}
+                                placeholder="Take notes during the call..."
+                                rows={6}
+                                className="w-full text-sm text-gray-900 rounded border border-gray-300 px-2 py-1.5 focus:border-blue-500 focus:outline-none resize-y"
+                              />
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 mt-3">
                             <button
                               onClick={() => setEditingId(null)}
                               className="px-3 py-1 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded hover:bg-gray-50"
                             >
                               Cancel
                             </button>
+                            <div className="flex-1" />
+                            <button
+                              onClick={() => handleResolve(item)}
+                              className="px-3 py-1.5 text-xs font-medium text-green-700 bg-white border border-green-300 rounded hover:bg-green-50"
+                            >
+                              Resolve
+                            </button>
                             <button
                               onClick={() => handleSaveEdit(item)}
-                              className="px-3 py-1 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700"
+                              disabled={savingNotes}
+                              className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5"
                             >
-                              Save
+                              {savingNotes && (
+                                <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                                </svg>
+                              )}
+                              {savingNotes ? "Updating..." : "Save"}
                             </button>
                           </div>
                         </div>
