@@ -166,7 +166,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
 
   function renderQuadrant(label: string, items: RaidRow[]) {
     return (
-      <div className="rounded-lg border border-gray-300 overflow-hidden">
+      <div className="rounded-tr-lg rounded-br-lg border border-gray-300 overflow-hidden">
         <div className="bg-gray-700 px-4 py-2">
           <h3 className="text-xs font-semibold text-white uppercase tracking-wide">{label} ({items.length})</h3>
         </div>
@@ -449,10 +449,10 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
           <button
             key={tab.type}
             onClick={() => setActiveTab(tab.type)}
-            className={`px-3 py-2.5 text-sm font-medium text-left border border-gray-300 transition-colors ${
+            className={`px-3 text-sm font-medium text-left border border-gray-300 transition-colors ${
               i > 0 ? "-mt-px" : ""
             } ${
-              i === 0 ? "rounded-tl-lg" : ""
+              i === 0 ? "rounded-tl-lg py-2" : "py-2.5"
             } ${
               i === tabs.length - 1 ? "rounded-bl-lg" : ""
             } ${
