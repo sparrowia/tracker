@@ -26,7 +26,8 @@ export type IntakeSource =
   | "email"
   | "meeting_notes"
   | "manual"
-  | "fathom_transcript";
+  | "fathom_transcript"
+  | "spreadsheet";
 
 export interface Organization {
   id: string;

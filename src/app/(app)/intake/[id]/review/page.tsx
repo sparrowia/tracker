@@ -711,14 +711,39 @@ export default function IntakeReviewPage() {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:items-start">
-        {/* Raw text */}
+        {/* Raw text / Import source */}
         <div className="lg:sticky lg:top-4 lg:self-start">
-          <h2 className="text-sm font-semibold text-gray-700 mb-2 uppercase tracking-wide">
-            Original Text
-          </h2>
-          <div ref={rawTextRef} className="bg-white rounded-lg border border-gray-200 p-4 max-h-[600px] overflow-y-auto">
-            <pre className="text-sm text-gray-700 whitespace-pre-wrap font-mono">{highlightedQuote ? renderHighlightedText(intake.raw_text, highlightedQuote) : intake.raw_text}</pre>
-          </div>
+          {intake.source === "spreadsheet" ? (
+            <>
+              <h2 className="text-sm font-semibold text-gray-700 mb-2 uppercase tracking-wide">
+                Import Source
+              </h2>
+              <div className="bg-white rounded-lg border border-gray-200 p-4">
+                <div className="flex items-center gap-3">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600 flex-shrink-0">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                    <line x1="16" y1="13" x2="8" y2="13"/>
+                    <line x1="16" y1="17" x2="8" y2="17"/>
+                    <polyline points="10 9 9 9 8 9"/>
+                  </svg>
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">Spreadsheet Import</p>
+                    <p className="text-xs text-gray-500 mt-0.5">{intake.raw_text}</p>
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <h2 className="text-sm font-semibold text-gray-700 mb-2 uppercase tracking-wide">
+                Original Text
+              </h2>
+              <div ref={rawTextRef} className="bg-white rounded-lg border border-gray-200 p-4 max-h-[600px] overflow-y-auto">
+                <pre className="text-sm text-gray-700 whitespace-pre-wrap font-mono">{highlightedQuote ? renderHighlightedText(intake.raw_text, highlightedQuote) : intake.raw_text}</pre>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Extracted entities */}
