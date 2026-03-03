@@ -36,6 +36,7 @@ interface ExtractedItem {
   date_reported?: string | null;
   attachments?: string | null;
   updates?: string | null;
+  reporter_name?: string | null;
   // Per-item overrides
   _accepted?: boolean;
   _edited?: boolean;
@@ -86,6 +87,7 @@ const categoryFields: Record<EntityCategory, { field: string; label: string; typ
   issues: [
     { field: "title", label: "Issue", type: "text" },
     { field: "owner_name", label: "Owner", type: "person" },
+    { field: "reporter_name", label: "Reporter", type: "person" },
     { field: "priority", label: "Priority", type: "select" },
     { field: "date_reported", label: "Date Reported", type: "date" },
     { field: "impact", label: "Impact", type: "textarea" },
@@ -549,8 +551,9 @@ export default function IntakeReviewPage() {
 
         const { error: err } = await supabase.from("raid_entries").insert(
           acceptedIssues.map((item, idx) => {
-            // Build description from notes, updates, and attachments
+            // Build description from reporter, notes, updates, and attachments
             const descParts: string[] = [];
+            if (item.reporter_name) descParts.push(`Reporter: ${item.reporter_name}`);
             if (item.notes) descParts.push(item.notes);
             if (item.updates) descParts.push(`--- Updates ---\n${item.updates}`);
             if (item.attachments) descParts.push(`--- Screenshots/Videos ---\n${item.attachments}`);
@@ -932,6 +935,9 @@ export default function IntakeReviewPage() {
                               {item.owner_name && (
                                 <span className="text-xs text-gray-500">Owner: {item.owner_name}</span>
                               )}
+                              {item.reporter_name && (
+                                <span className="text-xs text-gray-500">Reporter: {item.reporter_name}</span>
+                              )}
                               {item.made_by && (
                                 <span className="text-xs text-gray-500">By: {item.made_by}</span>
                               )}
@@ -951,6 +957,18 @@ export default function IntakeReviewPage() {
                                 </span>
                               )}
                             </div>
+                            {(item._project_id || item._vendor_id) && (
+                              <div className="flex gap-2 mt-1 flex-wrap">
+                                {item._project_id && (() => {
+                                  const proj = projects.find((p) => p.id === item._project_id);
+                                  return proj ? <span className="text-xs text-gray-500">Project: {proj.name}</span> : null;
+                                })()}
+                                {item._vendor_id && (() => {
+                                  const vend = vendors.find((v) => v.id === item._vendor_id);
+                                  return vend ? <span className="text-xs text-gray-500">Vendor: {vend.name}</span> : null;
+                                })()}
+                              </div>
+                            )}
                             {(item.notes || item.impact || item.impact_description || item.rationale || item.details || item.mitigation) && (
                               <p className="text-xs text-gray-600 mt-1 whitespace-pre-line">
                                 {item.notes || item.impact || item.impact_description || item.rationale || item.details || item.mitigation}

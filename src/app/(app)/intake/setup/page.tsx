@@ -34,6 +34,7 @@ const TARGET_FIELDS: Record<ItemType, { value: string; label: string }[]> = {
   issues: [
     { value: "title", label: "Issue Title" },
     { value: "owner_name", label: "Owner" },
+    { value: "reporter_name", label: "Reporter" },
     { value: "priority", label: "Priority" },
     { value: "date_reported", label: "Date Reported" },
     { value: "impact", label: "Impact" },

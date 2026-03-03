@@ -6,7 +6,7 @@ type ItemType = "action_items" | "decisions" | "issues" | "risks" | "blockers" |
 const TARGET_FIELDS: Record<ItemType, string[]> = {
   action_items: ["title", "owner_name", "priority", "due_date", "notes"],
   decisions: ["title", "made_by", "decision_date", "rationale"],
-  issues: ["title", "owner_name", "priority", "date_reported", "impact", "attachments", "notes", "updates"],
+  issues: ["title", "owner_name", "reporter_name", "priority", "date_reported", "impact", "attachments", "notes", "updates"],
   risks: ["title", "priority", "impact", "mitigation"],
   blockers: ["title", "owner_name", "priority", "impact_description"],
   status_updates: ["subject", "new_status", "details"],
@@ -72,6 +72,7 @@ function fallbackMapping(headers: string[]): SuggestResponse {
   const rationaleKeywords = ["rationale", "reason", "why", "justification"];
   const mitigationKeywords = ["mitigation", "plan", "response", "counter"];
 
+  const reporterKeywords = ["reporter", "reported by", "submitted by", "filed by", "author", "requester", "requestor"];
   const attachmentKeywords = ["screenshot", "video", "attachment", "media", "file", "image", "capture", "recording", "link"];
   const updatesKeywords = ["update", "response", "next step", "follow", "resolution", "reply"];
   const dateReportedKeywords = ["date reported", "reported", "opened", "created", "filed", "submitted"];
@@ -80,6 +81,7 @@ function fallbackMapping(headers: string[]): SuggestResponse {
     title: titleKeywords,
     subject: titleKeywords,
     owner_name: ownerKeywords,
+    reporter_name: reporterKeywords,
     made_by: ownerKeywords,
     priority: priorityKeywords,
     due_date: dateKeywords,
