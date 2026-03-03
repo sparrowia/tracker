@@ -381,8 +381,8 @@ export default function IntakeSetupPage() {
       const { data: intake, error: insertError } = await supabase
         .from("intakes")
         .insert({
-          raw_text: `Imported ${items.length} rows from ${sessionData.fileName}`,
-          source: "spreadsheet",
+          raw_text: `[Spreadsheet Import] ${items.length} rows from ${sessionData.fileName}`,
+          source: "manual",
           vendor_id: resolvedVendorId,
           project_id: resolvedProjectId,
           submitted_by: user.user?.id || null,

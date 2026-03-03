@@ -731,7 +731,7 @@ export default function IntakeReviewPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:items-start">
         {/* Raw text / Import source */}
         <div className="lg:sticky lg:top-4 lg:self-start">
-          {intake.source === "spreadsheet" ? (
+          {intake.raw_text.startsWith("[Spreadsheet Import]") ? (
             <>
               <h2 className="text-sm font-semibold text-gray-700 mb-2 uppercase tracking-wide">
                 Import Source
