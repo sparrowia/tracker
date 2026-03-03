@@ -1,0 +1,206 @@
+"use client";
+
+import { useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { healthColor, healthLabel, formatDateShort } from "@/lib/utils";
+import type { Project, ProjectHealth, Vendor } from "@/lib/types";
+import Link from "next/link";
+
+const healthOptions: ProjectHealth[] = ["on_track", "in_progress", "at_risk", "blocked", "paused", "complete"];
+
+interface ProjectHeaderProps {
+  project: Project;
+  vendors: Vendor[];
+}
+
+export default function ProjectHeader({ project, vendors }: ProjectHeaderProps) {
+  const [p, setP] = useState(project);
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState({
+    name: p.name,
+    description: p.description || "",
+    health: p.health,
+    platform_status: p.platform_status || "",
+    target_completion: p.target_completion || "",
+    start_date: p.start_date || "",
+    notes: p.notes || "",
+  });
+  const [saving, setSaving] = useState(false);
+  const supabase = createClient();
+
+  function startEdit() {
+    setForm({
+      name: p.name,
+      description: p.description || "",
+      health: p.health,
+      platform_status: p.platform_status || "",
+      target_completion: p.target_completion || "",
+      start_date: p.start_date || "",
+      notes: p.notes || "",
+    });
+    setEditing(true);
+  }
+
+  async function save() {
+    setSaving(true);
+    const updates = {
+      name: form.name.trim(),
+      description: form.description.trim() || null,
+      health: form.health,
+      platform_status: form.platform_status.trim() || null,
+      target_completion: form.target_completion || null,
+      start_date: form.start_date || null,
+      notes: form.notes.trim() || null,
+    };
+
+    const { error } = await supabase.from("projects").update(updates).eq("id", p.id);
+    if (!error) {
+      setP({ ...p, ...updates });
+      setEditing(false);
+    }
+    setSaving(false);
+  }
+
+  if (editing) {
+    return (
+      <div className="bg-white rounded-lg border border-gray-300 p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Edit Project</h2>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="md:col-span-2">
+            <label className="block text-xs font-medium text-gray-500 mb-1">Project Name</label>
+            <input
+              type="text"
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+          </div>
+
+          <div className="md:col-span-2">
+            <label className="block text-xs font-medium text-gray-500 mb-1">Description</label>
+            <textarea
+              value={form.description}
+              onChange={(e) => setForm({ ...form, description: e.target.value })}
+              rows={2}
+              className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Health</label>
+            <select
+              value={form.health}
+              onChange={(e) => setForm({ ...form, health: e.target.value as ProjectHealth })}
+              className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            >
+              {healthOptions.map((h) => (
+                <option key={h} value={h}>{healthLabel(h)}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Platform Status</label>
+            <input
+              type="text"
+              value={form.platform_status}
+              onChange={(e) => setForm({ ...form, platform_status: e.target.value })}
+              placeholder="e.g. All 3 iOS APPROVED"
+              className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Start Date</label>
+            <input
+              type="date"
+              value={form.start_date}
+              onChange={(e) => setForm({ ...form, start_date: e.target.value })}
+              className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Target Completion</label>
+            <input
+              type="date"
+              value={form.target_completion}
+              onChange={(e) => setForm({ ...form, target_completion: e.target.value })}
+              className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+          </div>
+
+          <div className="md:col-span-2">
+            <label className="block text-xs font-medium text-gray-500 mb-1">Notes</label>
+            <textarea
+              value={form.notes}
+              onChange={(e) => setForm({ ...form, notes: e.target.value })}
+              rows={2}
+              className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
+            />
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-2 pt-2 border-t border-gray-200">
+          <button
+            onClick={() => setEditing(false)}
+            className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded hover:bg-gray-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={save}
+            disabled={saving || !form.name.trim()}
+            className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50"
+          >
+            {saving ? "Saving..." : "Save"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="flex items-center gap-3 mb-2">
+        <h1 className="text-2xl font-bold text-gray-900">{p.name}</h1>
+        <span className={`inline-flex px-2.5 py-0.5 text-xs font-medium rounded-full border ${healthColor(p.health)}`}>
+          {healthLabel(p.health)}
+        </span>
+        <button
+          onClick={startEdit}
+          className="text-gray-400 hover:text-blue-600 transition-colors"
+          title="Edit project"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+          </svg>
+        </button>
+      </div>
+      {p.description && <p className="text-sm text-gray-600">{p.description}</p>}
+      <div className="flex gap-6 mt-3 text-sm text-gray-500">
+        {p.platform_status && <span>Platform: {p.platform_status}</span>}
+        {p.start_date && <span>Start: {formatDateShort(p.start_date)}</span>}
+        {p.target_completion && <span>Target: {formatDateShort(p.target_completion)}</span>}
+      </div>
+      {p.notes && <p className="text-sm text-gray-500 mt-2">{p.notes}</p>}
+      {vendors.length > 0 && (
+        <div className="flex gap-2 mt-3">
+          {vendors.map((v) => (
+            <Link
+              key={v.id}
+              href={`/settings/vendors/${v.id}`}
+              className="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100"
+            >
+              {v.name}
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

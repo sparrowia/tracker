@@ -1,9 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { healthColor, healthLabel, formatDateShort } from "@/lib/utils";
 import type { Project, ActionItem, RaidEntry, Blocker, Person, Vendor, Initiative } from "@/lib/types";
 import ProjectTabs from "@/components/project-tabs";
+import ProjectHeader from "@/components/project-header";
 
 export default async function ProjectDetailPage({
   params,
@@ -84,32 +84,7 @@ export default async function ProjectDetailPage({
       )}
 
       {/* Header */}
-      <div>
-        <div className="flex items-center gap-3 mb-2">
-          <h1 className="text-2xl font-bold text-gray-900">{p.name}</h1>
-          <span className={`inline-flex px-2.5 py-0.5 text-xs font-medium rounded-full border ${healthColor(p.health)}`}>
-            {healthLabel(p.health)}
-          </span>
-        </div>
-        {p.description && <p className="text-sm text-gray-600">{p.description}</p>}
-        <div className="flex gap-6 mt-3 text-sm text-gray-500">
-          {p.platform_status && <span>Platform: {p.platform_status}</span>}
-          {p.target_completion && <span>Target: {formatDateShort(p.target_completion)}</span>}
-        </div>
-        {typedVendors.length > 0 && (
-          <div className="flex gap-2 mt-3">
-            {typedVendors.map((v) => (
-              <Link
-                key={v.id}
-                href={`/settings/vendors/${v.id}`}
-                className="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100"
-              >
-                {v.name}
-              </Link>
-            ))}
-          </div>
-        )}
-      </div>
+      <ProjectHeader project={p} vendors={typedVendors} />
 
       {/* Tabbed content: Agenda, Blockers, RAID, Action Items */}
       <ProjectTabs
