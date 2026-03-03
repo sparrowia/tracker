@@ -603,7 +603,7 @@ export default function IntakeSetupPage() {
       </div>
 
       {/* Footer */}
-      <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 -mx-6 px-6 py-4">
+      <div className="sticky bottom-0 z-10 bg-gray-50 border-t border-gray-200 -mx-6 px-6 py-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
         <div className="max-w-4xl mx-auto flex justify-between items-center">
           <div>
             <p className="text-sm text-gray-600">
