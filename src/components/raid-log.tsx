@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, Fragment } from "react";
+import { useState, useEffect, Fragment } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { priorityColor, priorityLabel, statusBadge, formatAge, formatDateShort } from "@/lib/utils";
 import type { RaidEntry, RaidType, PriorityLevel, ItemStatus, Person, Vendor, Project } from "@/lib/types";
@@ -15,6 +15,7 @@ interface RaidLogProps {
   vendors: Vendor[];
   onPersonAdded: (person: Person) => void;
   addUndo: (label: string, undo: () => Promise<void>) => void;
+  onCountChange?: (count: number) => void;
 }
 
 const raidTypes: RaidType[] = ["risk", "assumption", "issue", "decision"];
@@ -40,8 +41,10 @@ function ageFromDate(date: string): number {
   return Math.floor(diff / (1000 * 60 * 60 * 24));
 }
 
-export default function RaidLog({ initialEntries, project, people, vendors, onPersonAdded, addUndo }: RaidLogProps) {
+export default function RaidLog({ initialEntries, project, people, vendors, onPersonAdded, addUndo, onCountChange }: RaidLogProps) {
   const [entries, setEntries] = useState<RaidRow[]>(initialEntries);
+
+  useEffect(() => { onCountChange?.(entries.length); }, [entries.length, onCountChange]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<RaidType>("risk");

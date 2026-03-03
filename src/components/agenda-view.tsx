@@ -76,11 +76,15 @@ function groupByPriority(items: ProjectAgendaRow[]) {
 export function AgendaView({
   project,
   initialItems,
+  onCountChange,
 }: {
   project: Project;
   initialItems: ProjectAgendaRow[];
+  onCountChange?: (count: number) => void;
 }) {
   const [items, setItems] = useState(initialItems);
+
+  useEffect(() => { onCountChange?.(items.length); }, [items.length, onCountChange]);
   const [showAddForm, setShowAddForm] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newContext, setNewContext] = useState("");

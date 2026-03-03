@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback, Fragment } from "react";
+import { useState, useEffect, useRef, useCallback, Fragment } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { priorityColor, priorityLabel, statusBadge, formatAge, formatDateShort } from "@/lib/utils";
 import type { Project, ActionItem, RaidEntry, Blocker, Person, Vendor, ProjectAgendaRow, PriorityLevel, ItemStatus } from "@/lib/types";
@@ -59,6 +59,12 @@ export default function ProjectTabs({
   const [dragOverTab, setDragOverTab] = useState<Tab | null>(null);
   const dragStartIndex = useRef<number>(-1);
   const [peopleList, setPeopleList] = useState<Person[]>(people);
+  const [tabCounts, setTabCounts] = useState({
+    actions: actions.length,
+    blockers: blockers.length,
+    raid: raidEntries.length,
+    agenda: agendaRows.length,
+  });
 
   const addPerson = useCallback((person: Person) => {
     setPeopleList((prev) => {
@@ -70,13 +76,13 @@ export default function ProjectTabs({
   const { stack: undoStack, addUndo, removeAction: dismissUndo, performUndo } = useUndo();
 
   function countForTab(key: Tab) {
-    switch (key) {
-      case "agenda": return agendaRows.length;
-      case "blockers": return blockers.length;
-      case "raid": return raidEntries.length;
-      case "actions": return actions.length;
-    }
+    return tabCounts[key];
   }
+
+  const setBlockerCount = useCallback((n: number) => setTabCounts((p) => ({ ...p, blockers: n })), []);
+  const setActionCount = useCallback((n: number) => setTabCounts((p) => ({ ...p, actions: n })), []);
+  const setRaidCount = useCallback((n: number) => setTabCounts((p) => ({ ...p, raid: n })), []);
+  const setAgendaCount = useCallback((n: number) => setTabCounts((p) => ({ ...p, agenda: n })), []);
 
   function onTabDragStart(e: React.DragEvent, tab: Tab, index: number) {
     setDragTab(tab);
@@ -165,19 +171,19 @@ export default function ProjectTabs({
       {/* Tab content */}
       <div className="mt-6">
         {active === "agenda" && (
-          <AgendaView project={project} initialItems={agendaRows} />
+          <AgendaView project={project} initialItems={agendaRows} onCountChange={setAgendaCount} />
         )}
 
         {active === "blockers" && (
-          <BlockersPanel blockers={blockers} people={peopleList} vendors={vendors} onPersonAdded={addPerson} addUndo={addUndo} />
+          <BlockersPanel blockers={blockers} people={peopleList} vendors={vendors} onPersonAdded={addPerson} addUndo={addUndo} onCountChange={setBlockerCount} />
         )}
 
         {active === "raid" && (
-          <RaidLog initialEntries={raidEntries} project={project} people={peopleList} vendors={vendors} onPersonAdded={addPerson} addUndo={addUndo} />
+          <RaidLog initialEntries={raidEntries} project={project} people={peopleList} vendors={vendors} onPersonAdded={addPerson} addUndo={addUndo} onCountChange={setRaidCount} />
         )}
 
         {active === "actions" && (
-          <ActionItemsPanel actions={actions} people={peopleList} vendors={vendors} onPersonAdded={addPerson} addUndo={addUndo} />
+          <ActionItemsPanel actions={actions} people={peopleList} vendors={vendors} onPersonAdded={addPerson} addUndo={addUndo} onCountChange={setActionCount} />
         )}
       </div>
       <UndoToast stack={undoStack} onUndo={performUndo} onDismiss={dismissUndo} />
@@ -207,14 +213,18 @@ function BlockersPanel({
   vendors,
   onPersonAdded,
   addUndo,
+  onCountChange,
 }: {
   blockers: BlockerRow[];
   people: Person[];
   vendors: Vendor[];
   onPersonAdded: (person: Person) => void;
   addUndo: (label: string, undo: () => Promise<void>) => void;
+  onCountChange?: (count: number) => void;
 }) {
   const [blockers, setBlockers] = useState<BlockerRow[]>(initialBlockers);
+
+  useEffect(() => { onCountChange?.(blockers.length); }, [blockers.length, onCountChange]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<BlockerEditForm>({
@@ -658,14 +668,18 @@ function ActionItemsPanel({
   vendors,
   onPersonAdded,
   addUndo,
+  onCountChange,
 }: {
   actions: ActionRow[];
   people: Person[];
   vendors: Vendor[];
   onPersonAdded: (person: Person) => void;
   addUndo: (label: string, undo: () => Promise<void>) => void;
+  onCountChange?: (count: number) => void;
 }) {
   const [actions, setActions] = useState<ActionRow[]>(initialActions);
+
+  useEffect(() => { onCountChange?.(actions.length); }, [actions.length, onCountChange]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<ActionEditForm>({
