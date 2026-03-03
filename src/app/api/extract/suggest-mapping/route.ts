@@ -6,7 +6,7 @@ type ItemType = "action_items" | "decisions" | "issues" | "risks" | "blockers" |
 const TARGET_FIELDS: Record<ItemType, string[]> = {
   action_items: ["title", "owner_name", "priority", "due_date", "notes"],
   decisions: ["title", "made_by", "decision_date", "rationale"],
-  issues: ["title", "owner_name", "priority", "impact"],
+  issues: ["title", "owner_name", "priority", "date_reported", "impact", "attachments", "notes", "updates"],
   risks: ["title", "priority", "impact", "mitigation"],
   blockers: ["title", "owner_name", "priority", "impact_description"],
   status_updates: ["subject", "new_status", "details"],
@@ -72,6 +72,10 @@ function fallbackMapping(headers: string[]): SuggestResponse {
   const rationaleKeywords = ["rationale", "reason", "why", "justification"];
   const mitigationKeywords = ["mitigation", "plan", "response", "counter"];
 
+  const attachmentKeywords = ["screenshot", "video", "attachment", "media", "file", "image", "capture", "recording", "link"];
+  const updatesKeywords = ["update", "response", "next step", "follow", "resolution", "reply"];
+  const dateReportedKeywords = ["date reported", "reported", "opened", "created", "filed", "submitted"];
+
   const fieldKeywordMap: Record<string, string[]> = {
     title: titleKeywords,
     subject: titleKeywords,
@@ -80,6 +84,7 @@ function fallbackMapping(headers: string[]): SuggestResponse {
     priority: priorityKeywords,
     due_date: dateKeywords,
     decision_date: dateKeywords,
+    date_reported: dateReportedKeywords,
     notes: notesKeywords,
     details: notesKeywords,
     new_status: statusKeywords,
@@ -87,6 +92,8 @@ function fallbackMapping(headers: string[]): SuggestResponse {
     impact_description: impactKeywords,
     rationale: rationaleKeywords,
     mitigation: mitigationKeywords,
+    attachments: attachmentKeywords,
+    updates: updatesKeywords,
   };
 
   const availableFields = TARGET_FIELDS[suggested_type];
@@ -150,9 +157,10 @@ Return a JSON object:
 
 Rules:
 - Every source column must appear in mappings (set target_field to null for columns that don't map)
-- Each target_field can only be used once across all mappings
+- Each target_field can only be used once across all mappings, EXCEPT "notes" and "updates" which can have multiple columns mapped (they get concatenated as paragraphs)
 - "title" (or "subject" for status_updates) is the most important field — always try to map it
 - Look at sample data to help determine correct mappings, not just header names
+- For issues: "date_reported" is for when the issue was filed/reported, "attachments" is for screenshot/video URLs or references, "notes" is for context/details, "updates" is for response/resolution/next-step columns
 - Return ONLY valid JSON, no other text`;
 
 export async function POST(request: Request) {

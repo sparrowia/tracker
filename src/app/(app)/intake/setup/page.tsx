@@ -35,7 +35,11 @@ const TARGET_FIELDS: Record<ItemType, { value: string; label: string }[]> = {
     { value: "title", label: "Issue Title" },
     { value: "owner_name", label: "Owner" },
     { value: "priority", label: "Priority" },
+    { value: "date_reported", label: "Date Reported" },
     { value: "impact", label: "Impact" },
+    { value: "attachments", label: "Screenshots/Videos" },
+    { value: "notes", label: "Notes" },
+    { value: "updates", label: "Updates" },
   ],
   risks: [
     { value: "title", label: "Risk Title" },
@@ -65,6 +69,9 @@ const REQUIRED_FIELD: Record<ItemType, string> = {
   blockers: "title",
   status_updates: "subject",
 };
+
+// Fields that allow multiple source columns to map to them (concatenated as paragraphs)
+const MULTI_MAP_FIELDS = new Set(["notes", "updates"]);
 
 interface ColumnMapping {
   source_column: string;
@@ -218,7 +225,8 @@ export default function IntakeSetupPage() {
     setMappings((prev) => {
       const updated = [...prev];
       // Clear any other mapping that uses this field (prevent duplicates)
-      if (newField) {
+      // Exception: multi-map fields (notes, updates) allow multiple columns
+      if (newField && !MULTI_MAP_FIELDS.has(newField)) {
         for (let i = 0; i < updated.length; i++) {
           if (i !== index && updated[i].target_field === newField) {
             updated[i] = { ...updated[i], target_field: null, confidence: "low" };
@@ -244,22 +252,27 @@ export default function IntakeSetupPage() {
     ? rows.filter((r) => r[titleColIndex]?.trim()).length
     : rows.length;
 
-  // Build preview rows
+  // Build preview rows (multi-map fields get concatenated with paragraph breaks)
   const previewRows = useMemo(() => {
     const sample = rows.slice(0, 5);
     return sample.map((row) => {
       const mapped: Record<string, string> = {};
       mappings.forEach((m, i) => {
-        if (m.target_field && row[i] !== undefined) {
+        if (m.target_field && row[i] !== undefined && row[i] !== "") {
           let val = row[i];
           if (m.target_field === "priority") {
             val = normalizePriority(val) || val;
-          } else if (m.target_field === "due_date" || m.target_field === "decision_date") {
+          } else if (["due_date", "decision_date", "date_reported"].includes(m.target_field)) {
             val = normalizeDate(val) || val;
           } else if (m.target_field === "new_status") {
             val = normalizeStatus(val) || val;
           }
-          mapped[m.target_field] = val;
+          // Multi-map fields: concatenate with paragraph break
+          if (MULTI_MAP_FIELDS.has(m.target_field) && mapped[m.target_field]) {
+            mapped[m.target_field] += `\n\n${val}`;
+          } else {
+            mapped[m.target_field] = val;
+          }
         }
       });
       return mapped;
@@ -320,12 +333,17 @@ export default function IntakeSetupPage() {
               let val = row[i];
               if (m.target_field === "priority") {
                 val = normalizePriority(val) || "medium";
-              } else if (m.target_field === "due_date" || m.target_field === "decision_date") {
+              } else if (["due_date", "decision_date", "date_reported"].includes(m.target_field)) {
                 val = normalizeDate(val) || val;
               } else if (m.target_field === "new_status") {
                 val = normalizeStatus(val) || val;
               }
-              item[m.target_field] = val;
+              // Multi-map fields: concatenate with paragraph break
+              if (MULTI_MAP_FIELDS.has(m.target_field) && item[m.target_field]) {
+                item[m.target_field] += `\n\n${val}`;
+              } else {
+                item[m.target_field] = val;
+              }
             }
           });
           return item;
@@ -498,9 +516,15 @@ export default function IntakeSetupPage() {
                           className="w-full rounded border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none"
                         >
                           <option value="">Skip</option>
-                          {availableFields.map((f) => (
-                            <option key={f.value} value={f.value}>{f.label}</option>
-                          ))}
+                          {availableFields.map((f) => {
+                            const inUse = mappings.some((m, j) => j !== i && m.target_field === f.value);
+                            const isMulti = MULTI_MAP_FIELDS.has(f.value);
+                            return (
+                              <option key={f.value} value={f.value}>
+                                {f.label}{inUse && isMulti ? " (add another)" : ""}
+                              </option>
+                            );
+                          })}
                         </select>
                       </td>
                     </tr>

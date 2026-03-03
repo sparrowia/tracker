@@ -31,6 +31,10 @@ Return a JSON object with these arrays (each can be empty):
       "priority": "critical|high|medium|low",
       "impact": "What this affects",
       "owner_name": "Person responsible or null",
+      "date_reported": "YYYY-MM-DD or null",
+      "attachments": "Screenshot/video URLs or references, or null",
+      "notes": "Additional context or null",
+      "updates": "Response/resolution/next-step info or null",
       "source_quote": "Exact short phrase from the original text"
     }
   ],

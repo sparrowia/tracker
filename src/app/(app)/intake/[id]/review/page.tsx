@@ -33,6 +33,9 @@ interface ExtractedItem {
   details?: string | null;
   subject?: string | null;
   source_quote?: string | null;
+  date_reported?: string | null;
+  attachments?: string | null;
+  updates?: string | null;
   // Per-item overrides
   _accepted?: boolean;
   _edited?: boolean;
@@ -84,7 +87,11 @@ const categoryFields: Record<EntityCategory, { field: string; label: string; typ
     { field: "title", label: "Issue", type: "text" },
     { field: "owner_name", label: "Owner", type: "person" },
     { field: "priority", label: "Priority", type: "select" },
+    { field: "date_reported", label: "Date Reported", type: "date" },
     { field: "impact", label: "Impact", type: "textarea" },
+    { field: "attachments", label: "Screenshots/Videos", type: "textarea" },
+    { field: "notes", label: "Notes", type: "textarea" },
+    { field: "updates", label: "Updates", type: "textarea" },
   ],
   risks: [
     { field: "title", label: "Risk", type: "text" },
@@ -541,17 +548,28 @@ export default function IntakeReviewPage() {
           .eq("raid_type", "issue");
 
         const { error: err } = await supabase.from("raid_entries").insert(
-          acceptedIssues.map((item, idx) => ({
-            org_id: orgId,
-            raid_type: "issue" as const,
-            display_id: `I${(count || 0) + idx + 1}`,
-            title: item.title,
-            impact: item.impact || null,
-            priority: item.priority || "medium",
-            owner_id: findPersonId(item.owner_name),
-            project_id: item._project_id || null,
-            vendor_id: item._vendor_id || null,
-          }))
+          acceptedIssues.map((item, idx) => {
+            // Build description from notes, updates, and attachments
+            const descParts: string[] = [];
+            if (item.notes) descParts.push(item.notes);
+            if (item.updates) descParts.push(`--- Updates ---\n${item.updates}`);
+            if (item.attachments) descParts.push(`--- Screenshots/Videos ---\n${item.attachments}`);
+            const description = descParts.length > 0 ? descParts.join("\n\n") : null;
+
+            return {
+              org_id: orgId,
+              raid_type: "issue" as const,
+              display_id: `I${(count || 0) + idx + 1}`,
+              title: item.title,
+              impact: item.impact || null,
+              description,
+              priority: item.priority || "medium",
+              owner_id: findPersonId(item.owner_name),
+              project_id: item._project_id || null,
+              vendor_id: item._vendor_id || null,
+              ...(item.date_reported ? { first_flagged_at: item.date_reported } : {}),
+            };
+          })
         );
         if (err) errors.push(`Issues: ${err.message}`);
       }
@@ -929,16 +947,27 @@ export default function IntakeReviewPage() {
                                   {item.new_status.replace(/_/g, " ")}
                                 </span>
                               )}
-                              {(item.due_date || item.decision_date) && (
+                              {(item.due_date || item.decision_date || item.date_reported) && (
                                 <span className="text-xs text-gray-500">
-                                  {item.due_date ? `Due: ${item.due_date}` : `Date: ${item.decision_date}`}
+                                  {item.due_date ? `Due: ${item.due_date}` : item.date_reported ? `Reported: ${item.date_reported}` : `Date: ${item.decision_date}`}
                                 </span>
                               )}
                             </div>
                             {(item.notes || item.impact || item.impact_description || item.rationale || item.details || item.mitigation) && (
-                              <p className="text-xs text-gray-600 mt-1">
+                              <p className="text-xs text-gray-600 mt-1 whitespace-pre-line">
                                 {item.notes || item.impact || item.impact_description || item.rationale || item.details || item.mitigation}
                               </p>
+                            )}
+                            {item.attachments && (
+                              <p className="text-xs text-blue-600 mt-1 break-all">
+                                {item.attachments}
+                              </p>
+                            )}
+                            {item.updates && (
+                              <div className="text-xs text-gray-500 mt-1">
+                                <span className="font-medium">Updates:</span>
+                                <p className="whitespace-pre-line">{item.updates}</p>
+                              </div>
                             )}
                           </div>
                         )}
