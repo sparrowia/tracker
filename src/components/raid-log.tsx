@@ -298,7 +298,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                       </svg>
                       <button
                         onClick={(e) => { e.stopPropagation(); toggleMeeting(entry.id); }}
-                        className={`p-0.5 rounded transition-colors flex-shrink-0 ${entry.include_in_meeting ? "text-blue-600" : "text-gray-300 hover:text-gray-400"}`}
+                        className={`p-0.5 rounded transition-colors flex-shrink-0 ${entry.include_in_meeting ? "text-blue-600" : "text-gray-400 hover:text-gray-500"}`}
                         title={entry.include_in_meeting ? "Remove from meeting" : "Include in meeting"}
                       >
                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill={entry.include_in_meeting ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
