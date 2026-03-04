@@ -1,24 +1,26 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, Fragment } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { priorityColor, priorityLabel, statusBadge, formatAge, formatDateShort } from "@/lib/utils";
-import type { Project, ActionItem, RaidEntry, Blocker, Person, Vendor, ProjectAgendaRow, PriorityLevel, ItemStatus } from "@/lib/types";
+import type { Project, ActionItem, RaidEntry, Blocker, Person, Vendor, ProjectAgendaRow, PriorityLevel, ItemStatus, Intake, IntakeSource } from "@/lib/types";
 import RaidLog from "@/components/raid-log";
 import { AgendaView } from "@/components/agenda-view";
 import OwnerPicker from "@/components/owner-picker";
 import { useUndo, UndoToast } from "@/components/undo-toast";
 
-type Tab = "actions" | "blockers" | "raid" | "agenda";
+type Tab = "actions" | "blockers" | "raid" | "agenda" | "intake";
 
 const TAB_LABELS: Record<Tab, string> = {
   actions: "Action Items",
   blockers: "Blockers",
   raid: "RAID Log",
   agenda: "Meeting Agenda",
+  intake: "Intake",
 };
 
-const DEFAULT_ORDER: Tab[] = ["actions", "blockers", "raid", "agenda"];
+const DEFAULT_ORDER: Tab[] = ["actions", "blockers", "raid", "agenda", "intake"];
 const STORAGE_KEY = "project-tab-order";
 
 function loadTabOrder(): Tab[] {
@@ -44,6 +46,7 @@ export default function ProjectTabs({
   people,
   vendors,
   agendaRows,
+  intakes,
 }: {
   project: Project;
   blockers: (Blocker & { owner: Person | null; vendor: Vendor | null })[];
@@ -52,6 +55,7 @@ export default function ProjectTabs({
   people: Person[];
   vendors: Vendor[];
   agendaRows: ProjectAgendaRow[];
+  intakes: Intake[];
 }) {
   const [tabOrder, setTabOrder] = useState<Tab[]>(loadTabOrder);
   const [active, setActive] = useState<Tab>(tabOrder[0]);
@@ -64,6 +68,7 @@ export default function ProjectTabs({
     blockers: blockers.length,
     raid: raidEntries.length,
     agenda: agendaRows.length,
+    intake: intakes.length,
   });
 
   const addPerson = useCallback((person: Person) => {
@@ -83,6 +88,7 @@ export default function ProjectTabs({
   const setActionCount = useCallback((n: number) => setTabCounts((p) => ({ ...p, actions: n })), []);
   const setRaidCount = useCallback((n: number) => setTabCounts((p) => ({ ...p, raid: n })), []);
   const setAgendaCount = useCallback((n: number) => setTabCounts((p) => ({ ...p, agenda: n })), []);
+  const setIntakeCount = useCallback((n: number) => setTabCounts((p) => ({ ...p, intake: n })), []);
 
   function onTabDragStart(e: React.DragEvent, tab: Tab, index: number) {
     setDragTab(tab);
@@ -184,6 +190,10 @@ export default function ProjectTabs({
 
         {active === "actions" && (
           <ActionItemsPanel actions={actions} people={peopleList} vendors={vendors} onPersonAdded={addPerson} addUndo={addUndo} onCountChange={setActionCount} />
+        )}
+
+        {active === "intake" && (
+          <IntakePanel project={project} initialIntakes={intakes} vendors={vendors} onCountChange={setIntakeCount} />
         )}
       </div>
       <UndoToast stack={undoStack} onUndo={performUndo} onDismiss={dismissUndo} />
@@ -1096,6 +1106,299 @@ function ActionItemsPanel({
           );
         })}
       </div>
+    </div>
+  );
+}
+
+/* ─── Intake Panel ─── */
+
+const SOURCE_LABELS: Record<IntakeSource, string> = {
+  slack: "Slack",
+  email: "Email",
+  meeting_notes: "Meeting Notes",
+  fathom_transcript: "Fathom",
+  manual: "Manual",
+  spreadsheet: "Spreadsheet",
+};
+
+const SOURCE_COLORS: Record<IntakeSource, string> = {
+  slack: "bg-purple-100 text-purple-700",
+  email: "bg-blue-100 text-blue-700",
+  meeting_notes: "bg-green-100 text-green-700",
+  fathom_transcript: "bg-yellow-100 text-yellow-700",
+  manual: "bg-gray-100 text-gray-600",
+  spreadsheet: "bg-orange-100 text-orange-700",
+};
+
+const EXTRACTION_STATUS_LABELS: Record<string, { label: string; className: string }> = {
+  pending: { label: "Pending", className: "bg-gray-100 text-gray-600" },
+  processing: { label: "Processing", className: "bg-blue-100 text-blue-700" },
+  complete: { label: "Extracted", className: "bg-green-100 text-green-700" },
+  failed: { label: "Failed", className: "bg-red-100 text-red-700" },
+};
+
+const intakeSourceOptions: { value: IntakeSource; label: string }[] = [
+  { value: "slack", label: "Slack Message" },
+  { value: "email", label: "Email" },
+  { value: "meeting_notes", label: "Meeting Notes" },
+  { value: "fathom_transcript", label: "Fathom Transcript" },
+  { value: "manual", label: "Manual Entry" },
+];
+
+function IntakePanel({
+  project,
+  initialIntakes,
+  vendors,
+  onCountChange,
+}: {
+  project: Project;
+  initialIntakes: Intake[];
+  vendors: Vendor[];
+  onCountChange?: (count: number) => void;
+}) {
+  const [intakes, setIntakes] = useState<Intake[]>(initialIntakes);
+  const [showForm, setShowForm] = useState(false);
+  const [rawText, setRawText] = useState("");
+  const [source, setSource] = useState<IntakeSource>("manual");
+  const [vendorId, setVendorId] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const router = useRouter();
+  const supabase = createClient();
+
+  useEffect(() => { onCountChange?.(intakes.length); }, [intakes.length, onCountChange]);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!rawText.trim()) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const { data: user } = await supabase.auth.getUser();
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("org_id")
+        .eq("id", user.user?.id)
+        .single();
+
+      const { data: intake, error: insertError } = await supabase
+        .from("intakes")
+        .insert({
+          raw_text: rawText.trim(),
+          source,
+          vendor_id: vendorId || null,
+          project_id: project.id,
+          submitted_by: user.user?.id || null,
+          org_id: profile?.org_id,
+          extraction_status: "processing",
+        })
+        .select()
+        .single();
+
+      if (insertError) throw insertError;
+
+      const response = await fetch("/api/extract", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          intake_id: intake.id,
+          raw_text: rawText.trim(),
+          vendor_id: vendorId || null,
+          project_id: project.id,
+        }),
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || "Extraction failed");
+      }
+
+      const updatedIntake = { ...intake, extraction_status: "complete" } as Intake;
+      setIntakes((prev) => [updatedIntake, ...prev]);
+      setRawText("");
+      setSource("manual");
+      setVendorId("");
+      setShowForm(false);
+
+      router.push(`/intake/${intake.id}/review`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      {showForm ? (
+        <form onSubmit={handleSubmit} className="bg-white rounded-lg border border-gray-300 p-4 space-y-3">
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded text-sm">{error}</div>
+          )}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Source</label>
+              <select
+                value={source}
+                onChange={(e) => setSource(e.target.value as IntakeSource)}
+                className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                {intakeSourceOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Vendor (optional)</label>
+              <select
+                value={vendorId}
+                onChange={(e) => setVendorId(e.target.value)}
+                className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                <option value="">Any / Auto-detect</option>
+                {vendors.map((v) => (
+                  <option key={v.id} value={v.id}>{v.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Raw Text</label>
+            <textarea
+              value={rawText}
+              onChange={(e) => setRawText(e.target.value)}
+              rows={6}
+              placeholder="Paste Slack message, email, meeting notes, or any text here..."
+              className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm font-mono focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => { setShowForm(false); setError(null); }}
+              className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <div className="flex-1" />
+            <button
+              type="submit"
+              disabled={loading || !rawText.trim()}
+              className="px-4 py-1.5 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5"
+            >
+              {loading && (
+                <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                </svg>
+              )}
+              {loading ? "Extracting..." : "Extract"}
+            </button>
+          </div>
+        </form>
+      ) : (
+        <button
+          onClick={() => setShowForm(true)}
+          className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+        >
+          + New Intake
+        </button>
+      )}
+
+      {intakes.length === 0 && !showForm ? (
+        <p className="text-sm text-gray-500">No intakes for this project yet.</p>
+      ) : intakes.length > 0 && (
+        <div className="bg-white rounded-lg border border-gray-300 overflow-hidden">
+          <div className="bg-gray-800 px-4 py-2.5">
+            <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Intakes ({intakes.length})</h2>
+          </div>
+          <div>
+            {intakes.map((intake) => {
+              const isExpanded = expandedId === intake.id;
+              const statusInfo = EXTRACTION_STATUS_LABELS[intake.extraction_status] || EXTRACTION_STATUS_LABELS.pending;
+              const preview = intake.raw_text.split("\n")[0].slice(0, 120);
+
+              return (
+                <Fragment key={intake.id}>
+                  <div
+                    className="bg-white p-3 border-b border-gray-200 last:border-b-0 cursor-pointer hover:bg-gray-50"
+                    onClick={() => setExpandedId(isExpanded ? null : intake.id)}
+                  >
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className={`text-gray-400 transition-transform flex-shrink-0 ${isExpanded ? "rotate-90" : ""}`}
+                      >
+                        <polyline points="9 18 15 12 9 6" />
+                      </svg>
+                      <span className={`inline-flex px-1.5 py-0.5 text-xs rounded ${SOURCE_COLORS[intake.source]}`}>
+                        {SOURCE_LABELS[intake.source]}
+                      </span>
+                      <span className={`inline-flex px-1.5 py-0.5 text-xs rounded ${statusInfo.className}`}>
+                        {statusInfo.label}
+                      </span>
+                      <span className="text-xs text-gray-400">
+                        {new Date(intake.created_at).toLocaleDateString()}
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-900 font-semibold mt-1 ml-5 truncate">
+                      {preview || "(empty)"}
+                    </p>
+                  </div>
+
+                  {isExpanded && (
+                    <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+                      <div className="space-y-2">
+                        <div>
+                          <span className="text-xs font-medium text-gray-500 uppercase">Raw Text</span>
+                          <pre className="text-sm text-gray-900 mt-1 whitespace-pre-wrap font-mono bg-white rounded border border-gray-200 p-2 max-h-48 overflow-y-auto">
+                            {intake.raw_text}
+                          </pre>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3 text-sm">
+                          <div>
+                            <span className="text-xs font-medium text-gray-500 uppercase">Source</span>
+                            <p className="text-gray-900 mt-0.5">{SOURCE_LABELS[intake.source]}</p>
+                          </div>
+                          <div>
+                            <span className="text-xs font-medium text-gray-500 uppercase">Status</span>
+                            <p className="text-gray-900 mt-0.5">{statusInfo.label}</p>
+                          </div>
+                          <div>
+                            <span className="text-xs font-medium text-gray-500 uppercase">Submitted</span>
+                            <p className="text-gray-900 mt-0.5">{new Date(intake.created_at).toLocaleString()}</p>
+                          </div>
+                        </div>
+                        {intake.extraction_status === "complete" && (
+                          <div className="flex justify-end pt-2 border-t border-gray-300 mt-2">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); router.push(`/intake/${intake.id}/review`); }}
+                              className="px-3 py-1.5 text-xs font-medium text-blue-700 bg-white border border-blue-300 rounded hover:bg-blue-50"
+                            >
+                              Review Extracted Items
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </Fragment>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

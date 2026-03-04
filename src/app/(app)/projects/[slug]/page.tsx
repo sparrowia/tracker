@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import type { Project, ActionItem, RaidEntry, Blocker, Person, Vendor, Initiative } from "@/lib/types";
+import type { Project, ActionItem, RaidEntry, Blocker, Person, Vendor, Initiative, Intake } from "@/lib/types";
 import ProjectTabs from "@/components/project-tabs";
 import ProjectHeader from "@/components/project-header";
 
@@ -31,6 +31,7 @@ export default async function ProjectDetailPage({
     { data: vendors },
     { data: allPeople },
     { data: initiativeData },
+    { data: intakeData },
   ] = await Promise.all([
     supabase
       .from("action_item_ages")
@@ -60,6 +61,11 @@ export default async function ProjectDetailPage({
     p.initiative_id
       ? supabase.from("initiatives").select("*").eq("id", p.initiative_id).single()
       : Promise.resolve({ data: null }),
+    supabase
+      .from("intakes")
+      .select("*")
+      .eq("project_id", p.id)
+      .order("created_at", { ascending: false }),
   ]);
 
   const initiative = initiativeData as Initiative | null;
@@ -70,6 +76,7 @@ export default async function ProjectDetailPage({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const typedVendors = ((vendors || []).map((v: any) => v.vendor).filter(Boolean)) as Vendor[];
   const typedPeople = (allPeople || []) as Person[];
+  const typedIntakes = (intakeData || []) as Intake[];
 
   return (
     <div className="max-w-6xl mx-auto space-y-8">
@@ -95,6 +102,7 @@ export default async function ProjectDetailPage({
         people={typedPeople}
         vendors={typedVendors}
         agendaRows={[]}
+        intakes={typedIntakes}
       />
     </div>
   );
