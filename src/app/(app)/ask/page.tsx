@@ -129,23 +129,27 @@ export default function AskPage() {
       )}
 
       {/* Q&A pairs */}
-      <div className="space-y-4">
+      <div className="space-y-5">
         {pairs.map((pair) => (
-          <div key={pair.id} className="bg-white rounded-lg border border-gray-300 overflow-hidden">
-            {/* Question */}
-            <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
-              <p className="text-sm font-medium text-gray-900">{pair.question}</p>
+          <div key={pair.id}>
+            {/* Question bubble */}
+            <div className="flex justify-end mb-2">
+              <div className="bg-blue-600 text-white px-4 py-2 rounded-2xl rounded-br-md max-w-[80%]">
+                <p className="text-sm">{pair.question}</p>
+              </div>
             </div>
             {/* Answer */}
-            <div className="px-4 py-3">
-              <div className="text-sm text-gray-800 prose-sm">
+            <div className="bg-white rounded-lg border border-gray-200 px-4 py-3 shadow-sm">
+              <div className="text-sm text-gray-800 leading-relaxed">
                 <SimpleMarkdown text={pair.answer} />
               </div>
               {pair.sources.length > 0 && (
-                <div className="mt-3 pt-2 border-t border-gray-100">
-                  <span className="text-xs text-gray-400">
-                    Sources: {pair.sources.join(", ")}
-                  </span>
+                <div className="mt-2 pt-2 border-t border-gray-100 flex flex-wrap gap-1.5">
+                  {pair.sources.map((s) => (
+                    <span key={s} className="text-[10px] px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded">
+                      {s}
+                    </span>
+                  ))}
                 </div>
               )}
             </div>
@@ -156,36 +160,38 @@ export default function AskPage() {
   );
 }
 
-/** Minimal markdown renderer — bold, bullets, line breaks */
 function SimpleMarkdown({ text }: { text: string }) {
   const lines = text.split("\n");
   const elements: React.ReactNode[] = [];
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    const isBullet = /^[-*]\s/.test(line.trim());
+    const bulletMatch = line.trim().match(/^[-*]\s/);
+    const numberedMatch = line.trim().match(/^\d+\.\s/);
 
-    if (isBullet) {
-      // Collect consecutive bullets
+    if (bulletMatch || numberedMatch) {
       const bullets: string[] = [];
       let j = i;
-      while (j < lines.length && /^[-*]\s/.test(lines[j].trim())) {
-        bullets.push(lines[j].trim().replace(/^[-*]\s/, ""));
+      while (j < lines.length && (/^[-*]\s/.test(lines[j].trim()) || /^\d+\.\s/.test(lines[j].trim()))) {
+        bullets.push(lines[j].trim().replace(/^[-*]\s|^\d+\.\s/, ""));
         j++;
       }
       elements.push(
-        <ul key={i} className="list-disc pl-5 space-y-1 my-1">
+        <ul key={i} className="space-y-1.5 my-2">
           {bullets.map((b, idx) => (
-            <li key={idx}><BoldText text={b} /></li>
+            <li key={idx} className="flex gap-2">
+              <span className="text-blue-400 mt-0.5 flex-shrink-0">&#8226;</span>
+              <span><InlineFormat text={b} /></span>
+            </li>
           ))}
         </ul>
       );
       i = j - 1;
     } else if (line.trim() === "") {
-      elements.push(<br key={i} />);
+      if (elements.length > 0) elements.push(<div key={i} className="h-2" />);
     } else {
       elements.push(
-        <p key={i} className="my-1"><BoldText text={line} /></p>
+        <p key={i} className="my-1"><InlineFormat text={line} /></p>
       );
     }
   }
@@ -193,13 +199,17 @@ function SimpleMarkdown({ text }: { text: string }) {
   return <>{elements}</>;
 }
 
-function BoldText({ text }: { text: string }) {
-  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+function InlineFormat({ text }: { text: string }) {
+  // Handle **bold** and `code`
+  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
   return (
     <>
       {parts.map((part, i) => {
         if (part.startsWith("**") && part.endsWith("**")) {
-          return <strong key={i}>{part.slice(2, -2)}</strong>;
+          return <strong key={i} className="font-semibold text-gray-900">{part.slice(2, -2)}</strong>;
+        }
+        if (part.startsWith("`") && part.endsWith("`")) {
+          return <code key={i} className="px-1 py-0.5 bg-gray-100 text-gray-700 rounded text-xs font-mono">{part.slice(1, -1)}</code>;
         }
         return <span key={i}>{part}</span>;
       })}

@@ -1,19 +1,18 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
-const SYSTEM_PROMPT = `You are a PM assistant that answers questions about project management data. You will be given a snapshot of all active items across the organization, then a user question.
+const SYSTEM_PROMPT = `You answer questions about PM data. You receive a data snapshot then a question.
 
 Rules:
-- Answer ONLY from the provided data — never invent or assume information
-- Be concise and specific — use exact names, numbers, dates, and counts
-- Use markdown: **bold** for names/emphasis, bullet points for lists
-- Match names fuzzily (e.g. "Olga" matches "Olga Nagdaseva", "BP" matches "BenchPrep")
-- If the data doesn't contain enough information to answer, say so clearly
-- For counts, actually count the items — don't estimate
-- When listing items, include their priority and status when relevant
-- Keep answers brief — a few sentences or a short bulleted list
+- Answer ONLY from the data — never invent
+- Be extremely brief — 1-3 short bullet points or 1-2 sentences max
+- Use **bold** for names. Use bullet points for lists.
+- Match names fuzzily ("Olga" = "Olga Nagdaseva", "BP" = "BenchPrep")
+- For counts, count exactly
+- Do NOT repeat the question or add filler ("Here is...", "Based on...")
+- Go straight to the answer
 
-Return JSON: { "answer": "markdown string", "sources": ["which data categories you used"] }`;
+Return JSON: { "answer": "markdown string", "sources": ["category names used"] }`;
 
 function formatActionItems(items: Record<string, unknown>[]) {
   if (items.length === 0) return "";
@@ -195,6 +194,7 @@ export async function POST(request: Request) {
           { role: "user", content: `DATA:\n${dataContext}\n\nQUESTION: ${question}` },
         ],
         temperature: 0.1,
+        max_tokens: 400,
         response_format: { type: "json_object" },
       }),
     });
