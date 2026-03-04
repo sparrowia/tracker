@@ -52,6 +52,9 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
     title: "", raid_type: "risk", priority: "medium", status: "pending",
     owner_id: "", vendor_id: "", impact: "", description: "", decision_date: "",
   });
+  const [addingType, setAddingType] = useState<RaidType | null>(null);
+  const [addTitle, setAddTitle] = useState("");
+  const [addPriority, setAddPriority] = useState<PriorityLevel>("medium");
   const supabase = createClient();
 
   const risks = entries.filter((r) => r.raid_type === "risk");
@@ -168,15 +171,92 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
     }
   }
 
-  function renderQuadrant(label: string, items: RaidRow[]) {
+  async function handleAdd() {
+    if (!addTitle.trim() || !addingType) return;
+    const prefix = typePrefix[addingType];
+    const existingOfType = entries.filter((e) => e.raid_type === addingType);
+    const maxNum = existingOfType.reduce((max, e) => {
+      const num = parseInt(e.display_id.slice(1));
+      return isNaN(num) ? max : Math.max(max, num);
+    }, 0);
+    const displayId = `${prefix}${maxNum + 1}`;
+
+    const newEntry = {
+      title: addTitle.trim(),
+      raid_type: addingType,
+      display_id: displayId,
+      priority: addPriority,
+      status: "pending" as ItemStatus,
+      project_id: project.id,
+      org_id: project.org_id,
+      owner_id: null,
+      vendor_id: null,
+      impact: null,
+      description: null,
+      decision_date: null,
+    };
+
+    const { data, error } = await supabase.from("raid_entries").insert(newEntry).select("*, owner:people(*), vendor:vendors(*)").single();
+    if (!error && data) {
+      setEntries((prev) => [data as RaidRow, ...prev]);
+      setAddTitle("");
+      setAddPriority("medium");
+      setAddingType(null);
+    }
+  }
+
+  function renderQuadrant(label: string, raidType: RaidType, items: RaidRow[]) {
     return (
       <div className="rounded-lg border border-gray-300 overflow-hidden">
-        <div className="bg-gray-700 px-4 h-9 flex items-center">
+        <div className="bg-gray-700 px-4 h-9 flex items-center justify-between">
           <h3 className="text-xs font-semibold text-white uppercase tracking-wide">{label} ({items.length})</h3>
+          <button
+            onClick={() => { setAddingType(addingType === raidType ? null : raidType); setAddTitle(""); setAddPriority("medium"); }}
+            className="text-xs text-blue-300 hover:text-white transition-colors"
+          >
+            + Add {label.slice(0, -1)}
+          </button>
         </div>
-        {items.length === 0 ? (
+        {addingType === raidType && (
+          <div className="bg-blue-50 border-b border-blue-200 p-3">
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={addTitle}
+                onChange={(e) => setAddTitle(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && addTitle.trim()) handleAdd(); if (e.key === "Escape") setAddingType(null); }}
+                placeholder={`New ${label.slice(0, -1).toLowerCase()} title...`}
+                className="flex-1 rounded border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                autoFocus
+              />
+              <select
+                value={addPriority}
+                onChange={(e) => setAddPriority(e.target.value as PriorityLevel)}
+                className="rounded border border-gray-300 px-2 py-1 text-xs focus:border-blue-500 focus:outline-none"
+              >
+                {priorityOptions.map((p) => (
+                  <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</option>
+                ))}
+              </select>
+              <button
+                onClick={handleAdd}
+                disabled={!addTitle.trim()}
+                className="px-3 py-1 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50"
+              >
+                Add
+              </button>
+              <button
+                onClick={() => setAddingType(null)}
+                className="px-2 py-1 text-xs text-gray-500 hover:text-gray-700"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+        {items.length === 0 && addingType !== raidType ? (
           <p className="text-sm text-gray-400 p-4">None</p>
-        ) : (
+        ) : items.length === 0 ? null : (
           <div>
             {items.map((entry) => {
               const isExpanded = expandedId === entry.id;
@@ -472,7 +552,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
 
       {/* Right panel */}
       <div className="flex-1">
-        {renderQuadrant(activeItems.label, activeItems.items)}
+        {renderQuadrant(activeItems.label, activeItems.type as RaidType, activeItems.items)}
       </div>
     </div>
   );
