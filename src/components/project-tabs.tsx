@@ -219,6 +219,21 @@ interface BlockerEditForm {
 
 type BlockerRow = Blocker & { owner: Person | null; vendor: Vendor | null };
 
+function MeetingToggle({ active, onClick }: { active: boolean; onClick: (e: React.MouseEvent) => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`p-0.5 rounded transition-colors flex-shrink-0 ${active ? "text-blue-600" : "text-gray-300 hover:text-gray-400"}`}
+      title={active ? "Remove from meeting" : "Include in meeting"}
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill={active ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+        <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+      </svg>
+    </button>
+  );
+}
+
 function BlockersPanel({
   blockers: initialBlockers,
   people,
@@ -246,6 +261,16 @@ function BlockersPanel({
   const [callNotes, setCallNotes] = useState("");
   const [savingNotes, setSavingNotes] = useState(false);
   const supabase = createClient();
+
+  function toggleMeeting(id: string) {
+    const blocker = blockers.find((b) => b.id === id);
+    if (!blocker) return;
+    const newVal = !blocker.include_in_meeting;
+    setBlockers((prev) => prev.map((b) => b.id === id ? { ...b, include_in_meeting: newVal } : b));
+    supabase.from("blockers").update({ include_in_meeting: newVal }).eq("id", id).then(({ error }) => {
+      if (error) console.error("Toggle failed:", error);
+    });
+  }
 
   function toggleExpand(id: string) {
     setExpandedId((prev) => (prev === id ? null : id));
@@ -402,6 +427,7 @@ function BlockersPanel({
                   >
                     <polyline points="9 18 15 12 9 6" />
                   </svg>
+                  <MeetingToggle active={b.include_in_meeting} onClick={(e) => { e.stopPropagation(); toggleMeeting(b.id); }} />
                   <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border ${priorityColor(b.priority)}`}>{priorityLabel(b.priority)}</span>
                   <span className={`inline-flex px-1.5 py-0.5 text-xs rounded ${badge.className}`}>{badge.label}</span>
                   {b.age_days != null && (
@@ -687,6 +713,16 @@ function ActionItemsPanel({
   const [savingNotes, setSavingNotes] = useState(false);
   const supabase = createClient();
 
+  function toggleMeeting(id: string) {
+    const action = actions.find((a) => a.id === id);
+    if (!action) return;
+    const newVal = !action.include_in_meeting;
+    setActions((prev) => prev.map((a) => a.id === id ? { ...a, include_in_meeting: newVal } : a));
+    supabase.from("action_items").update({ include_in_meeting: newVal }).eq("id", id).then(({ error }) => {
+      if (error) console.error("Toggle failed:", error);
+    });
+  }
+
   function toggleExpand(id: string) {
     setExpandedId((prev) => (prev === id ? null : id));
     if (editingId && editingId !== id) setEditingId(null);
@@ -841,6 +877,7 @@ function ActionItemsPanel({
                   >
                     <polyline points="9 18 15 12 9 6" />
                   </svg>
+                  <MeetingToggle active={a.include_in_meeting} onClick={(e) => { e.stopPropagation(); toggleMeeting(a.id); }} />
                   <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border ${priorityColor(a.priority)}`}>{priorityLabel(a.priority)}</span>
                   <span className={`inline-flex px-1.5 py-0.5 text-xs rounded ${badge.className}`}>{badge.label}</span>
                   {a.age_days != null && (

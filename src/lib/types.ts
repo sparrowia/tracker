@@ -121,6 +121,7 @@ export interface ActionItem {
   escalation_count: number;
   resolved_at: string | null;
   notes: string | null;
+  include_in_meeting: boolean;
   created_at: string;
   updated_at: string;
   owner?: Person;
@@ -146,6 +147,7 @@ export interface RaidEntry {
   owner_id: string | null;
   vendor_id: string | null;
   decision_date: string | null;
+  include_in_meeting: boolean;
   first_flagged_at: string;
   escalation_count: number;
   resolved_at: string | null;
@@ -171,6 +173,7 @@ export interface Blocker {
   escalation_count: number;
   resolved_at: string | null;
   due_date: string | null;
+  include_in_meeting: boolean;
   created_at: string;
   updated_at: string;
   owner?: Person;

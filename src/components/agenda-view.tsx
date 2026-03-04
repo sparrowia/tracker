@@ -329,6 +329,7 @@ export function AgendaView({
 
   const [generating, setGenerating] = useState(false);
   const [hasGenerated, setHasGenerated] = useState(initialItems.length > 0);
+  const [mode, setMode] = useState<"auto" | "selected">("auto");
 
   // Auto-load agenda on mount if not provided
   useEffect(() => {
@@ -346,13 +347,27 @@ export function AgendaView({
   async function handleGenerate() {
     if (generating) return;
     setGenerating(true);
-    const { data } = await supabase.rpc("generate_project_agenda", {
+    const rpcName = mode === "selected" ? "generate_project_agenda_from_selected" : "generate_project_agenda";
+    const { data } = await supabase.rpc(rpcName, {
       p_project_id: project.id,
       p_limit: 30,
     });
     setItems((data || []) as ProjectAgendaRow[]);
     setHasGenerated(true);
     setGenerating(false);
+  }
+
+  function switchMode(newMode: "auto" | "selected") {
+    if (newMode === mode) return;
+    setMode(newMode);
+    // Auto-regenerate on mode switch
+    setGenerating(true);
+    const rpcName = newMode === "selected" ? "generate_project_agenda_from_selected" : "generate_project_agenda";
+    supabase.rpc(rpcName, { p_project_id: project.id, p_limit: 30 }).then(({ data }) => {
+      setItems((data || []) as ProjectAgendaRow[]);
+      setHasGenerated(true);
+      setGenerating(false);
+    });
   }
 
   function toggleSort(field: SortField) {
@@ -377,10 +392,25 @@ export function AgendaView({
             Meeting Agenda
           </h2>
           <p className="text-sm text-gray-500 mt-0.5">
-            {items.length} items, ranked by priority + age + escalations
+            {items.length} items{mode === "selected" ? " from selected" : ""}, ranked by priority + age + escalations
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-3">
+          {/* Mode toggle */}
+          <div className="inline-flex rounded-md border border-gray-300 overflow-hidden text-xs font-medium">
+            <button
+              onClick={() => switchMode("auto")}
+              className={`px-3 py-1.5 transition-colors ${mode === "auto" ? "bg-gray-800 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+            >
+              Auto
+            </button>
+            <button
+              onClick={() => switchMode("selected")}
+              className={`px-3 py-1.5 transition-colors border-l border-gray-300 ${mode === "selected" ? "bg-gray-800 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+            >
+              From Selected
+            </button>
+          </div>
           <button
             onClick={() => setShowAddForm(!showAddForm)}
             className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
