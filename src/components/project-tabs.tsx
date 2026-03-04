@@ -476,7 +476,7 @@ function BlockersPanel({
                                 className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                               >
                                 {blockerStatusOptions.map((s) => (
-                                  <option key={s} value={s}>{s.replace(/_/g, " ")}</option>
+                                  <option key={s} value={s}>{s.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase())}</option>
                                 ))}
                               </select>
                             </div>
@@ -592,7 +592,7 @@ function BlockersPanel({
                         </div>
                         <div>
                           <span className="text-xs font-medium text-gray-500 uppercase">Status</span>
-                          <p className="text-gray-900 mt-0.5">{b.status.replace(/_/g, " ")}</p>
+                          <p className="text-gray-900 mt-0.5">{b.status.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase())}</p>
                         </div>
                         <div>
                           <span className="text-xs font-medium text-gray-500 uppercase">Priority</span>
@@ -930,7 +930,7 @@ function ActionItemsPanel({
                                 className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                               >
                                 {actionStatusOptions.map((s) => (
-                                  <option key={s} value={s}>{s.replace(/_/g, " ")}</option>
+                                  <option key={s} value={s}>{s.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase())}</option>
                                 ))}
                               </select>
                             </div>
@@ -1046,7 +1046,7 @@ function ActionItemsPanel({
                         </div>
                         <div>
                           <span className="text-xs font-medium text-gray-500 uppercase">Status</span>
-                          <p className="text-gray-900 mt-0.5">{a.status.replace(/_/g, " ")}</p>
+                          <p className="text-gray-900 mt-0.5">{a.status.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase())}</p>
                         </div>
                         <div>
                           <span className="text-xs font-medium text-gray-500 uppercase">Priority</span>

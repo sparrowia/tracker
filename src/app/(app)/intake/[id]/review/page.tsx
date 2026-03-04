@@ -897,7 +897,7 @@ export default function IntakeReviewPage() {
                                     >
                                       <option value="">—</option>
                                       {statusOptions.map((s) => (
-                                        <option key={s} value={s}>{s.replace(/_/g, " ")}</option>
+                                        <option key={s} value={s}>{s.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase())}</option>
                                       ))}
                                     </select>
                                   )}
@@ -991,7 +991,7 @@ export default function IntakeReviewPage() {
                               )}
                               {item.new_status && (
                                 <span className="inline-flex px-1.5 py-0.5 text-xs rounded border border-gray-300 bg-gray-100 text-gray-700">
-                                  {item.new_status.replace(/_/g, " ")}
+                                  {item.new_status.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase())}
                                 </span>
                               )}
                               {(item.due_date || item.decision_date || item.date_reported) && (
