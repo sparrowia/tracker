@@ -411,6 +411,14 @@ export function AgendaView({
               From Selected
             </button>
           </div>
+          {items.length > 0 && (
+            <button
+              onClick={() => { setItems([]); setHasGenerated(false); }}
+              className="px-3 py-1.5 text-sm font-medium text-red-600 bg-white border border-gray-300 rounded-md hover:bg-red-50"
+            >
+              Reset
+            </button>
+          )}
           <button
             onClick={() => setShowAddForm(!showAddForm)}
             className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
