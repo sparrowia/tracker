@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
-const SYSTEM_PROMPT = `You answer questions about PM data. You receive a data snapshot then a question.
+const SYSTEM_PROMPT = `You answer questions about PM data. You receive relevant data then a question.
 
 Rules:
 - Answer ONLY from the data — never invent
@@ -14,82 +14,107 @@ Rules:
 
 Return JSON: { "answer": "markdown string", "sources": ["category names used"] }`;
 
-function formatActionItems(items: Record<string, unknown>[]) {
-  if (items.length === 0) return "";
-  const lines = items.map((i) => {
-    const owner = i.owner_name || "Unassigned";
-    const vendor = i.vendor_name ? ` | ${i.vendor_name}` : "";
-    const project = i.project_name ? ` | ${i.project_name}` : "";
-    const due = i.due_date ? ` | due ${i.due_date}` : "";
-    const age = i.age_days != null ? ` | ${i.age_days}d old` : "";
-    return `- [${i.priority}/${i.status}] ${i.title} | owner: ${owner}${vendor}${project}${due}${age}`;
-  });
-  return `ACTION ITEMS (${items.length}):\n${lines.join("\n")}`;
+type DataCategory = "actions" | "blockers" | "raid" | "tickets" | "projects" | "vendors" | "people" | "resolved";
+
+/** Determine which data categories are relevant based on question keywords */
+function detectCategories(q: string): Set<DataCategory> {
+  const lq = q.toLowerCase();
+  const cats = new Set<DataCategory>();
+
+  // Keyword → category mapping
+  if (/action\s*item|task|todo|assigned|owner|due|overdue/.test(lq)) cats.add("actions");
+  if (/blocker|block|stuck|impediment/.test(lq)) cats.add("blockers");
+  if (/raid|risk|assumption|issue|decision|pending decision/.test(lq)) cats.add("raid");
+  if (/ticket|support|case/.test(lq)) cats.add("tickets");
+  if (/project|health|initiative|status/.test(lq)) cats.add("projects");
+  if (/vendor|company|partner/.test(lq)) cats.add("vendors");
+  if (/who|person|people|team|contact|assigned|owner/.test(lq)) cats.add("people");
+  if (/resolved|completed|done|closed|last week|recently|update/.test(lq)) cats.add("resolved");
+
+  // Vendor/person names likely need broad search — if the question mentions a name
+  // but no specific category, include the main item types
+  if (cats.size === 0 || (cats.size === 1 && cats.has("people"))) {
+    cats.add("actions");
+    cats.add("blockers");
+    cats.add("raid");
+  }
+
+  // "everything" / "all" / "summary" → all categories
+  if (/everything|all\s|summary|overview/.test(lq)) {
+    cats.add("actions");
+    cats.add("blockers");
+    cats.add("raid");
+    cats.add("tickets");
+    cats.add("projects");
+  }
+
+  return cats;
 }
 
-function formatBlockers(items: Record<string, unknown>[]) {
-  if (items.length === 0) return "";
-  const lines = items.map((i) => {
-    const owner = i.owner_name || "Unassigned";
-    const vendor = i.vendor_name ? ` | ${i.vendor_name}` : "";
-    const project = i.project_name ? ` | ${i.project_name}` : "";
-    const age = i.age_days != null ? ` | ${i.age_days}d old` : "";
-    return `- [${i.priority}/${i.status}] ${i.title} | owner: ${owner}${vendor}${project}${age}`;
-  });
-  return `BLOCKERS (${items.length}):\n${lines.join("\n")}`;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Row = Record<string, any>;
+
+function formatActionItems(items: Row[]) {
+  if (!items.length) return "";
+  return `ACTION ITEMS (${items.length}):\n` + items.map((i) =>
+    `- [${i.priority}/${i.status}] ${i.title} | ${i.owner_name || "Unassigned"}${i.vendor_name ? ` | ${i.vendor_name}` : ""}${i.project_name ? ` | ${i.project_name}` : ""}${i.due_date ? ` | due ${i.due_date}` : ""}${i.age_days != null ? ` | ${i.age_days}d` : ""}`
+  ).join("\n");
 }
 
-function formatRaid(items: Record<string, unknown>[]) {
-  if (items.length === 0) return "";
-  const lines = items.map((i) => {
-    const owner = i.owner_name || "Unassigned";
-    const vendor = i.vendor_name ? ` | ${i.vendor_name}` : "";
-    const project = i.project_name ? ` | ${i.project_name}` : "";
-    return `- [${i.raid_type}/${i.priority}/${i.status}] ${i.title} | owner: ${owner}${vendor}${project}`;
-  });
-  return `RAID ENTRIES (${items.length}):\n${lines.join("\n")}`;
+function formatBlockers(items: Row[]) {
+  if (!items.length) return "";
+  return `BLOCKERS (${items.length}):\n` + items.map((i) =>
+    `- [${i.priority}/${i.status}] ${i.title} | ${i.owner_name || "Unassigned"}${i.vendor_name ? ` | ${i.vendor_name}` : ""}${i.project_name ? ` | ${i.project_name}` : ""}${i.age_days != null ? ` | ${i.age_days}d` : ""}`
+  ).join("\n");
 }
 
-function formatTickets(items: Record<string, unknown>[]) {
-  if (items.length === 0) return "";
-  const lines = items.map((i) => {
-    const vendor = i.vendor_name ? ` | ${i.vendor_name}` : "";
-    return `- [${i.priority}/${i.status}] #${i.ticket_number}: ${i.title || "(no title)"}${vendor}`;
-  });
-  return `SUPPORT TICKETS (${items.length}):\n${lines.join("\n")}`;
+function formatRaid(items: Row[]) {
+  if (!items.length) return "";
+  return `RAID ENTRIES (${items.length}):\n` + items.map((i) =>
+    `- [${i.raid_type}/${i.priority}/${i.status}] ${i.title} | ${i.owner_name || "Unassigned"}${i.vendor_name ? ` | ${i.vendor_name}` : ""}${i.project_name ? ` | ${i.project_name}` : ""}`
+  ).join("\n");
 }
 
-function formatProjects(items: Record<string, unknown>[]) {
-  if (items.length === 0) return "";
-  const lines = items.map((i) => {
-    const init = i.initiative_name ? ` | initiative: ${i.initiative_name}` : "";
-    return `- [${i.health}] ${i.name}${init}`;
-  });
-  return `PROJECTS (${items.length}):\n${lines.join("\n")}`;
+function formatTickets(items: Row[]) {
+  if (!items.length) return "";
+  return `SUPPORT TICKETS (${items.length}):\n` + items.map((i) =>
+    `- [${i.priority}/${i.status}] #${i.ticket_number}: ${i.title || "(no title)"}${i.vendor_name ? ` | ${i.vendor_name}` : ""}`
+  ).join("\n");
 }
 
-function formatVendors(items: Record<string, unknown>[]) {
-  if (items.length === 0) return "";
+function formatProjects(items: Row[]) {
+  if (!items.length) return "";
+  return `PROJECTS (${items.length}):\n` + items.map((i) =>
+    `- [${i.health}] ${i.name}${i.initiative_name ? ` | ${i.initiative_name}` : ""}`
+  ).join("\n");
+}
+
+function formatVendors(items: Row[]) {
+  if (!items.length) return "";
   return `VENDORS (${items.length}): ${items.map((v) => v.name).join(", ")}`;
 }
 
-function formatPeople(items: Record<string, unknown>[]) {
-  if (items.length === 0) return "";
-  const lines = items.map((i) => {
-    const role = i.is_internal ? "internal" : "vendor contact";
-    const vendor = i.vendor_name ? ` | ${i.vendor_name}` : "";
-    return `- ${i.full_name} (${role}${vendor})`;
-  });
-  return `PEOPLE (${items.length}):\n${lines.join("\n")}`;
+function formatPeople(items: Row[]) {
+  if (!items.length) return "";
+  return `PEOPLE (${items.length}):\n` + items.map((i) =>
+    `- ${i.full_name} (${i.is_internal ? "internal" : "vendor contact"}${i.vendor_name ? ` | ${i.vendor_name}` : ""})`
+  ).join("\n");
 }
 
-function formatResolved(label: string, items: Record<string, unknown>[]) {
-  if (items.length === 0) return "";
-  const lines = items.map((i) => {
-    const resolved = i.resolved_at ? ` | resolved ${String(i.resolved_at).slice(0, 10)}` : "";
-    return `- ${i.title}${resolved}`;
-  });
-  return `RECENTLY RESOLVED ${label} (${items.length}, last 30 days):\n${lines.join("\n")}`;
+function formatResolved(label: string, items: Row[]) {
+  if (!items.length) return "";
+  return `RECENTLY RESOLVED ${label} (${items.length}, last 30d):\n` + items.map((i) =>
+    `- ${i.title}${i.resolved_at ? ` | resolved ${String(i.resolved_at).slice(0, 10)}` : ""}`
+  ).join("\n");
+}
+
+function flatten(row: Row, joins: Record<string, string>): Row {
+  const flat = { ...row };
+  for (const [joinKey, field] of Object.entries(joins)) {
+    flat[`${joinKey}_name`] = (row[joinKey] as Row | null)?.[field] || null;
+    delete flat[joinKey];
+  }
+  return flat;
 }
 
 export async function POST(request: Request) {
@@ -121,65 +146,52 @@ export async function POST(request: Request) {
     }
 
     const orgId = profile.org_id;
+    const cats = detectCategories(question);
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
-    // Fetch all data in parallel
-    const [
-      { data: actionItems },
-      { data: blockers },
-      { data: raidEntries },
-      { data: tickets },
-      { data: vendors },
-      { data: projects },
-      { data: people },
-      { data: resolvedActions },
-      { data: resolvedBlockers },
-    ] = await Promise.all([
-      supabase.from("action_item_ages").select("title, priority, status, due_date, age_days, owner_name, vendor_name, project_name").eq("org_id", orgId),
-      supabase.from("blocker_ages").select("title, priority, status, age_days, owner_name, vendor_name, project_name").eq("org_id", orgId),
-      supabase.from("raid_entries").select("title, raid_type, priority, status, owner:people(full_name), vendor:vendors(name), project:projects(name)").eq("org_id", orgId).neq("status", "complete"),
-      supabase.from("support_tickets").select("ticket_number, title, priority, status, vendor:vendors(name)").eq("org_id", orgId).neq("status", "complete"),
-      supabase.from("vendors").select("name").eq("org_id", orgId).order("name"),
-      supabase.from("projects").select("name, health, initiative:initiatives(name)").eq("org_id", orgId).order("name"),
-      supabase.from("people").select("full_name, is_internal, vendor:vendors(name)").eq("org_id", orgId).order("full_name"),
-      supabase.from("action_items").select("title, resolved_at").eq("org_id", orgId).eq("status", "complete").gte("resolved_at", thirtyDaysAgo),
-      supabase.from("blockers").select("title, resolved_at").eq("org_id", orgId).eq("status", "complete").gte("resolved_at", thirtyDaysAgo),
-    ]);
+    // Only fetch what we need
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const fetches: Record<string, PromiseLike<{ data: any[] | null }>> = {};
 
-    // Flatten joined fields for RAID, tickets, projects, people
-    const flatRaid = (raidEntries || []).map((r: Record<string, unknown>) => ({
-      ...r,
-      owner_name: (r.owner as Record<string, unknown> | null)?.full_name || null,
-      vendor_name: (r.vendor as Record<string, unknown> | null)?.name || null,
-      project_name: (r.project as Record<string, unknown> | null)?.name || null,
-    }));
-    const flatTickets = (tickets || []).map((t: Record<string, unknown>) => ({
-      ...t,
-      vendor_name: (t.vendor as Record<string, unknown> | null)?.name || null,
-    }));
-    const flatProjects = (projects || []).map((p: Record<string, unknown>) => ({
-      ...p,
-      initiative_name: (p.initiative as Record<string, unknown> | null)?.name || null,
-    }));
-    const flatPeople = (people || []).map((p: Record<string, unknown>) => ({
-      ...p,
-      vendor_name: (p.vendor as Record<string, unknown> | null)?.name || null,
-    }));
+    if (cats.has("actions"))
+      fetches.actions = supabase.from("action_item_ages").select("title, priority, status, due_date, age_days, owner_name, vendor_name, project_name").eq("org_id", orgId);
+    if (cats.has("blockers"))
+      fetches.blockers = supabase.from("blocker_ages").select("title, priority, status, age_days, owner_name, vendor_name, project_name").eq("org_id", orgId);
+    if (cats.has("raid"))
+      fetches.raid = supabase.from("raid_entries").select("title, raid_type, priority, status, owner:people(full_name), vendor:vendors(name), project:projects(name)").eq("org_id", orgId).neq("status", "complete");
+    if (cats.has("tickets"))
+      fetches.tickets = supabase.from("support_tickets").select("ticket_number, title, priority, status, vendor:vendors(name)").eq("org_id", orgId).neq("status", "complete");
+    if (cats.has("projects"))
+      fetches.projects = supabase.from("projects").select("name, health, initiative:initiatives(name)").eq("org_id", orgId).order("name");
+    if (cats.has("vendors"))
+      fetches.vendors = supabase.from("vendors").select("name").eq("org_id", orgId).order("name");
+    if (cats.has("people"))
+      fetches.people = supabase.from("people").select("full_name, is_internal, vendor:vendors(name)").eq("org_id", orgId).order("full_name");
+    if (cats.has("resolved")) {
+      fetches.resolvedActions = supabase.from("action_items").select("title, resolved_at").eq("org_id", orgId).eq("status", "complete").gte("resolved_at", thirtyDaysAgo);
+      fetches.resolvedBlockers = supabase.from("blockers").select("title, resolved_at").eq("org_id", orgId).eq("status", "complete").gte("resolved_at", thirtyDaysAgo);
+    }
 
-    // Build context
-    const sections = [
-      formatActionItems(actionItems || []),
-      formatBlockers(blockers || []),
-      formatRaid(flatRaid),
-      formatTickets(flatTickets),
-      formatProjects(flatProjects),
-      formatVendors(vendors || []),
-      formatPeople(flatPeople),
-      formatResolved("ACTION ITEMS", resolvedActions || []),
-      formatResolved("BLOCKERS", resolvedBlockers || []),
-    ].filter(Boolean);
+    // Execute all in parallel
+    const keys = Object.keys(fetches);
+    const results = await Promise.all(Object.values(fetches));
+    const data: Record<string, Row[]> = {};
+    keys.forEach((k, i) => { data[k] = results[i].data || []; });
 
-    const dataContext = sections.join("\n\n");
+    // Build context — only include fetched categories
+    const sections: string[] = [];
+
+    if (data.actions) sections.push(formatActionItems(data.actions));
+    if (data.blockers) sections.push(formatBlockers(data.blockers));
+    if (data.raid) sections.push(formatRaid(data.raid.map((r) => flatten(r, { owner: "full_name", vendor: "name", project: "name" }))));
+    if (data.tickets) sections.push(formatTickets(data.tickets.map((t) => flatten(t, { vendor: "name" }))));
+    if (data.projects) sections.push(formatProjects(data.projects.map((p) => flatten(p, { initiative: "name" }))));
+    if (data.vendors) sections.push(formatVendors(data.vendors));
+    if (data.people) sections.push(formatPeople(data.people.map((p) => flatten(p, { vendor: "name" }))));
+    if (data.resolvedActions) sections.push(formatResolved("ACTION ITEMS", data.resolvedActions));
+    if (data.resolvedBlockers) sections.push(formatResolved("BLOCKERS", data.resolvedBlockers));
+
+    const dataContext = sections.filter(Boolean).join("\n\n");
 
     const response = await fetch("https://api.deepseek.com/chat/completions", {
       method: "POST",
