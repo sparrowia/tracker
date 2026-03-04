@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, Fragment } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { priorityColor, priorityLabel, statusBadge, formatAge, formatDateShort } from "@/lib/utils";
 import type { Project, ActionItem, RaidEntry, Blocker, Person, Vendor, ProjectAgendaRow, PriorityLevel, ItemStatus, Intake, IntakeSource } from "@/lib/types";
@@ -57,8 +57,10 @@ export default function ProjectTabs({
   agendaRows: ProjectAgendaRow[];
   intakes: Intake[];
 }) {
+  const searchParams = useSearchParams();
   const [tabOrder, setTabOrder] = useState<Tab[]>(loadTabOrder);
-  const [active, setActive] = useState<Tab>(tabOrder[0]);
+  const urlTab = searchParams.get("tab") as Tab | null;
+  const [active, setActive] = useState<Tab>(urlTab && DEFAULT_ORDER.includes(urlTab) ? urlTab : tabOrder[0]);
   const [dragTab, setDragTab] = useState<Tab | null>(null);
   const [dragOverTab, setDragOverTab] = useState<Tab | null>(null);
   const dragStartIndex = useRef<number>(-1);

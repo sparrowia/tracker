@@ -141,8 +141,12 @@ export default async function DashboardPage() {
                 {criticalPath.map((item) => {
                   const badge = statusBadge(item.status);
                   return (
-                    <tr key={item.id} className="border-b border-gray-200 hover:bg-gray-50">
-                      <td className="px-4 py-3 text-sm text-gray-900 font-semibold">{item.title}</td>
+                    <tr key={item.id} className="border-b border-gray-200 hover:bg-blue-50/60 relative group">
+                      <td className="px-4 py-3 text-sm text-gray-900 font-semibold">
+                        {item.project ? (
+                          <Link href={`/projects/${item.project.slug}?tab=actions`} className="before:absolute before:inset-0">{item.title}</Link>
+                        ) : item.title}
+                      </td>
                       <td className="px-4 py-3 text-sm">
                         {item.owner ? (
                           <div className="flex items-center gap-1.5">
@@ -155,13 +159,7 @@ export default async function DashboardPage() {
                           <span className="text-gray-400 italic">Unassigned</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-600">
-                        {item.project ? (
-                          <Link href={`/projects/${item.project.slug}`} className="text-blue-600 hover:underline">
-                            {item.project.name}
-                          </Link>
-                        ) : "—"}
-                      </td>
+                      <td className="px-4 py-3 text-sm text-blue-600">{item.project?.name || "—"}</td>
                       <td className="px-4 py-3">
                         <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full border ${priorityColor(item.priority)}`}>
                           {priorityLabel(item.priority)}
@@ -208,22 +206,14 @@ export default async function DashboardPage() {
               </thead>
               <tbody>
                 {blockers.map((b) => (
-                  <tr key={b.id} className="border-b border-gray-200 hover:bg-gray-50">
-                    <td className="px-4 py-3 text-sm text-gray-900 font-semibold">{b.title}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600">
+                  <tr key={b.id} className="border-b border-gray-200 hover:bg-red-50/60 relative group">
+                    <td className="px-4 py-3 text-sm text-gray-900 font-semibold">
                       {b.project ? (
-                        <Link href={`/projects/${b.project.slug}`} className="text-blue-600 hover:underline">
-                          {b.project.name}
-                        </Link>
-                      ) : "—"}
+                        <Link href={`/projects/${b.project.slug}?tab=blockers`} className="before:absolute before:inset-0">{b.title}</Link>
+                      ) : b.title}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-600">
-                      {b.vendor ? (
-                        <Link href={`/settings/vendors/${b.vendor.id}`} className="text-blue-600 hover:underline">
-                          {b.vendor.name}
-                        </Link>
-                      ) : "—"}
-                    </td>
+                    <td className="px-4 py-3 text-sm text-blue-600">{b.project?.name || "—"}</td>
+                    <td className="px-4 py-3 text-sm text-blue-600">{b.vendor?.name || "—"}</td>
                     <td className="px-4 py-3 text-sm">
                       <span className={
                         b.age_severity === "critical" ? "text-red-600 font-medium" :
@@ -255,20 +245,32 @@ export default async function DashboardPage() {
               <div className="bg-gray-800 px-4 py-2.5">
                 <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Open Support Requests</h2>
               </div>
-              {supportTickets.map((t) => (
-                <div key={t.id} className="px-4 py-3 border-b border-gray-200 last:border-b-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-mono text-gray-500">{t.ticket_number}</span>
-                    <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full border ${priorityColor(t.priority)}`}>
-                      {priorityLabel(t.priority)}
-                    </span>
+              {supportTickets.map((t) => {
+                const href = t.project ? `/projects/${t.project.slug}` : null;
+                const inner = (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-mono text-gray-500">{t.ticket_number}</span>
+                      <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full border ${priorityColor(t.priority)}`}>
+                        {priorityLabel(t.priority)}
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-900 font-semibold mt-1">{t.title || t.description}</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {t.vendor?.name} {t.opened_at ? `· Opened ${formatDateShort(t.opened_at)}` : ""}
+                    </p>
+                  </>
+                );
+                return href ? (
+                  <Link key={t.id} href={href} className="block px-4 py-3 border-b border-gray-200 last:border-b-0 hover:bg-blue-50/60">
+                    {inner}
+                  </Link>
+                ) : (
+                  <div key={t.id} className="px-4 py-3 border-b border-gray-200 last:border-b-0">
+                    {inner}
                   </div>
-                  <p className="text-sm text-gray-900 font-semibold mt-1">{t.title || t.description}</p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {t.vendor?.name} {t.opened_at ? `· Opened ${formatDateShort(t.opened_at)}` : ""}
-                  </p>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </section>
@@ -284,20 +286,32 @@ export default async function DashboardPage() {
               <div className="bg-gray-800 px-4 py-2.5">
                 <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Decisions Needed</h2>
               </div>
-              {decisions.map((d) => (
-                <div key={d.id} className="px-4 py-3 border-b border-gray-200 last:border-b-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-mono text-gray-400">{d.display_id}</span>
-                    <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full border ${priorityColor(d.priority)}`}>
-                      {priorityLabel(d.priority)}
-                    </span>
+              {decisions.map((d) => {
+                const href = d.project ? `/projects/${(d.project as Project).slug}?tab=raid` : null;
+                const inner = (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-mono text-gray-400">{d.display_id}</span>
+                      <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full border ${priorityColor(d.priority)}`}>
+                        {priorityLabel(d.priority)}
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-900 font-semibold mt-1">{d.title}</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {d.owner?.full_name || "Unassigned"} · {d.project?.name || "General"}
+                    </p>
+                  </>
+                );
+                return href ? (
+                  <Link key={d.id} href={href} className="block px-4 py-3 border-b border-gray-200 last:border-b-0 hover:bg-blue-50/60">
+                    {inner}
+                  </Link>
+                ) : (
+                  <div key={d.id} className="px-4 py-3 border-b border-gray-200 last:border-b-0">
+                    {inner}
                   </div>
-                  <p className="text-sm text-gray-900 font-semibold mt-1">{d.title}</p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {d.owner?.full_name || "Unassigned"} · {d.project?.name || "General"}
-                  </p>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </section>
