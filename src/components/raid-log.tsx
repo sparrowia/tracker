@@ -109,31 +109,32 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
       decision_date: editForm.raid_type === "decision" ? (editForm.decision_date || null) : null,
     };
 
-    const { error } = await supabase.from("raid_entries").update(updates).eq("id", id);
+    // Optimistic: update UI immediately, save in background
+    const newOwner = people.find((p) => p.id === editForm.owner_id) || null;
+    const newVendor = vendors.find((v) => v.id === editForm.vendor_id) || null;
+    setEntries((prev) =>
+      prev.map((e) =>
+        e.id === id
+          ? {
+              ...e,
+              ...updates,
+              display_id: newDisplayId,
+              raid_type: editForm.raid_type,
+              priority: editForm.priority as PriorityLevel,
+              status: editForm.status as ItemStatus,
+              owner_id: editForm.owner_id || null,
+              vendor_id: editForm.vendor_id || null,
+              owner: newOwner,
+              vendor: newVendor,
+            } as RaidRow
+          : e
+      )
+    );
+    setEditingId(null);
 
-    if (!error) {
-      const newOwner = people.find((p) => p.id === editForm.owner_id) || null;
-      const newVendor = vendors.find((v) => v.id === editForm.vendor_id) || null;
-      setEntries((prev) =>
-        prev.map((e) =>
-          e.id === id
-            ? {
-                ...e,
-                ...updates,
-                display_id: newDisplayId,
-                raid_type: editForm.raid_type,
-                priority: editForm.priority as PriorityLevel,
-                status: editForm.status as ItemStatus,
-                owner_id: editForm.owner_id || null,
-                vendor_id: editForm.vendor_id || null,
-                owner: newOwner,
-                vendor: newVendor,
-              } as RaidRow
-            : e
-        )
-      );
-      setEditingId(null);
-    }
+    supabase.from("raid_entries").update(updates).eq("id", id).then(({ error }) => {
+      if (error) console.error("Save failed:", error);
+    });
   }
 
   async function handleResolve(id: string) {

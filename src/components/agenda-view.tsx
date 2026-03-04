@@ -271,9 +271,7 @@ export function AgendaView({
         }
         if (aiUpdates.status) dbUpdates.status = aiUpdates.status;
 
-        const { error } = await supabase.from(table).update(dbUpdates).eq("id", item.entity_id);
-        if (error) { console.error("Save failed:", error); setSavingNotes(false); return; }
-
+        // AI done — optimistic: update UI immediately, save in background
         setItems((prev) =>
           prev.map((i) =>
             i.entity_id === item.entity_id
@@ -283,15 +281,19 @@ export function AgendaView({
         );
         setNotesText("");
         setEditingId(null);
+        setSavingNotes(false);
+
+        supabase.from(table).update(dbUpdates).eq("id", item.entity_id).then(({ error }) => {
+          if (error) console.error("Save failed:", error);
+        });
       } catch (err) {
         console.error("Save notes failed:", err);
-      } finally {
         setSavingNotes(false);
       }
       return;
     }
 
-    // No notes — save form field changes directly
+    // No notes — optimistic: update UI immediately, save in background
     const updates: Record<string, unknown> = { title: editFields.title, priority: editFields.priority };
     if (item.entity_type === "agenda_item") {
       updates.context = editFields.context || null;
@@ -302,9 +304,6 @@ export function AgendaView({
       updates.impact_description = editFields.context || null;
     }
 
-    const { error } = await supabase.from(table).update(updates).eq("id", item.entity_id);
-    if (error) { console.error("Save failed:", error); return; }
-
     setItems((prev) =>
       prev.map((i) =>
         i.entity_id === item.entity_id
@@ -313,6 +312,10 @@ export function AgendaView({
       )
     );
     setEditingId(null);
+
+    supabase.from(table).update(updates).eq("id", item.entity_id).then(({ error }) => {
+      if (error) console.error("Save failed:", error);
+    });
   }
 
   async function handleDelete(item: ProjectAgendaRow) {
