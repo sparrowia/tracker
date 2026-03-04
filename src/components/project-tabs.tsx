@@ -1313,7 +1313,7 @@ function IntakePanel({
       ) : intakes.length > 0 && (
         <div className="bg-white rounded-lg border border-gray-300 overflow-hidden">
           <div className="bg-gray-800 px-4 py-2.5">
-            <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Intakes ({intakes.length})</h2>
+            <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Past Intakes ({intakes.length})</h2>
           </div>
           <div>
             {intakes.map((intake) => {
