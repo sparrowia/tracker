@@ -14,6 +14,7 @@ import {
   ChevronDown,
   ChevronRight,
   BookType,
+  MessageSquare,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
@@ -133,6 +134,20 @@ export function Sidebar() {
         >
           <LayoutDashboard className="h-4 w-4 flex-shrink-0" />
           Dashboard
+        </Link>
+
+        {/* Ask */}
+        <Link
+          href="/ask"
+          className={cn(
+            "flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors",
+            pathname === "/ask"
+              ? "bg-blue-50 text-blue-700"
+              : "text-gray-700 hover:bg-gray-100"
+          )}
+        >
+          <MessageSquare className="h-4 w-4 flex-shrink-0" />
+          Ask
         </Link>
 
         {/* Initiatives group */}
