@@ -68,63 +68,50 @@ export default function IntakePage() {
     reader.readAsDataURL(file);
   }, []);
 
-  // Global paste listener — catches image paste regardless of focus target
+  // Extract image from clipboard data — shared between textarea onPaste and document listener
+  const handleImagePaste = useCallback((clipboardData: DataTransfer): boolean => {
+    // Check items (Chrome, Edge, modern browsers)
+    if (clipboardData.items) {
+      for (let i = 0; i < clipboardData.items.length; i++) {
+        const item = clipboardData.items[i];
+        if (item.type.startsWith("image/")) {
+          const file = item.getAsFile();
+          if (file) addImageFile(file);
+          return true;
+        }
+      }
+    }
+    // Fallback: check files (Safari, older browsers)
+    if (clipboardData.files && clipboardData.files.length > 0) {
+      for (let i = 0; i < clipboardData.files.length; i++) {
+        const file = clipboardData.files[i];
+        if (file.type.startsWith("image/")) {
+          addImageFile(file);
+          return true;
+        }
+      }
+    }
+    return false;
+  }, [addImageFile]);
+
+  // Direct onPaste for textarea — most reliable path
+  const onTextareaPaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    if (e.clipboardData && handleImagePaste(e.clipboardData)) {
+      e.preventDefault();
+    }
+  }, [handleImagePaste]);
+
+  // Document-level fallback for pastes outside the textarea
   useEffect(() => {
     function onPaste(e: ClipboardEvent) {
-      const clipboardData = e.clipboardData;
-      console.log("[paste] event fired", clipboardData);
-      if (!clipboardData) {
-        console.log("[paste] no clipboardData");
-        return;
+      if (!e.clipboardData) return;
+      if (handleImagePaste(e.clipboardData)) {
+        e.preventDefault();
       }
-
-      // Log what's in the clipboard
-      console.log("[paste] items count:", clipboardData.items?.length);
-      console.log("[paste] files count:", clipboardData.files?.length);
-      if (clipboardData.items) {
-        for (let i = 0; i < clipboardData.items.length; i++) {
-          console.log("[paste] item", i, "kind:", clipboardData.items[i].kind, "type:", clipboardData.items[i].type);
-        }
-      }
-      if (clipboardData.files) {
-        for (let i = 0; i < clipboardData.files.length; i++) {
-          console.log("[paste] file", i, "type:", clipboardData.files[i].type, "size:", clipboardData.files[i].size);
-        }
-      }
-
-      // Check items (Chrome, Edge, modern browsers)
-      if (clipboardData.items) {
-        for (let i = 0; i < clipboardData.items.length; i++) {
-          const item = clipboardData.items[i];
-          if (item.type.startsWith("image/")) {
-            e.preventDefault();
-            const file = item.getAsFile();
-            console.log("[paste] got image file from items:", file);
-            if (file) addImageFile(file);
-            return;
-          }
-        }
-      }
-
-      // Fallback: check files (Safari, older browsers)
-      if (clipboardData.files && clipboardData.files.length > 0) {
-        for (let i = 0; i < clipboardData.files.length; i++) {
-          const file = clipboardData.files[i];
-          if (file.type.startsWith("image/")) {
-            e.preventDefault();
-            console.log("[paste] got image file from files:", file);
-            addImageFile(file);
-            return;
-          }
-        }
-      }
-
-      console.log("[paste] no image found in clipboard");
     }
-
     document.addEventListener("paste", onPaste);
     return () => document.removeEventListener("paste", onPaste);
-  }, [addImageFile]);
+  }, [handleImagePaste]);
 
   function removeImage(id: string) {
     setPastedImages((prev) => prev.filter((img) => img.id !== id));
@@ -538,12 +525,38 @@ export default function IntakePage() {
 
             {/* Raw Text Area */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Raw Text
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-sm font-medium text-gray-700">
+                  Raw Text
+                </label>
+                <label className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-700 cursor-pointer">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                    <circle cx="8.5" cy="8.5" r="1.5"/>
+                    <polyline points="21 15 16 10 5 21"/>
+                  </svg>
+                  Add Image
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => {
+                      const files = e.target.files;
+                      if (files) {
+                        for (let i = 0; i < files.length; i++) {
+                          addImageFile(files[i]);
+                        }
+                      }
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+              </div>
               <textarea
                 value={rawText}
                 onChange={(e) => setRawText(e.target.value)}
+                onPaste={onTextareaPaste}
                 rows={12}
                 required={pastedImages.length === 0 && !isFileMode}
                 placeholder="Paste Slack message, email, meeting notes, or any text here. You can also paste screenshots (Cmd+V)."
