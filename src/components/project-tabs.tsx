@@ -268,7 +268,10 @@ function BlockersPanel({
   }
 
   async function saveEdit(id: string) {
-    // If call notes present, process through AI
+    const newOwner = people.find((p) => p.id === editForm.owner_id) || null;
+    const newVendor = vendors.find((v) => v.id === editForm.vendor_id) || null;
+
+    // If call notes present, process through AI (can't be optimistic — need AI response)
     if (callNotes.trim()) {
       setSavingNotes(true);
       try {
@@ -289,7 +292,6 @@ function BlockersPanel({
         });
         if (res.ok) {
           const { updates: aiUpdates } = await res.json();
-          // Merge AI updates into form
           const merged = {
             title: aiUpdates.title || editForm.title,
             priority: aiUpdates.priority || editForm.priority,
@@ -300,28 +302,21 @@ function BlockersPanel({
             description: aiUpdates.description !== undefined ? aiUpdates.description : editForm.description || null,
             due_date: editForm.due_date || null,
           };
-          const { error } = await supabase.from("blockers").update(merged).eq("id", id);
-          if (!error) {
-            const newOwner = people.find((p) => p.id === editForm.owner_id) || null;
-            const newVendor = vendors.find((v) => v.id === editForm.vendor_id) || null;
-            setBlockers((prev) =>
-              prev.map((b) =>
-                b.id === id ? { ...b, ...merged, owner: newOwner, vendor: newVendor } as BlockerRow : b
-              )
-            );
-            setCallNotes("");
-            setEditingId(null);
-          }
+          setBlockers((prev) => prev.map((b) => b.id === id ? { ...b, ...merged, owner: newOwner, vendor: newVendor } as BlockerRow : b));
+          setCallNotes("");
+          setEditingId(null);
+          setSavingNotes(false);
+          // Fire DB save in background
+          supabase.from("blockers").update(merged).eq("id", id).then(({ error }) => { if (error) console.error("Save failed:", error); });
         }
       } catch (err) {
         console.error("AI save failed:", err);
-      } finally {
         setSavingNotes(false);
       }
       return;
     }
 
-    // No notes — save form fields directly
+    // No notes — optimistic: update UI immediately, save in background
     const updates = {
       title: editForm.title,
       priority: editForm.priority,
@@ -333,20 +328,10 @@ function BlockersPanel({
       due_date: editForm.due_date || null,
     };
 
-    const { error } = await supabase.from("blockers").update(updates).eq("id", id);
+    setBlockers((prev) => prev.map((b) => b.id === id ? { ...b, ...updates, owner: newOwner, vendor: newVendor } as BlockerRow : b));
+    setEditingId(null);
 
-    if (!error) {
-      const newOwner = people.find((p) => p.id === editForm.owner_id) || null;
-      const newVendor = vendors.find((v) => v.id === editForm.vendor_id) || null;
-      setBlockers((prev) =>
-        prev.map((b) =>
-          b.id === id
-            ? { ...b, ...updates, owner: newOwner, vendor: newVendor } as BlockerRow
-            : b
-        )
-      );
-      setEditingId(null);
-    }
+    supabase.from("blockers").update(updates).eq("id", id).then(({ error }) => { if (error) console.error("Save failed:", error); });
   }
 
   async function handleResolve(id: string) {
@@ -723,7 +708,10 @@ function ActionItemsPanel({
   }
 
   async function saveEdit(id: string) {
-    // If call notes present, process through AI
+    const newOwner = people.find((p) => p.id === editForm.owner_id) || null;
+    const newVendor = vendors.find((v) => v.id === editForm.vendor_id) || null;
+
+    // If call notes present, process through AI (can't be optimistic — need AI response)
     if (callNotes.trim()) {
       setSavingNotes(true);
       try {
@@ -754,28 +742,20 @@ function ActionItemsPanel({
             notes: aiUpdates.notes !== undefined ? aiUpdates.notes : editForm.notes || null,
             due_date: editForm.due_date || null,
           };
-          const { error } = await supabase.from("action_items").update(merged).eq("id", id);
-          if (!error) {
-            const newOwner = people.find((p) => p.id === editForm.owner_id) || null;
-            const newVendor = vendors.find((v) => v.id === editForm.vendor_id) || null;
-            setActions((prev) =>
-              prev.map((a) =>
-                a.id === id ? { ...a, ...merged, owner: newOwner, vendor: newVendor } as ActionRow : a
-              )
-            );
-            setCallNotes("");
-            setEditingId(null);
-          }
+          setActions((prev) => prev.map((a) => a.id === id ? { ...a, ...merged, owner: newOwner, vendor: newVendor } as ActionRow : a));
+          setCallNotes("");
+          setEditingId(null);
+          setSavingNotes(false);
+          supabase.from("action_items").update(merged).eq("id", id).then(({ error }) => { if (error) console.error("Save failed:", error); });
         }
       } catch (err) {
         console.error("AI save failed:", err);
-      } finally {
         setSavingNotes(false);
       }
       return;
     }
 
-    // No notes — save form fields directly
+    // No notes — optimistic: update UI immediately, save in background
     const updates = {
       title: editForm.title,
       description: editForm.description || null,
@@ -787,20 +767,10 @@ function ActionItemsPanel({
       due_date: editForm.due_date || null,
     };
 
-    const { error } = await supabase.from("action_items").update(updates).eq("id", id);
+    setActions((prev) => prev.map((a) => a.id === id ? { ...a, ...updates, owner: newOwner, vendor: newVendor } as ActionRow : a));
+    setEditingId(null);
 
-    if (!error) {
-      const newOwner = people.find((p) => p.id === editForm.owner_id) || null;
-      const newVendor = vendors.find((v) => v.id === editForm.vendor_id) || null;
-      setActions((prev) =>
-        prev.map((a) =>
-          a.id === id
-            ? { ...a, ...updates, owner: newOwner, vendor: newVendor } as ActionRow
-            : a
-        )
-      );
-      setEditingId(null);
-    }
+    supabase.from("action_items").update(updates).eq("id", id).then(({ error }) => { if (error) console.error("Save failed:", error); });
   }
 
   async function handleResolve(id: string) {
@@ -1158,12 +1128,16 @@ function IntakePanel({
   vendors: Vendor[];
   onCountChange?: (count: number) => void;
 }) {
+  interface PastedImage { id: string; dataUrl: string; file: File; }
+
   const [intakes, setIntakes] = useState<Intake[]>(initialIntakes);
   const [showForm, setShowForm] = useState(false);
   const [rawText, setRawText] = useState("");
+  const [pastedImages, setPastedImages] = useState<PastedImage[]>([]);
   const [source, setSource] = useState<IntakeSource>("manual");
   const [vendorId, setVendorId] = useState("");
   const [loading, setLoading] = useState(false);
+  const [progressStep, setProgressStep] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const router = useRouter();
@@ -1171,14 +1145,78 @@ function IntakePanel({
 
   useEffect(() => { onCountChange?.(intakes.length); }, [intakes.length, onCountChange]);
 
+  const addImageFile = useCallback((file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      setPastedImages((prev) => [...prev, { id: crypto.randomUUID(), dataUrl, file }]);
+    };
+    reader.readAsDataURL(file);
+  }, []);
+
+  function onTextareaPaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
+    const cd = e.clipboardData;
+    if (!cd) return;
+    if (cd.items) {
+      for (let i = 0; i < cd.items.length; i++) {
+        if (cd.items[i].type.startsWith("image/")) {
+          e.preventDefault();
+          const file = cd.items[i].getAsFile();
+          if (file) addImageFile(file);
+          return;
+        }
+      }
+    }
+    if (cd.files && cd.files.length > 0) {
+      for (let i = 0; i < cd.files.length; i++) {
+        if (cd.files[i].type.startsWith("image/")) {
+          e.preventDefault();
+          addImageFile(cd.files[i]);
+          return;
+        }
+      }
+    }
+  }
+
+  async function ocrImages(images: PastedImage[]): Promise<string> {
+    const { createWorker } = await import("tesseract.js");
+    const worker = await createWorker("eng");
+    const texts: string[] = [];
+    for (let i = 0; i < images.length; i++) {
+      setProgressStep(`Reading image ${i + 1} of ${images.length}...`);
+      const { data } = await worker.recognize(images[i].dataUrl);
+      if (data.text.trim()) texts.push(data.text.trim());
+    }
+    await worker.terminate();
+    return texts.join("\n\n");
+  }
+
+  const hasContent = rawText.trim().length > 0 || pastedImages.length > 0;
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!rawText.trim()) return;
+    if (!hasContent) return;
 
     setLoading(true);
     setError(null);
+    setProgressStep("");
 
     try {
+      let combinedText = rawText.trim();
+      if (pastedImages.length > 0) {
+        setProgressStep("Running OCR on images...");
+        const ocrText = await ocrImages(pastedImages);
+        if (ocrText) {
+          combinedText = combinedText
+            ? `${combinedText}\n\n--- Text from pasted image ---\n${ocrText}`
+            : ocrText;
+        } else if (!combinedText) {
+          throw new Error("Could not extract any text from the pasted images.");
+        }
+      }
+
+      setProgressStep("Extracting items...");
+
       const { data: user } = await supabase.auth.getUser();
       const { data: profile } = await supabase
         .from("profiles")
@@ -1189,7 +1227,7 @@ function IntakePanel({
       const { data: intake, error: insertError } = await supabase
         .from("intakes")
         .insert({
-          raw_text: rawText.trim(),
+          raw_text: combinedText,
           source,
           vendor_id: vendorId || null,
           project_id: project.id,
@@ -1207,7 +1245,7 @@ function IntakePanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           intake_id: intake.id,
-          raw_text: rawText.trim(),
+          raw_text: combinedText,
           vendor_id: vendorId || null,
           project_id: project.id,
         }),
@@ -1221,6 +1259,7 @@ function IntakePanel({
       const updatedIntake = { ...intake, extraction_status: "complete" } as Intake;
       setIntakes((prev) => [updatedIntake, ...prev]);
       setRawText("");
+      setPastedImages([]);
       setSource("manual");
       setVendorId("");
       setShowForm(false);
@@ -1230,6 +1269,7 @@ function IntakePanel({
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
       setLoading(false);
+      setProgressStep("");
     }
   }
 
@@ -1268,19 +1308,64 @@ function IntakePanel({
             </div>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">Raw Text</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-medium text-gray-500">Raw Text</label>
+              <label className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 cursor-pointer">
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                  <circle cx="8.5" cy="8.5" r="1.5"/>
+                  <polyline points="21 15 16 10 5 21"/>
+                </svg>
+                Add Image
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    const files = e.target.files;
+                    if (files) { for (let i = 0; i < files.length; i++) addImageFile(files[i]); }
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+            </div>
             <textarea
               value={rawText}
               onChange={(e) => setRawText(e.target.value)}
+              onPaste={onTextareaPaste}
               rows={6}
-              placeholder="Paste Slack message, email, meeting notes, or any text here..."
+              required={pastedImages.length === 0}
+              placeholder="Paste Slack message, email, meeting notes, or any text here. You can also paste screenshots (Cmd+V)."
               className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm font-mono focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
+            {pastedImages.length > 0 && (
+              <div className="mt-2 space-y-2">
+                {pastedImages.map((img) => (
+                  <div key={img.id} className="relative inline-block border border-gray-200 rounded-lg overflow-hidden">
+                    <img src={img.dataUrl} alt="Pasted screenshot" className="max-w-full max-h-48 object-contain" />
+                    <button
+                      type="button"
+                      onClick={() => setPastedImages((prev) => prev.filter((i) => i.id !== img.id))}
+                      className="absolute top-1.5 right-1.5 bg-white/90 hover:bg-red-50 text-gray-500 hover:text-red-600 rounded-full p-0.5 shadow transition-colors"
+                      title="Remove image"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                      </svg>
+                    </button>
+                    <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-[10px] px-2 py-0.5">
+                      Screenshot — will be OCR&apos;d on extract
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => { setShowForm(false); setError(null); }}
+              onClick={() => { setShowForm(false); setError(null); setPastedImages([]); }}
               className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded hover:bg-gray-50"
             >
               Cancel
@@ -1288,7 +1373,7 @@ function IntakePanel({
             <div className="flex-1" />
             <button
               type="submit"
-              disabled={loading || !rawText.trim()}
+              disabled={loading || !hasContent}
               className="px-4 py-1.5 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5"
             >
               {loading && (
@@ -1297,7 +1382,7 @@ function IntakePanel({
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
                 </svg>
               )}
-              {loading ? "Extracting..." : "Extract"}
+              {loading ? (progressStep || "Extracting...") : pastedImages.length > 0 ? `Extract (${pastedImages.length} image${pastedImages.length > 1 ? "s" : ""} will be OCR'd)` : "Extract"}
             </button>
           </div>
         </form>
