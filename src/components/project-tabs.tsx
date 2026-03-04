@@ -47,6 +47,7 @@ export default function ProjectTabs({
   vendors,
   agendaRows,
   intakes,
+  intakeSourceMap = {},
 }: {
   project: Project;
   blockers: (Blocker & { owner: Person | null; vendor: Vendor | null })[];
@@ -56,6 +57,7 @@ export default function ProjectTabs({
   vendors: Vendor[];
   agendaRows: ProjectAgendaRow[];
   intakes: Intake[];
+  intakeSourceMap?: Record<string, string>;
 }) {
   const searchParams = useSearchParams();
   const [tabOrder, setTabOrder] = useState<Tab[]>(loadTabOrder);
@@ -183,15 +185,15 @@ export default function ProjectTabs({
         )}
 
         {active === "blockers" && (
-          <BlockersPanel blockers={blockers} people={peopleList} vendors={vendors} onPersonAdded={addPerson} addUndo={addUndo} onCountChange={setBlockerCount} />
+          <BlockersPanel blockers={blockers} people={peopleList} vendors={vendors} onPersonAdded={addPerson} addUndo={addUndo} onCountChange={setBlockerCount} intakeSourceMap={intakeSourceMap} />
         )}
 
         {active === "raid" && (
-          <RaidLog initialEntries={raidEntries} project={project} people={peopleList} vendors={vendors} onPersonAdded={addPerson} addUndo={addUndo} onCountChange={setRaidCount} />
+          <RaidLog initialEntries={raidEntries} project={project} people={peopleList} vendors={vendors} onPersonAdded={addPerson} addUndo={addUndo} onCountChange={setRaidCount} intakeSourceMap={intakeSourceMap} />
         )}
 
         {active === "actions" && (
-          <ActionItemsPanel actions={actions} people={peopleList} vendors={vendors} onPersonAdded={addPerson} addUndo={addUndo} onCountChange={setActionCount} />
+          <ActionItemsPanel actions={actions} people={peopleList} vendors={vendors} onPersonAdded={addPerson} addUndo={addUndo} onCountChange={setActionCount} intakeSourceMap={intakeSourceMap} />
         )}
 
         {active === "intake" && (
@@ -241,6 +243,7 @@ function BlockersPanel({
   onPersonAdded,
   addUndo,
   onCountChange,
+  intakeSourceMap = {},
 }: {
   blockers: BlockerRow[];
   people: Person[];
@@ -248,6 +251,7 @@ function BlockersPanel({
   onPersonAdded: (person: Person) => void;
   addUndo: (label: string, undo: () => Promise<void>) => void;
   onCountChange?: (count: number) => void;
+  intakeSourceMap?: Record<string, string>;
 }) {
   const [blockers, setBlockers] = useState<BlockerRow[]>(initialBlockers);
 
@@ -447,6 +451,15 @@ function BlockersPanel({
                     <span className="text-gray-400 italic">Unassigned</span>
                   )}
                   {b.vendor && <span className="text-gray-400">| {b.vendor.name}</span>}
+                  {intakeSourceMap[b.id] && (
+                    <a
+                      href={`/intake/${intakeSourceMap[b.id]}/review`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="text-blue-500 hover:text-blue-700 hover:underline"
+                    >
+                      View source
+                    </a>
+                  )}
                 </div>
               </div>
 
@@ -692,6 +705,7 @@ function ActionItemsPanel({
   onPersonAdded,
   addUndo,
   onCountChange,
+  intakeSourceMap = {},
 }: {
   actions: ActionRow[];
   people: Person[];
@@ -699,6 +713,7 @@ function ActionItemsPanel({
   onPersonAdded: (person: Person) => void;
   addUndo: (label: string, undo: () => Promise<void>) => void;
   onCountChange?: (count: number) => void;
+  intakeSourceMap?: Record<string, string>;
 }) {
   const [actions, setActions] = useState<ActionRow[]>(initialActions);
 
@@ -897,6 +912,15 @@ function ActionItemsPanel({
                     <span className="text-gray-400 italic">Unassigned</span>
                   )}
                   {a.vendor && <span className="text-gray-400">| {a.vendor.name}</span>}
+                  {intakeSourceMap[a.id] && (
+                    <a
+                      href={`/intake/${intakeSourceMap[a.id]}/review`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="text-blue-500 hover:text-blue-700 hover:underline"
+                    >
+                      View source
+                    </a>
+                  )}
                 </div>
               </div>
 

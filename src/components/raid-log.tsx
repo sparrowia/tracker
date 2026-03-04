@@ -16,6 +16,7 @@ interface RaidLogProps {
   onPersonAdded: (person: Person) => void;
   addUndo: (label: string, undo: () => Promise<void>) => void;
   onCountChange?: (count: number) => void;
+  intakeSourceMap?: Record<string, string>;
 }
 
 const raidTypes: RaidType[] = ["risk", "assumption", "issue", "decision"];
@@ -42,7 +43,7 @@ function ageFromDate(date: string): number {
   return Math.floor(diff / (1000 * 60 * 60 * 24));
 }
 
-export default function RaidLog({ initialEntries, project, people, vendors, onPersonAdded, addUndo, onCountChange }: RaidLogProps) {
+export default function RaidLog({ initialEntries, project, people, vendors, onPersonAdded, addUndo, onCountChange, intakeSourceMap = {} }: RaidLogProps) {
   const [entries, setEntries] = useState<RaidRow[]>(initialEntries);
 
   useEffect(() => { onCountChange?.(entries.length); }, [entries.length, onCountChange]);
@@ -328,6 +329,15 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                         <span className="text-gray-400 italic">Unassigned</span>
                       )}
                       <span>{formatAge(age)}</span>
+                      {intakeSourceMap[entry.id] && (
+                        <a
+                          href={`/intake/${intakeSourceMap[entry.id]}/review`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-blue-500 hover:text-blue-700 hover:underline"
+                        >
+                          View source
+                        </a>
+                      )}
                     </div>
                   </div>
 

@@ -78,6 +78,19 @@ export default async function ProjectDetailPage({
   const typedPeople = (allPeople || []) as Person[];
   const typedIntakes = (intakeData || []) as Intake[];
 
+  // Build entity → intake source map
+  const intakeIds = typedIntakes.map((i) => i.id);
+  let intakeSourceMap: Record<string, string> = {};
+  if (intakeIds.length > 0) {
+    const { data: intakeEntities } = await supabase
+      .from("intake_entities")
+      .select("entity_id, intake_id")
+      .in("intake_id", intakeIds);
+    if (intakeEntities) {
+      intakeSourceMap = Object.fromEntries(intakeEntities.map((ie) => [ie.entity_id, ie.intake_id]));
+    }
+  }
+
   return (
     <div className="max-w-6xl mx-auto space-y-8">
       {/* Breadcrumb */}
@@ -103,6 +116,7 @@ export default async function ProjectDetailPage({
         vendors={typedVendors}
         agendaRows={[]}
         intakes={typedIntakes}
+        intakeSourceMap={intakeSourceMap}
       />
     </div>
   );
