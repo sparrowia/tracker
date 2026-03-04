@@ -329,13 +329,13 @@ export function AgendaView({
 
   const [generating, setGenerating] = useState(false);
   const [hasGenerated, setHasGenerated] = useState(initialItems.length > 0);
-  const [mode, setMode] = useState<"auto" | "selected">("auto");
+  const [mode, setMode] = useState<"auto" | "selected">("selected");
 
   // Auto-load agenda on mount if not provided
   useEffect(() => {
     if (initialItems.length > 0) return;
     let cancelled = false;
-    supabase.rpc("generate_project_agenda", { p_project_id: project.id, p_limit: 30 }).then(({ data }) => {
+    supabase.rpc("generate_project_agenda_from_selected", { p_project_id: project.id, p_limit: 30 }).then(({ data }) => {
       if (!cancelled && data && (data as ProjectAgendaRow[]).length > 0) {
         setItems(data as ProjectAgendaRow[]);
         setHasGenerated(true);
