@@ -21,6 +21,7 @@ interface RaidLogProps {
 const raidTypes: RaidType[] = ["risk", "assumption", "issue", "decision"];
 const priorityOptions: PriorityLevel[] = ["critical", "high", "medium", "low"];
 const statusOptions: ItemStatus[] = ["pending", "in_progress", "complete", "needs_verification", "paused", "at_risk", "blocked"];
+const riskStatusOptions: ItemStatus[] = ["identified", "assessing", "in_progress", "mitigated", "closed"];
 
 const typePrefix: Record<RaidType, string> = { risk: "R", assumption: "A", issue: "I", decision: "D" };
 
@@ -79,11 +80,14 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
 
   function startEdit(entry: RaidRow) {
     setEditingId(entry.id);
+    // Map legacy "pending" status to "identified" for risks
+    let editStatus = entry.status;
+    if (entry.raid_type === "risk" && editStatus === "pending") editStatus = "identified";
     setEditForm({
       title: entry.title,
       raid_type: entry.raid_type,
       priority: entry.priority,
-      status: entry.status,
+      status: editStatus,
       owner_id: entry.owner_id || "",
       vendor_id: entry.vendor_id || "",
       impact: entry.impact || "",
@@ -155,7 +159,8 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
     if (!entry) return;
     const prevStatus = entry.status;
     const now = new Date().toISOString();
-    const { error } = await supabase.from("raid_entries").update({ status: "complete", resolved_at: now }).eq("id", id);
+    const resolveStatus = entry.raid_type === "risk" ? "closed" : "complete";
+    const { error } = await supabase.from("raid_entries").update({ status: resolveStatus, resolved_at: now }).eq("id", id);
     if (!error) {
       setEntries((prev) => prev.filter((e) => e.id !== id));
       if (expandedId === id) setExpandedId(null);
@@ -196,7 +201,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
       raid_type: addingType,
       display_id: displayId,
       priority: addPriority,
-      status: "pending" as ItemStatus,
+      status: (addingType === "risk" ? "identified" : "pending") as ItemStatus,
       project_id: project.id,
       org_id: project.org_id,
       owner_id: null,
@@ -372,7 +377,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                                 onChange={(e) => setEditForm({ ...editForm, status: e.target.value as ItemStatus })}
                                 className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                               >
-                                {statusOptions.map((s) => (
+                                {(editForm.raid_type === "risk" ? riskStatusOptions : statusOptions).map((s) => (
                                   <option key={s} value={s}>{s.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase())}</option>
                                 ))}
                               </select>

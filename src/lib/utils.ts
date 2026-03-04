@@ -45,6 +45,10 @@ export function statusBadge(status: ItemStatus): { label: string; className: str
     case "paused": return { label: "Paused", className: "text-gray-600 bg-gray-200" };
     case "at_risk": return { label: "At Risk", className: "text-amber-700 bg-amber-100" };
     case "blocked": return { label: "Blocked", className: "text-red-700 bg-red-100" };
+    case "identified": return { label: "Identified", className: "text-slate-700 bg-slate-100" };
+    case "assessing": return { label: "Assessing", className: "text-indigo-700 bg-indigo-100" };
+    case "mitigated": return { label: "Mitigated", className: "text-teal-700 bg-teal-100" };
+    case "closed": return { label: "Closed", className: "text-green-700 bg-green-100" };
   }
 }
 

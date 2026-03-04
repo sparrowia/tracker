@@ -5,7 +5,11 @@ export type ItemStatus =
   | "needs_verification"
   | "paused"
   | "at_risk"
-  | "blocked";
+  | "blocked"
+  | "identified"
+  | "assessing"
+  | "mitigated"
+  | "closed";
 
 export type PriorityLevel = "critical" | "high" | "medium" | "low";
 
