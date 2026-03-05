@@ -1,6 +1,9 @@
+-- Fix raid_type enum: rename 'action' → 'assumption' (RAID = Risks, Assumptions, Issues, Decisions)
+ALTER TYPE raid_type RENAME VALUE 'action' TO 'assumption';
+
 -- Fix generate_project_agenda_from_selected:
 -- 1. Remove status/resolved_at filters — if user toggled include_in_meeting, respect that
--- 2. Fix raid_type filter: 'action' → 'assumption' to match actual DB values
+-- 2. raid_type filter now uses correct 'assumption' value
 CREATE OR REPLACE FUNCTION generate_project_agenda_from_selected(p_project_id uuid, p_limit int DEFAULT 20)
 RETURNS TABLE (
   rank         bigint,

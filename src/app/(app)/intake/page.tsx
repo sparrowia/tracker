@@ -130,15 +130,62 @@ export default function IntakePage() {
     setPastedImages((prev) => prev.filter((img) => img.id !== id));
   }
 
+  /** Preprocess image for better OCR: grayscale + contrast boost via canvas. */
+  function preprocessImage(dataUrl: string): Promise<string> {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { resolve(dataUrl); return; }
+
+        // Draw original
+        ctx.drawImage(img, 0, 0);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const d = imageData.data;
+
+        // Convert to grayscale + boost contrast (factor 1.5 centered at 128)
+        const contrast = 1.5;
+        const intercept = 128 * (1 - contrast);
+        for (let i = 0; i < d.length; i += 4) {
+          const gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+          const val = Math.max(0, Math.min(255, contrast * gray + intercept));
+          d[i] = d[i + 1] = d[i + 2] = val;
+        }
+
+        ctx.putImageData(imageData, 0, 0);
+        resolve(canvas.toDataURL("image/png"));
+      };
+      img.onerror = () => resolve(dataUrl);
+      img.src = dataUrl;
+    });
+  }
+
   async function ocrImages(images: PastedImage[]): Promise<string> {
     const { createWorker } = await import("tesseract.js");
     const worker = await createWorker("eng");
     const texts: string[] = [];
+    const MIN_CONFIDENCE = 40; // Skip blocks with very low confidence
 
     for (let i = 0; i < images.length; i++) {
+      setProgressStep(`Preprocessing image ${i + 1} of ${images.length}...`);
+      const processed = await preprocessImage(images[i].dataUrl);
+
       setProgressStep(`Reading image ${i + 1} of ${images.length}...`);
-      const { data } = await worker.recognize(images[i].dataUrl);
-      if (data.text.trim()) {
+      const { data } = await worker.recognize(processed);
+
+      // Filter out low-confidence paragraphs via blocks
+      if (data.blocks && data.blocks.length > 0) {
+        const goodText = data.blocks
+          .flatMap((b) => b.paragraphs)
+          .filter((p) => p.confidence >= MIN_CONFIDENCE)
+          .map((p) => p.text.trim())
+          .filter(Boolean)
+          .join("\n");
+        if (goodText) texts.push(goodText);
+      } else if (data.text.trim()) {
         texts.push(data.text.trim());
       }
     }
