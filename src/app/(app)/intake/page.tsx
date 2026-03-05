@@ -17,12 +17,12 @@ interface ParsedFile {
 }
 
 const sourceOptions: { value: IntakeSource; label: string }[] = [
-  { value: "slack", label: "Slack Message" },
-  { value: "email", label: "Email" },
-  { value: "meeting_notes", label: "Meeting Notes" },
-  { value: "fathom_transcript", label: "Fathom Transcript" },
   { value: "asana", label: "Asana Export" },
+  { value: "email", label: "Email" },
+  { value: "fathom_transcript", label: "Fathom Transcript" },
   { value: "manual", label: "Manual Entry" },
+  { value: "meeting_notes", label: "Meeting Notes" },
+  { value: "slack", label: "Slack Message" },
 ];
 
 export default function IntakePage() {
