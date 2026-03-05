@@ -57,6 +57,7 @@ export default function ProjectHeader({ project, vendors }: ProjectHeaderProps) 
     if (!error) {
       setP({ ...p, ...updates });
       setEditing(false);
+      window.dispatchEvent(new CustomEvent("sidebar:refresh"));
     }
     setSaving(false);
   }

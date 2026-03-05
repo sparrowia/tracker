@@ -49,7 +49,7 @@ export function Sidebar() {
   const [initiatives, setInitiatives] = useState<SidebarInitiative[]>([]);
   const [loaded, setLoaded] = useState(false);
 
-  // Fetch once on mount
+  // Fetch on mount + re-fetch on sidebar:refresh events
   useEffect(() => {
     const supabase = createClient();
     async function load() {
@@ -73,6 +73,8 @@ export function Sidebar() {
       setLoaded(true);
     }
     load();
+    window.addEventListener("sidebar:refresh", load);
+    return () => window.removeEventListener("sidebar:refresh", load);
   }, []);
 
   // Auto-expand based on current path (no re-fetch)
