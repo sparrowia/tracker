@@ -641,6 +641,7 @@ export default function IntakeReviewPage() {
                 description,
                 priority: item.priority || "medium",
                 owner_id: findPersonId(item.owner_name),
+                reporter_id: findPersonId(item.reporter_name) || null,
                 project_id: item._project_id || null,
                 vendor_id: item._vendor_id || null,
                 first_flagged_at: item.date_reported || today,

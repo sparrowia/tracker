@@ -72,7 +72,7 @@ export default function ProjectTabs({
   project: Project;
   blockers: (Blocker & { owner: Person | null; vendor: Vendor | null })[];
   actions: (ActionItem & { owner: Person | null; vendor: Vendor | null })[];
-  raidEntries: (RaidEntry & { owner: Person | null; vendor: Vendor | null })[];
+  raidEntries: (RaidEntry & { owner: Person | null; reporter: Person | null; vendor: Vendor | null })[];
   people: Person[];
   vendors: Vendor[];
   agendaRows: ProjectAgendaRow[];

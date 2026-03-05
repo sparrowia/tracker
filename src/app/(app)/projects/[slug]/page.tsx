@@ -41,7 +41,7 @@ export default async function ProjectDetailPage({
       .order("due_date", { ascending: true, nullsFirst: false }),
     supabase
       .from("raid_entries")
-      .select("*, owner:people(*), vendor:vendors(*)")
+      .select("*, owner:people!raid_entries_owner_id_fkey(*), reporter:people!raid_entries_reporter_id_fkey(*), vendor:vendors(*)")
       .eq("project_id", p.id)
       .order("raid_type")
       .order("priority"),
@@ -71,7 +71,7 @@ export default async function ProjectDetailPage({
   const initiative = initiativeData as Initiative | null;
 
   const typedActions = (actionItems || []) as (ActionItem & { owner: Person | null; vendor: Vendor | null })[];
-  const typedRaid = (raidEntries || []) as (RaidEntry & { owner: Person | null; vendor: Vendor | null })[];
+  const typedRaid = (raidEntries || []) as (RaidEntry & { owner: Person | null; reporter: Person | null; vendor: Vendor | null })[];
   const typedBlockers = (blockers || []) as (Blocker & { owner: Person | null; vendor: Vendor | null })[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const typedVendors = ((vendors || []).map((v: any) => v.vendor).filter(Boolean)) as Vendor[];

@@ -150,6 +150,7 @@ export interface RaidEntry {
   priority: PriorityLevel;
   status: ItemStatus;
   owner_id: string | null;
+  reporter_id: string | null;
   vendor_id: string | null;
   decision_date: string | null;
   include_in_meeting: boolean;

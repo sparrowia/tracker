@@ -6,7 +6,7 @@ import { priorityColor, priorityLabel, statusBadge, formatAge, formatDateShort }
 import type { RaidEntry, RaidType, PriorityLevel, ItemStatus, Person, Vendor, Project } from "@/lib/types";
 import OwnerPicker from "@/components/owner-picker";
 
-type RaidRow = RaidEntry & { owner: Person | null; vendor: Vendor | null };
+type RaidRow = RaidEntry & { owner: Person | null; reporter: Person | null; vendor: Vendor | null };
 
 interface RaidLogProps {
   initialEntries: RaidRow[];
@@ -27,12 +27,13 @@ const riskStatusOptions: ItemStatus[] = ["identified", "assessing", "in_progress
 
 const typePrefix: Record<RaidType, string> = { risk: "R", assumption: "A", issue: "I", decision: "D" };
 
-type RaidColumnKey = "priority" | "status" | "owner" | "vendor" | "age" | "escalations" | "first_flagged";
+type RaidColumnKey = "priority" | "status" | "owner" | "reporter" | "vendor" | "age" | "escalations" | "first_flagged";
 
 const RAID_COLUMNS: { key: RaidColumnKey; label: string; width: string }[] = [
   { key: "priority", label: "Priority", width: "w-[68px]" },
   { key: "status", label: "Status", width: "w-[88px]" },
   { key: "owner", label: "Owner", width: "w-[150px]" },
+  { key: "reporter", label: "Reporter", width: "w-[150px]" },
   { key: "vendor", label: "Vendor", width: "w-[100px]" },
   { key: "age", label: "Age", width: "w-12" },
   { key: "escalations", label: "Escalations", width: "w-[72px]" },
@@ -237,6 +238,21 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
             )}
           </div>
         );
+      case "reporter":
+        return (
+          <div className="w-[150px] flex-shrink-0 flex justify-end">
+            {entry.reporter ? (
+              <div className="flex items-center gap-1">
+                <span className="w-5 h-5 rounded-full bg-purple-100 text-[9px] font-medium text-purple-700 flex items-center justify-center flex-shrink-0">
+                  {entry.reporter.full_name.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
+                </span>
+                <span className="text-xs text-gray-600 truncate">{entry.reporter.full_name}</span>
+              </div>
+            ) : (
+              <span className="text-xs text-gray-400 italic">—</span>
+            )}
+          </div>
+        );
       case "vendor":
         return (
           <div className="w-[100px] flex-shrink-0 text-right">
@@ -275,6 +291,10 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
       const newOwner = people.find((p) => p.id === value) || null;
       dbUpdates.owner_id = value || null;
       setEntries((prev) => prev.map((e) => e.id === id ? { ...e, owner_id: value || null, owner: newOwner } as RaidRow : e));
+    } else if (field === "reporter_id") {
+      const newReporter = people.find((p) => p.id === value) || null;
+      dbUpdates.reporter_id = value || null;
+      setEntries((prev) => prev.map((e) => e.id === id ? { ...e, reporter_id: value || null, reporter: newReporter } as RaidRow : e));
     } else if (field === "vendor_id") {
       const newVendor = vendors.find((v) => v.id === value) || null;
       dbUpdates.vendor_id = value || null;
@@ -333,7 +353,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
     if (!error) {
       setEntries((prev) => prev.filter((e) => e.id !== id));
       if (expandedId === id) setExpandedId(null);
-      const { owner: _o, vendor: _v, ...dbFields } = entry;
+      const { owner: _o, reporter: _r, vendor: _v, ...dbFields } = entry;
       addUndo(`Deleted "${entry.title}"`, async () => {
         const { error: err } = await supabase.from("raid_entries").insert(dbFields);
         if (!err) setEntries((prev) => [...prev, entry]);
@@ -366,7 +386,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
       decision_date: null,
     };
 
-    const { data, error } = await supabase.from("raid_entries").insert(newEntry).select("*, owner:people(*), vendor:vendors(*)").single();
+    const { data, error } = await supabase.from("raid_entries").insert(newEntry).select("*, owner:people!raid_entries_owner_id_fkey(*), reporter:people!raid_entries_reporter_id_fkey(*), vendor:vendors(*)").single();
     if (!error && data) {
       setEntries((prev) => [data as RaidRow, ...prev]);
       setAddTitle("");
@@ -655,6 +675,17 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                               <OwnerPicker
                                 value={entry.owner_id || ""}
                                 onChange={(id) => saveField(entry.id, "owner_id", id)}
+                                people={people}
+                                onPersonAdded={onPersonAdded}
+                              />
+                            </div>
+                          </div>
+                          <div onClick={(e) => e.stopPropagation()}>
+                            <span className="text-xs font-medium text-gray-500 uppercase">Reporter</span>
+                            <div className="mt-0.5">
+                              <OwnerPicker
+                                value={entry.reporter_id || ""}
+                                onChange={(id) => saveField(entry.id, "reporter_id", id)}
                                 people={people}
                                 onPersonAdded={onPersonAdded}
                               />
