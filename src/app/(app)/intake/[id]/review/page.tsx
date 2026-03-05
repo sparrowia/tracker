@@ -181,6 +181,7 @@ export default function IntakeReviewPage() {
   const rawTextRef = useRef<HTMLDivElement>(null);
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const editSnapshotsRef = useRef<Map<string, ExtractedItem>>(new Map());
+  const originalExtractedRef = useRef<Record<EntityCategory, ExtractedItem[]> | null>(null);
   const router = useRouter();
   const supabase = createClient();
 
@@ -237,6 +238,16 @@ export default function IntakeReviewPage() {
         const defaultProjectId = intakeData.project_id || null;
         const defaultVendorId = intakeData.vendor_id || null;
 
+        // Store original AI output for correction logging
+        originalExtractedRef.current = {
+          action_items: ed.action_items || [],
+          decisions: ed.decisions || [],
+          issues: ed.issues || [],
+          risks: ed.risks || [],
+          blockers: ed.blockers || [],
+          status_updates: ed.status_updates || [],
+        };
+
         setExtracted({
           action_items: (ed.action_items || []).map((i: ExtractedItem) => ({
             ...i,
@@ -286,7 +297,11 @@ export default function IntakeReviewPage() {
           const matchRes = await fetch("/api/match", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ intake_id: intakeId }),
+            body: JSON.stringify({
+              intake_id: intakeId,
+              vendor_id: intakeData.vendor_id || null,
+              project_id: intakeData.project_id || null,
+            }),
           });
           if (matchRes.ok) {
             const matchData = await matchRes.json();
@@ -698,6 +713,105 @@ export default function IntakeReviewPage() {
 
       if (errors.length > 0) {
         throw new Error(`Some items failed to save:\n${errors.join("\n")}`);
+      }
+
+      // Log corrections for feedback loop (non-blocking)
+      const original = originalExtractedRef.current;
+      if (original) {
+        const corrections: {
+          org_id: string;
+          intake_id: string;
+          extracted_category: string;
+          extracted_title: string;
+          extracted_priority: string | null;
+          correction_type: string;
+          corrected_value: string | null;
+        }[] = [];
+
+        for (const [cat, items] of Object.entries(extracted) as [EntityCategory, ExtractedItem[]][]) {
+          items.forEach((item, idx) => {
+            const orig = original[cat]?.[idx];
+            if (!orig) return;
+            const origTitle = orig.title || orig.subject || "";
+            const origPriority = orig.priority || null;
+
+            if (item._accepted === false) {
+              // User rejected this item
+              corrections.push({
+                org_id: orgId,
+                intake_id: intakeId,
+                extracted_category: cat,
+                extracted_title: origTitle,
+                extracted_priority: origPriority,
+                correction_type: "rejected",
+                corrected_value: null,
+              });
+            } else if (item._accepted === true) {
+              const curTitle = item.title || item.subject || "";
+
+              // Title was edited
+              if (curTitle !== origTitle && curTitle.trim() !== "") {
+                corrections.push({
+                  org_id: orgId,
+                  intake_id: intakeId,
+                  extracted_category: cat,
+                  extracted_title: origTitle,
+                  extracted_priority: origPriority,
+                  correction_type: "title_edit",
+                  corrected_value: curTitle,
+                });
+              }
+
+              // Type was reassigned
+              if (item._save_as && item._save_as !== cat) {
+                corrections.push({
+                  org_id: orgId,
+                  intake_id: intakeId,
+                  extracted_category: cat,
+                  extracted_title: origTitle,
+                  extracted_priority: origPriority,
+                  correction_type: "type_change",
+                  corrected_value: item._save_as,
+                });
+              }
+
+              // Priority was changed
+              if (item.priority && item.priority !== origPriority) {
+                corrections.push({
+                  org_id: orgId,
+                  intake_id: intakeId,
+                  extracted_category: cat,
+                  extracted_title: origTitle,
+                  extracted_priority: origPriority,
+                  correction_type: "priority_change",
+                  corrected_value: item.priority,
+                });
+              }
+
+              // Accepted without changes (positive signal)
+              if (
+                curTitle === origTitle &&
+                (!item._save_as || item._save_as === cat) &&
+                (!item.priority || item.priority === origPriority)
+              ) {
+                corrections.push({
+                  org_id: orgId,
+                  intake_id: intakeId,
+                  extracted_category: cat,
+                  extracted_title: origTitle,
+                  extracted_priority: origPriority,
+                  correction_type: "accepted_as_is",
+                  corrected_value: null,
+                });
+              }
+            }
+          });
+        }
+
+        if (corrections.length > 0) {
+          // Fire and forget — don't block navigation on logging
+          supabase.from("correction_log").insert(corrections);
+        }
       }
 
       router.push("/dashboard");

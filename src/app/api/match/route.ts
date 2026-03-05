@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
-const SYSTEM_PROMPT = `You are a project management deduplication assistant. Compare NEWLY EXTRACTED items against EXISTING open items and identify likely duplicates or updates.
+const SYSTEM_PROMPT = `You are a project management deduplication assistant. Compare NEWLY EXTRACTED items against EXISTING items and identify likely duplicates or updates.
 
 Return JSON: { "matches": { "<extracted_key>": [{ "existing_id": "<id>", "confidence": "high"|"medium", "reason": "<1 sentence>" }] } }
 
@@ -11,7 +11,9 @@ Rules:
 - "medium" = likely the same task but phrased differently
 - Do NOT match items that merely share a keyword
 - An extracted item can match 0-2 existing items max
-- Omit extracted keys with no matches`;
+- Omit extracted keys with no matches
+- status_updates should match against the existing item they are updating (by subject similarity)
+- Items marked [CLOSED] were recently completed — still match if the extracted item is about the same topic (may be a re-raised issue or status confirmation)`;
 
 export async function POST(request: Request) {
   try {
@@ -22,7 +24,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { intake_id } = await request.json();
+    const { intake_id, vendor_id, project_id } = await request.json();
 
     if (!intake_id) {
       return NextResponse.json({ error: "Missing intake_id" }, { status: 400 });
@@ -30,7 +32,7 @@ export async function POST(request: Request) {
 
     // Fetch intake and org in parallel
     const [{ data: intake }, { data: profile }] = await Promise.all([
-      supabase.from("intakes").select("extracted_data").eq("id", intake_id).single(),
+      supabase.from("intakes").select("extracted_data, vendor_id, project_id").eq("id", intake_id).single(),
       supabase.from("profiles").select("org_id").eq("id", user.id).single(),
     ]);
 
@@ -39,24 +41,59 @@ export async function POST(request: Request) {
     }
 
     const orgId = profile.org_id;
-    const extracted = intake.extracted_data as Record<string, { title?: string; subject?: string; notes?: string; impact?: string; impact_description?: string; rationale?: string; mitigation?: string }[]>;
+    // Use passed vendor_id/project_id, fall back to intake record values
+    const scopeVendorId = vendor_id || intake.vendor_id || null;
+    const scopeProjectId = project_id || intake.project_id || null;
 
-    // Fetch existing open items in parallel
+    const extracted = intake.extracted_data as Record<string, { title?: string; subject?: string; notes?: string; impact?: string; impact_description?: string; rationale?: string; mitigation?: string; details?: string; new_status?: string }[]>;
+
+    // Build queries — scope to vendor/project if available, include recently closed (last 30 days)
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+    // Helper to build a scoped query for each table
+    function buildActionQuery() {
+      let q = supabase.from("action_items").select("id, title, status, priority, vendor_id, project_id").eq("org_id", orgId);
+      if (scopeProjectId) q = q.eq("project_id", scopeProjectId);
+      else if (scopeVendorId) q = q.eq("vendor_id", scopeVendorId);
+      // Include open items + recently completed
+      q = q.or(`status.neq.complete,updated_at.gte.${thirtyDaysAgo}`);
+      return q;
+    }
+
+    function buildBlockerQuery() {
+      let q = supabase.from("blockers").select("id, title, status, priority, vendor_id, project_id, resolved_at").eq("org_id", orgId);
+      if (scopeProjectId) q = q.eq("project_id", scopeProjectId);
+      else if (scopeVendorId) q = q.eq("vendor_id", scopeVendorId);
+      // Include unresolved + recently resolved
+      q = q.or(`resolved_at.is.null,resolved_at.gte.${thirtyDaysAgo}`);
+      return q;
+    }
+
+    function buildRaidQuery() {
+      let q = supabase.from("raid_entries").select("id, title, status, priority, raid_type, vendor_id, project_id").eq("org_id", orgId);
+      if (scopeProjectId) q = q.eq("project_id", scopeProjectId);
+      else if (scopeVendorId) q = q.eq("vendor_id", scopeVendorId);
+      // Include open + recently completed
+      q = q.or(`status.neq.complete,updated_at.gte.${thirtyDaysAgo}`);
+      return q;
+    }
+
     const [{ data: actions }, { data: blockers }, { data: raids }] = await Promise.all([
-      supabase.from("action_items").select("id, title, status, priority").eq("org_id", orgId).neq("status", "complete"),
-      supabase.from("blockers").select("id, title, status, priority").eq("org_id", orgId).is("resolved_at", null),
-      supabase.from("raid_entries").select("id, title, status, priority, raid_type").eq("org_id", orgId).neq("status", "complete"),
+      buildActionQuery(),
+      buildBlockerQuery(),
+      buildRaidQuery(),
     ]);
 
-    // Build extracted items text
+    // Build extracted items text — now including status_updates
     const extractedLines: string[] = [];
-    const categories = ["action_items", "decisions", "issues", "risks", "blockers"] as const;
+    const categories = ["action_items", "decisions", "issues", "risks", "blockers", "status_updates"] as const;
     for (const cat of categories) {
       const items = extracted[cat] || [];
       items.forEach((item, idx) => {
         const key = `${cat}-${idx}`;
-        const extra = item.notes || item.impact || item.impact_description || item.rationale || item.mitigation || "";
-        extractedLines.push(`${key}: "${item.title || item.subject}"${extra ? ` [notes: ${extra}]` : ""}`);
+        const extra = item.notes || item.impact || item.impact_description || item.rationale || item.mitigation || item.details || "";
+        const statusNote = item.new_status ? ` (status: ${item.new_status})` : "";
+        extractedLines.push(`${key}: "${item.title || item.subject}"${statusNote}${extra ? ` [notes: ${extra}]` : ""}`);
       });
     }
 
@@ -65,16 +102,19 @@ export async function POST(request: Request) {
     const existingMap = new Map<string, { title: string; status: string; priority: string; table: string; raid_type?: string }>();
 
     for (const a of (actions || [])) {
-      existingLines.push(`[A] ${a.id}: "${a.title}" (${a.status}, ${a.priority})`);
+      const closed = a.status === "complete" ? " [CLOSED]" : "";
+      existingLines.push(`[A] ${a.id}: "${a.title}" (${a.status}, ${a.priority})${closed}`);
       existingMap.set(a.id, { title: a.title, status: a.status, priority: a.priority, table: "action_items" });
     }
     for (const b of (blockers || [])) {
-      existingLines.push(`[B] ${b.id}: "${b.title}" (${b.status}, ${b.priority})`);
+      const closed = b.resolved_at ? " [CLOSED]" : "";
+      existingLines.push(`[B] ${b.id}: "${b.title}" (${b.status}, ${b.priority})${closed}`);
       existingMap.set(b.id, { title: b.title, status: b.status, priority: b.priority, table: "blockers" });
     }
     for (const r of (raids || [])) {
-      const prefix = r.raid_type === "risk" ? "R" : r.raid_type === "issue" ? "I" : r.raid_type === "assumption" ? "A" : "D";
-      existingLines.push(`[${prefix}] ${r.id}: "${r.title}" (${r.status}, ${r.priority})`);
+      const prefix = r.raid_type === "risk" ? "R" : r.raid_type === "issue" ? "I" : r.raid_type === "assumption" ? "AS" : "D";
+      const closed = r.status === "complete" ? " [CLOSED]" : "";
+      existingLines.push(`[${prefix}] ${r.id}: "${r.title}" (${r.status}, ${r.priority})${closed}`);
       existingMap.set(r.id, { title: r.title, status: r.status, priority: r.priority, table: "raid_entries", raid_type: r.raid_type });
     }
 
@@ -88,7 +128,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ matches: {} });
     }
 
-    const userContent = `NEWLY EXTRACTED:\n${extractedLines.join("\n")}\n\nEXISTING OPEN ITEMS:\n${existingLines.join("\n")}`;
+    const scopeNote = scopeProjectId
+      ? "Note: Items are scoped to the same project. Matching should be more aggressive within the same project context."
+      : scopeVendorId
+        ? "Note: Items are scoped to the same vendor. Matching should be more aggressive within the same vendor context."
+        : "";
+
+    const userContent = `${scopeNote ? scopeNote + "\n\n" : ""}NEWLY EXTRACTED:\n${extractedLines.join("\n")}\n\nEXISTING ITEMS:\n${existingLines.join("\n")}`;
 
     const response = await fetch("https://api.deepseek.com/chat/completions", {
       method: "POST",
