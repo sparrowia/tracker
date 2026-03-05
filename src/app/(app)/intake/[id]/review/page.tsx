@@ -906,7 +906,7 @@ export default function IntakeReviewPage() {
   const totalNew = totalAccepted - totalLinked;
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
+    <div className="max-w-6xl mx-auto space-y-6 pb-20">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Review Extraction</h1>
         <p className="text-sm text-gray-500 mt-1">
@@ -1387,7 +1387,7 @@ export default function IntakeReviewPage() {
       </div>
 
       {totalAccepted > 0 && (
-        <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 -mx-6 px-6 py-4">
+        <div className="fixed bottom-0 left-0 md:left-56 right-0 bg-gray-50 border-t border-gray-200 px-6 py-4 z-10">
           <div className="max-w-6xl mx-auto flex justify-between items-center">
             <p className="text-sm text-gray-600">
               {totalLinked > 0
