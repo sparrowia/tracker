@@ -78,11 +78,13 @@ export function AgendaView({
   initialItems,
   onCountChange,
   onNewItemsSuggested,
+  refreshTrigger,
 }: {
   project: Project;
   initialItems: ProjectAgendaRow[];
   onCountChange?: (count: number) => void;
   onNewItemsSuggested?: (items: { title: string; suggested_type?: string; priority?: string; description?: string }[]) => void;
+  refreshTrigger?: number;
 }) {
   const [items, setItems] = useState(initialItems);
 
@@ -338,7 +340,7 @@ export function AgendaView({
   const [hasGenerated, setHasGenerated] = useState(initialItems.length > 0);
   const [mode, setMode] = useState<"auto" | "selected">("selected");
 
-  // Always refresh agenda from RPC on mount to reflect latest include_in_meeting toggles
+  // Refresh agenda from RPC on mount and when meeting toggles change in other panels
   useEffect(() => {
     let cancelled = false;
     const rpcName = mode === "selected" ? "generate_project_agenda_from_selected" : "generate_project_agenda";
@@ -349,7 +351,19 @@ export function AgendaView({
       }
     });
     return () => { cancelled = true; };
-  }, []);
+  }, [refreshTrigger]);
+
+  function handleRemoveFromMeeting(item: ProjectAgendaRow) {
+    // agenda_items are meeting-specific by nature — don't toggle them
+    if (item.entity_type === "agenda_item") return;
+    const table = item.entity_type === "blocker" ? "blockers"
+      : item.entity_type === "action_item" ? "action_items"
+      : "raid_entries";
+    setItems((prev) => prev.filter((i) => i.entity_id !== item.entity_id));
+    supabase.from(table).update({ include_in_meeting: false }).eq("id", item.entity_id).then(({ error }) => {
+      if (error) console.error("Toggle failed:", error);
+    });
+  }
 
   async function handleGenerate() {
     if (generating) return;
@@ -494,7 +508,8 @@ export function AgendaView({
       ) : (
         <div className="bg-white rounded-lg border border-gray-300 overflow-hidden">
           {/* Column headers */}
-          <div className="grid grid-cols-[2.5rem_1fr_5.5rem_5rem_9rem_4rem_4.5rem_6.5rem] gap-0 px-3 py-2 bg-gray-50 border-b border-gray-300 text-xs font-medium text-gray-500 uppercase tracking-wide">
+          <div className="grid grid-cols-[1.5rem_2.5rem_1fr_5.5rem_5rem_9rem_4rem_4.5rem_6.5rem] gap-0 px-3 py-2 bg-gray-50 border-b border-gray-300 text-xs font-medium text-gray-500 uppercase tracking-wide">
+            <div></div>
             <div></div>
             {(["name", "priority", "type", "responsible", "age", "score"] as SortField[]).map((field) => {
               const labels: Record<SortField, string> = { name: "Name", priority: "Priority", type: "Type", responsible: "Responsible", age: "Age", score: "Score" };
@@ -554,7 +569,20 @@ export function AgendaView({
                     </div>
                   ) : (
                     <>
-                      <div onClick={() => toggleExpand(itemKey)} className="grid grid-cols-[2.5rem_1fr_5.5rem_5rem_9rem_4rem_4.5rem_6.5rem] gap-0 px-3 py-2.5 items-center hover:bg-gray-50/80 cursor-pointer transition-colors group">
+                      <div onClick={() => toggleExpand(itemKey)} className="grid grid-cols-[1.5rem_2.5rem_1fr_5.5rem_5rem_9rem_4rem_4.5rem_6.5rem] gap-0 px-3 py-2.5 items-center hover:bg-gray-50/80 cursor-pointer transition-colors group">
+                        {/* Bell toggle */}
+                        {item.entity_type !== "agenda_item" ? (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleRemoveFromMeeting(item); }}
+                            className="p-0.5 rounded transition-colors text-blue-600 hover:text-gray-400"
+                            title="Remove from meeting"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                            </svg>
+                          </button>
+                        ) : <span />}
                         <span className="text-xs font-mono text-gray-400">#{item.rank}</span>
                         <div className="min-w-0 pr-3">
                           <span className="text-sm font-semibold text-gray-900 truncate block">{item.title}</span>
@@ -716,8 +744,22 @@ export function AgendaView({
                           {/* Main row */}
                           <div
                             onClick={() => toggleExpand(itemKey)}
-                            className="grid grid-cols-[2.5rem_1fr_5.5rem_5rem_9rem_4rem_4.5rem_6.5rem] gap-0 px-3 py-2.5 items-center hover:bg-gray-50/80 cursor-pointer transition-colors group"
+                            className="grid grid-cols-[1.5rem_2.5rem_1fr_5.5rem_5rem_9rem_4rem_4.5rem_6.5rem] gap-0 px-3 py-2.5 items-center hover:bg-gray-50/80 cursor-pointer transition-colors group"
                           >
+                            {/* Bell toggle — remove from meeting */}
+                            {item.entity_type !== "agenda_item" ? (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleRemoveFromMeeting(item); }}
+                                className="p-0.5 rounded transition-colors text-blue-600 hover:text-gray-400"
+                                title="Remove from meeting"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                                  <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                                </svg>
+                              </button>
+                            ) : <span />}
+
                             {/* Rank */}
                             <span className="text-xs font-mono text-gray-400">#{item.rank}</span>
 

@@ -239,27 +239,27 @@ export default function ProjectTabs({
         />
       )}
 
-      {/* Tab content */}
+      {/* Tab content — use display:none so panels stay mounted and state persists */}
       <div className="mt-6">
-        {active === "agenda" && (
-          <AgendaView key={agendaRefreshKey} project={project} initialItems={agendaRows} onCountChange={setAgendaCount} onNewItemsSuggested={onNewItemsSuggested} />
-        )}
+        <div style={{ display: active === "agenda" ? "block" : "none" }}>
+          <AgendaView project={project} initialItems={agendaRows} onCountChange={setAgendaCount} onNewItemsSuggested={onNewItemsSuggested} refreshTrigger={agendaRefreshKey} />
+        </div>
 
-        {active === "blockers" && (
+        <div style={{ display: active === "blockers" ? "block" : "none" }}>
           <BlockersPanel blockers={blockers} people={peopleList} vendors={vendors} onPersonAdded={addPerson} addUndo={addUndo} onCountChange={setBlockerCount} intakeSourceMap={intakeSourceMap} onNewItemsSuggested={onNewItemsSuggested} registerAdder={(fn) => { itemAddersRef.current.addBlocker = fn; return () => { itemAddersRef.current.addBlocker = undefined; }; }} onMeetingToggle={bumpAgendaRefresh} />
-        )}
+        </div>
 
-        {active === "raid" && (
+        <div style={{ display: active === "raid" ? "block" : "none" }}>
           <RaidLog initialEntries={raidEntries} project={project} people={peopleList} vendors={vendors} onPersonAdded={addPerson} addUndo={addUndo} onCountChange={setRaidCount} intakeSourceMap={intakeSourceMap} />
-        )}
+        </div>
 
-        {active === "actions" && (
+        <div style={{ display: active === "actions" ? "block" : "none" }}>
           <ActionItemsPanel actions={actions} people={peopleList} vendors={vendors} onPersonAdded={addPerson} addUndo={addUndo} onCountChange={setActionCount} intakeSourceMap={intakeSourceMap} onNewItemsSuggested={onNewItemsSuggested} registerAdder={(fn) => { itemAddersRef.current.addAction = fn; return () => { itemAddersRef.current.addAction = undefined; }; }} onMeetingToggle={bumpAgendaRefresh} />
-        )}
+        </div>
 
-        {active === "intake" && (
+        <div style={{ display: active === "intake" ? "block" : "none" }}>
           <IntakePanel project={project} initialIntakes={intakes} vendors={vendors} onCountChange={setIntakeCount} />
-        )}
+        </div>
       </div>
       <UndoToast stack={undoStack} onUndo={performUndo} onDismiss={dismissUndo} />
     </div>
