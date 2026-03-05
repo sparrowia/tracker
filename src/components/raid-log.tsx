@@ -301,6 +301,15 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
           <p className="text-sm text-gray-400 p-4">None</p>
         ) : items.length === 0 ? null : (
           <div>
+            <div className="bg-gray-50 px-3 py-1 border-b border-gray-300">
+              <div className="flex items-center gap-2.5">
+                <div className="flex-1" />
+                <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide w-[68px] text-center">Priority</span>
+                <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide w-[88px] text-center">Status</span>
+                <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide w-[130px]">Owner</span>
+                <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide w-12 text-right">Age</span>
+              </div>
+            </div>
             {items.map((entry) => {
               const isExpanded = expandedId === entry.id;
               const badge = statusBadge(entry.status);
@@ -345,19 +354,25 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                       <span className="text-sm font-semibold text-gray-900 truncate min-w-0">{entry.title}</span>
                       {/* Spacer */}
                       <div className="flex-1" />
-                      {/* Metadata */}
-                      <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border flex-shrink-0 ${priorityColor(entry.priority)}`}>{priorityLabel(entry.priority)}</span>
-                      <span className={`inline-flex px-1.5 py-0.5 text-xs rounded flex-shrink-0 ${badge.className}`}>{badge.label}</span>
-                      {entry.owner ? (
-                        <div className="flex items-center gap-1 flex-shrink-0">
-                          <span className="w-5 h-5 rounded-full bg-blue-100 text-[9px] font-medium text-blue-700 flex items-center justify-center">
-                            {entry.owner.full_name.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
-                          </span>
-                          <span className="text-xs text-gray-600 max-w-[100px] truncate">{entry.owner.full_name}</span>
-                        </div>
-                      ) : (
-                        <span className="text-xs text-gray-400 italic flex-shrink-0">Unassigned</span>
-                      )}
+                      {/* Metadata — fixed-width columns */}
+                      <div className="w-[68px] flex-shrink-0 flex justify-center">
+                        <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border ${priorityColor(entry.priority)}`}>{priorityLabel(entry.priority)}</span>
+                      </div>
+                      <div className="w-[88px] flex-shrink-0 flex justify-center">
+                        <span className={`inline-flex px-1.5 py-0.5 text-xs rounded ${badge.className}`}>{badge.label}</span>
+                      </div>
+                      <div className="w-[130px] flex-shrink-0">
+                        {entry.owner ? (
+                          <div className="flex items-center gap-1">
+                            <span className="w-5 h-5 rounded-full bg-blue-100 text-[9px] font-medium text-blue-700 flex items-center justify-center flex-shrink-0">
+                              {entry.owner.full_name.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
+                            </span>
+                            <span className="text-xs text-gray-600 truncate">{entry.owner.full_name}</span>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-gray-400 italic">Unassigned</span>
+                        )}
+                      </div>
                       <span className="text-xs text-gray-500 font-medium flex-shrink-0 w-12 text-right">{formatAge(age)}</span>
                       {intakeSourceMap[entry.id] && (
                         <a

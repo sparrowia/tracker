@@ -451,6 +451,15 @@ function BlockersPanel({
       <div className="bg-red-800 px-4 py-2.5">
         <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Active Blockers ({blockers.length})</h2>
       </div>
+      <div className="bg-gray-50 px-3 py-1 border-b border-gray-300">
+        <div className="flex items-center gap-2.5">
+          <div className="flex-1" />
+          <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide w-[68px] text-center">Priority</span>
+          <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide w-[88px] text-center">Status</span>
+          <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide w-[130px]">Owner</span>
+          <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide w-12 text-right">Age</span>
+        </div>
+      </div>
       <div>
         {blockers.map((b) => {
           const isExpanded = expandedId === b.id;
@@ -484,22 +493,26 @@ function BlockersPanel({
                   <span className="text-sm font-semibold text-gray-900 truncate min-w-0">{b.title}</span>
                   {/* Spacer */}
                   <div className="flex-1" />
-                  {/* Metadata */}
-                  <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border flex-shrink-0 ${priorityColor(b.priority)}`}>{priorityLabel(b.priority)}</span>
-                  <span className={`inline-flex px-1.5 py-0.5 text-xs rounded flex-shrink-0 ${badge.className}`}>{badge.label}</span>
-                  {b.owner ? (
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                      <span className="w-5 h-5 rounded-full bg-blue-100 text-[9px] font-medium text-blue-700 flex items-center justify-center">
-                        {b.owner.full_name.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
-                      </span>
-                      <span className="text-xs text-gray-600 max-w-[100px] truncate">{b.owner.full_name}</span>
-                    </div>
-                  ) : (
-                    <span className="text-xs text-gray-400 italic flex-shrink-0">Unassigned</span>
-                  )}
-                  {b.age_days != null && (
-                    <span className="text-xs text-red-600 font-medium flex-shrink-0 w-12 text-right">{formatAge(b.age_days)}</span>
-                  )}
+                  {/* Metadata — fixed-width columns */}
+                  <div className="w-[68px] flex-shrink-0 flex justify-center">
+                    <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border ${priorityColor(b.priority)}`}>{priorityLabel(b.priority)}</span>
+                  </div>
+                  <div className="w-[88px] flex-shrink-0 flex justify-center">
+                    <span className={`inline-flex px-1.5 py-0.5 text-xs rounded ${badge.className}`}>{badge.label}</span>
+                  </div>
+                  <div className="w-[130px] flex-shrink-0">
+                    {b.owner ? (
+                      <div className="flex items-center gap-1">
+                        <span className="w-5 h-5 rounded-full bg-blue-100 text-[9px] font-medium text-blue-700 flex items-center justify-center flex-shrink-0">
+                          {b.owner.full_name.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
+                        </span>
+                        <span className="text-xs text-gray-600 truncate">{b.owner.full_name}</span>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-gray-400 italic">Unassigned</span>
+                    )}
+                  </div>
+                  <span className="text-xs text-red-600 font-medium flex-shrink-0 w-12 text-right">{b.age_days != null ? formatAge(b.age_days) : ""}</span>
                   {intakeSourceMap[b.id] && (
                     <a
                       href={`/intake/${intakeSourceMap[b.id]}/review`}
@@ -816,6 +829,15 @@ function ActionItemsPanel({
       <div className="bg-gray-800 px-4 py-2.5">
         <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Action Items ({actions.length})</h2>
       </div>
+      <div className="bg-gray-50 px-3 py-1 border-b border-gray-300">
+        <div className="flex items-center gap-2.5">
+          <div className="flex-1" />
+          <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide w-[68px] text-center">Priority</span>
+          <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide w-[88px] text-center">Status</span>
+          <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide w-[130px]">Owner</span>
+          <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide w-12 text-right">Age</span>
+        </div>
+      </div>
       <div>
         {actions.map((a) => {
           const isExpanded = expandedId === a.id;
@@ -849,22 +871,26 @@ function ActionItemsPanel({
                   <span className="text-sm font-semibold text-gray-900 truncate min-w-0">{a.title}</span>
                   {/* Spacer */}
                   <div className="flex-1" />
-                  {/* Metadata */}
-                  <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border flex-shrink-0 ${priorityColor(a.priority)}`}>{priorityLabel(a.priority)}</span>
-                  <span className={`inline-flex px-1.5 py-0.5 text-xs rounded flex-shrink-0 ${badge.className}`}>{badge.label}</span>
-                  {a.owner ? (
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                      <span className="w-5 h-5 rounded-full bg-blue-100 text-[9px] font-medium text-blue-700 flex items-center justify-center">
-                        {a.owner.full_name.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
-                      </span>
-                      <span className="text-xs text-gray-600 max-w-[100px] truncate">{a.owner.full_name}</span>
-                    </div>
-                  ) : (
-                    <span className="text-xs text-gray-400 italic flex-shrink-0">Unassigned</span>
-                  )}
-                  {a.age_days != null && (
-                    <span className="text-xs text-gray-500 font-medium flex-shrink-0 w-12 text-right">{formatAge(a.age_days)}</span>
-                  )}
+                  {/* Metadata — fixed-width columns */}
+                  <div className="w-[68px] flex-shrink-0 flex justify-center">
+                    <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border ${priorityColor(a.priority)}`}>{priorityLabel(a.priority)}</span>
+                  </div>
+                  <div className="w-[88px] flex-shrink-0 flex justify-center">
+                    <span className={`inline-flex px-1.5 py-0.5 text-xs rounded ${badge.className}`}>{badge.label}</span>
+                  </div>
+                  <div className="w-[130px] flex-shrink-0">
+                    {a.owner ? (
+                      <div className="flex items-center gap-1">
+                        <span className="w-5 h-5 rounded-full bg-blue-100 text-[9px] font-medium text-blue-700 flex items-center justify-center flex-shrink-0">
+                          {a.owner.full_name.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
+                        </span>
+                        <span className="text-xs text-gray-600 truncate">{a.owner.full_name}</span>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-gray-400 italic">Unassigned</span>
+                    )}
+                  </div>
+                  <span className="text-xs text-gray-500 font-medium flex-shrink-0 w-12 text-right">{a.age_days != null ? formatAge(a.age_days) : ""}</span>
                   {intakeSourceMap[a.id] && (
                     <a
                       href={`/intake/${intakeSourceMap[a.id]}/review`}
