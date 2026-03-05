@@ -925,7 +925,7 @@ function ActionItemsPanel({
         <div className="relative" ref={colPickerRef}>
           <button
             onClick={() => setShowColPicker((p) => !p)}
-            className="text-gray-400 hover:text-white transition-colors"
+            className="text-white hover:text-gray-300 transition-colors"
             title="Configure columns"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
