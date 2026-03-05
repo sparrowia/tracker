@@ -306,7 +306,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                 <div className="flex-1" />
                 <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide w-[68px] text-right">Priority</span>
                 <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide w-[88px] text-right">Status</span>
-                <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide w-[130px]">Owner</span>
+                <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide w-[130px] text-right">Owner</span>
                 <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide w-12 text-right">Age</span>
               </div>
             </div>
@@ -361,7 +361,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                       <div className="w-[88px] flex-shrink-0 flex justify-end">
                         <span className={`inline-flex px-1.5 py-0.5 text-xs rounded ${badge.className}`}>{badge.label}</span>
                       </div>
-                      <div className="w-[130px] flex-shrink-0">
+                      <div className="w-[130px] flex-shrink-0 flex justify-end">
                         {entry.owner ? (
                           <div className="flex items-center gap-1">
                             <span className="w-5 h-5 rounded-full bg-blue-100 text-[9px] font-medium text-blue-700 flex items-center justify-center flex-shrink-0">
