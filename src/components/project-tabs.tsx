@@ -12,6 +12,26 @@ import { useUndo, UndoToast } from "@/components/undo-toast";
 
 type Tab = "actions" | "blockers" | "raid" | "agenda" | "intake";
 
+type SuggestedItem = {
+  id: string;
+  title: string;
+  suggested_type: "action_item" | "blocker" | "risk" | "issue" | "decision" | "assumption";
+  priority: PriorityLevel;
+  description: string;
+  owner_id: string;
+};
+
+const SUGGESTED_TYPE_LABELS: Record<string, string> = {
+  action_item: "Action Item",
+  blocker: "Blocker",
+  risk: "Risk",
+  issue: "Issue",
+  decision: "Decision",
+  assumption: "Assumption",
+};
+
+const SUGGESTED_TYPE_OPTIONS: SuggestedItem["suggested_type"][] = ["action_item", "blocker", "risk", "issue", "decision", "assumption"];
+
 const TAB_LABELS: Record<Tab, string> = {
   actions: "Action Items",
   blockers: "Blockers",
@@ -59,7 +79,9 @@ export default function ProjectTabs({
   intakes: Intake[];
   intakeSourceMap?: Record<string, string>;
 }) {
+  const router = useRouter();
   const searchParams = useSearchParams();
+  const supabase = createClient();
   const [tabOrder, setTabOrder] = useState<Tab[]>(loadTabOrder);
   const urlTab = searchParams.get("tab") as Tab | null;
   const [active, setActive] = useState<Tab>(urlTab && DEFAULT_ORDER.includes(urlTab) ? urlTab : tabOrder[0]);
@@ -83,6 +105,21 @@ export default function ProjectTabs({
   }, []);
 
   const { stack: undoStack, addUndo, removeAction: dismissUndo, performUndo } = useUndo();
+
+  // Staging area for AI-suggested new items
+  const [pendingSuggestions, setPendingSuggestions] = useState<SuggestedItem[]>([]);
+
+  const onNewItemsSuggested = useCallback((items: { title: string; suggested_type?: string; priority?: string; description?: string }[]) => {
+    const mapped: SuggestedItem[] = items.map((item) => ({
+      id: crypto.randomUUID(),
+      title: item.title,
+      suggested_type: (item.suggested_type as SuggestedItem["suggested_type"]) || "action_item",
+      priority: (item.priority as PriorityLevel) || "medium",
+      description: item.description || "",
+      owner_id: "",
+    }));
+    setPendingSuggestions((prev) => [...prev, ...mapped]);
+  }, []);
 
   function countForTab(key: Tab) {
     return tabCounts[key];
@@ -178,14 +215,27 @@ export default function ProjectTabs({
         })}
       </div>
 
+      {/* Staging area for AI-suggested new items */}
+      {pendingSuggestions.length > 0 && (
+        <StagingArea
+          suggestions={pendingSuggestions}
+          setSuggestions={setPendingSuggestions}
+          project={project}
+          people={peopleList}
+          onPersonAdded={addPerson}
+          supabase={supabase}
+          onAccepted={() => router.refresh()}
+        />
+      )}
+
       {/* Tab content */}
       <div className="mt-6">
         {active === "agenda" && (
-          <AgendaView project={project} initialItems={agendaRows} onCountChange={setAgendaCount} />
+          <AgendaView project={project} initialItems={agendaRows} onCountChange={setAgendaCount} onNewItemsSuggested={onNewItemsSuggested} />
         )}
 
         {active === "blockers" && (
-          <BlockersPanel blockers={blockers} people={peopleList} vendors={vendors} onPersonAdded={addPerson} addUndo={addUndo} onCountChange={setBlockerCount} intakeSourceMap={intakeSourceMap} />
+          <BlockersPanel blockers={blockers} people={peopleList} vendors={vendors} onPersonAdded={addPerson} addUndo={addUndo} onCountChange={setBlockerCount} intakeSourceMap={intakeSourceMap} onNewItemsSuggested={onNewItemsSuggested} />
         )}
 
         {active === "raid" && (
@@ -193,7 +243,7 @@ export default function ProjectTabs({
         )}
 
         {active === "actions" && (
-          <ActionItemsPanel actions={actions} people={peopleList} vendors={vendors} onPersonAdded={addPerson} addUndo={addUndo} onCountChange={setActionCount} intakeSourceMap={intakeSourceMap} />
+          <ActionItemsPanel actions={actions} people={peopleList} vendors={vendors} onPersonAdded={addPerson} addUndo={addUndo} onCountChange={setActionCount} intakeSourceMap={intakeSourceMap} onNewItemsSuggested={onNewItemsSuggested} />
         )}
 
         {active === "intake" && (
@@ -337,6 +387,202 @@ function MeetingToggle({ active, onClick }: { active: boolean; onClick: (e: Reac
   );
 }
 
+/* ─── Staging Area for AI-Suggested Items ─── */
+
+type SupabaseClient = ReturnType<typeof createClient>;
+
+function StagingArea({
+  suggestions,
+  setSuggestions,
+  project,
+  people,
+  onPersonAdded,
+  supabase,
+  onAccepted,
+}: {
+  suggestions: SuggestedItem[];
+  setSuggestions: React.Dispatch<React.SetStateAction<SuggestedItem[]>>;
+  project: Project;
+  people: Person[];
+  onPersonAdded: (person: Person) => void;
+  supabase: SupabaseClient;
+  onAccepted: () => void;
+}) {
+  const [accepting, setAccepting] = useState<Set<string>>(new Set());
+
+  function updateSuggestion(id: string, field: keyof SuggestedItem, value: string) {
+    setSuggestions((prev) => prev.map((s) => s.id === id ? { ...s, [field]: value } : s));
+  }
+
+  function dismiss(id: string) {
+    setSuggestions((prev) => prev.filter((s) => s.id !== id));
+  }
+
+  function dismissAll() {
+    setSuggestions([]);
+  }
+
+  async function accept(item: SuggestedItem) {
+    setAccepting((prev) => new Set(prev).add(item.id));
+    const now = new Date().toISOString();
+    const base = {
+      project_id: project.id,
+      org_id: project.org_id,
+      title: item.title,
+      priority: item.priority,
+      status: "pending" as const,
+      first_flagged_at: now,
+      escalation_count: 0,
+      include_in_meeting: false,
+      ...(item.owner_id ? { owner_id: item.owner_id } : {}),
+    };
+
+    let error = null;
+    if (item.suggested_type === "action_item") {
+      const { error: e } = await supabase.from("action_items").insert({ ...base, description: item.description || null, notes: null });
+      error = e;
+    } else if (item.suggested_type === "blocker") {
+      const { error: e } = await supabase.from("blockers").insert({ ...base, description: item.description || null, impact_description: null });
+      error = e;
+    } else {
+      // RAID types: risk, issue, decision, assumption
+      const raidTypeMap: Record<string, string> = { risk: "risk", issue: "issue", decision: "decision", assumption: "assumption" };
+      const { error: e } = await supabase.from("raid_entries").insert({
+        project_id: project.id,
+        org_id: project.org_id,
+        raid_type: raidTypeMap[item.suggested_type] || "risk",
+        title: item.title,
+        description: item.description || null,
+        priority: item.priority,
+        status: "pending",
+        first_flagged_at: now,
+        escalation_count: 0,
+        include_in_meeting: false,
+        ...(item.owner_id ? { owner_id: item.owner_id } : {}),
+      });
+      error = e;
+    }
+
+    if (error) {
+      console.error("Failed to create item:", error);
+      setAccepting((prev) => { const next = new Set(prev); next.delete(item.id); return next; });
+    } else {
+      setSuggestions((prev) => prev.filter((s) => s.id !== item.id));
+      setAccepting((prev) => { const next = new Set(prev); next.delete(item.id); return next; });
+      onAccepted();
+    }
+  }
+
+  async function acceptAll() {
+    for (const item of suggestions) {
+      await accept(item);
+    }
+  }
+
+  return (
+    <div className="mt-4 mb-2 bg-blue-50 border border-blue-200 rounded-lg overflow-hidden">
+      <div className="bg-blue-100 px-4 py-2 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600">
+            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+          </svg>
+          <span className="text-xs font-semibold text-blue-800 uppercase tracking-wide">
+            AI Suggested Items ({suggestions.length})
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          {suggestions.length > 1 && (
+            <>
+              <button
+                onClick={acceptAll}
+                className="px-2.5 py-1 text-xs font-medium text-green-700 bg-green-100 border border-green-300 rounded hover:bg-green-200 transition-colors"
+              >
+                Accept All
+              </button>
+              <button
+                onClick={dismissAll}
+                className="px-2.5 py-1 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded hover:bg-gray-50 transition-colors"
+              >
+                Dismiss All
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+      <div className="divide-y divide-blue-200">
+        {suggestions.map((item) => (
+          <div key={item.id} className="px-4 py-2.5 flex items-center gap-3">
+            {/* Editable title */}
+            <input
+              type="text"
+              value={item.title}
+              onChange={(e) => updateSuggestion(item.id, "title", e.target.value)}
+              className="flex-1 min-w-0 text-sm font-semibold text-gray-900 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none px-1 py-0.5"
+            />
+            {/* Type dropdown */}
+            <select
+              value={item.suggested_type}
+              onChange={(e) => updateSuggestion(item.id, "suggested_type", e.target.value)}
+              className="text-xs rounded border border-gray-300 bg-white px-1.5 py-1 focus:border-blue-500 focus:outline-none cursor-pointer"
+            >
+              {SUGGESTED_TYPE_OPTIONS.map((t) => (
+                <option key={t} value={t}>{SUGGESTED_TYPE_LABELS[t]}</option>
+              ))}
+            </select>
+            {/* Priority dropdown */}
+            <select
+              value={item.priority}
+              onChange={(e) => updateSuggestion(item.id, "priority", e.target.value)}
+              className="text-xs rounded border border-gray-300 bg-white px-1.5 py-1 focus:border-blue-500 focus:outline-none cursor-pointer"
+            >
+              {(["critical", "high", "medium", "low"] as PriorityLevel[]).map((p) => (
+                <option key={p} value={p}>{priorityLabel(p)}</option>
+              ))}
+            </select>
+            {/* Owner picker */}
+            <div className="w-[140px] flex-shrink-0">
+              <OwnerPicker
+                value={item.owner_id}
+                onChange={(id) => updateSuggestion(item.id, "owner_id", id)}
+                people={people}
+                onPersonAdded={onPersonAdded}
+              />
+            </div>
+            {/* Accept button */}
+            <button
+              onClick={() => accept(item)}
+              disabled={accepting.has(item.id)}
+              className="p-1 text-green-600 hover:text-green-700 hover:bg-green-100 rounded transition-colors disabled:opacity-50"
+              title="Accept"
+            >
+              {accepting.has(item.id) ? (
+                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                </svg>
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              )}
+            </button>
+            {/* Dismiss button */}
+            <button
+              onClick={() => dismiss(item.id)}
+              className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+              title="Dismiss"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function BlockersPanel({
   blockers: initialBlockers,
   people,
@@ -345,6 +591,7 @@ function BlockersPanel({
   addUndo,
   onCountChange,
   intakeSourceMap = {},
+  onNewItemsSuggested,
 }: {
   blockers: BlockerRow[];
   people: Person[];
@@ -353,6 +600,7 @@ function BlockersPanel({
   addUndo: (label: string, undo: () => Promise<void>) => void;
   onCountChange?: (count: number) => void;
   intakeSourceMap?: Record<string, string>;
+  onNewItemsSuggested?: (items: { title: string; suggested_type?: string; priority?: string; description?: string }[]) => void;
 }) {
   const [blockers, setBlockers] = useState<BlockerRow[]>(initialBlockers);
 
@@ -467,22 +715,27 @@ function BlockersPanel({
             description: entry.description,
             priority: entry.priority,
             status: entry.status,
+            due_date: entry.due_date,
           },
           notes: callNotes,
         }),
       });
       if (res.ok) {
-        const { updates: aiUpdates } = await res.json();
+        const { updates: aiUpdates, new_items } = await res.json();
         const merged: Record<string, unknown> = {};
         if (aiUpdates.title) merged.title = aiUpdates.title;
         if (aiUpdates.priority) merged.priority = aiUpdates.priority;
         if (aiUpdates.status) merged.status = aiUpdates.status;
         if (aiUpdates.impact_description !== undefined) merged.impact_description = aiUpdates.impact_description;
         if (aiUpdates.description !== undefined) merged.description = aiUpdates.description;
+        if (aiUpdates.due_date !== undefined) merged.due_date = aiUpdates.due_date;
         setBlockers((prev) => prev.map((b) => b.id === id ? { ...b, ...merged } as BlockerRow : b));
         setCallNotes("");
         setCallNotesId(null);
         supabase.from("blockers").update(merged).eq("id", id).then(({ error }) => { if (error) console.error("Save failed:", error); });
+        if (new_items?.length > 0 && onNewItemsSuggested) {
+          onNewItemsSuggested(new_items);
+        }
       }
     } catch (err) {
       console.error("AI save failed:", err);
@@ -828,6 +1081,7 @@ function ActionItemsPanel({
   addUndo,
   onCountChange,
   intakeSourceMap = {},
+  onNewItemsSuggested,
 }: {
   actions: ActionRow[];
   people: Person[];
@@ -836,6 +1090,7 @@ function ActionItemsPanel({
   addUndo: (label: string, undo: () => Promise<void>) => void;
   onCountChange?: (count: number) => void;
   intakeSourceMap?: Record<string, string>;
+  onNewItemsSuggested?: (items: { title: string; suggested_type?: string; priority?: string; description?: string }[]) => void;
 }) {
   const [actions, setActions] = useState<ActionRow[]>(initialActions);
 
@@ -950,22 +1205,27 @@ function ActionItemsPanel({
             notes: entry.notes,
             priority: entry.priority,
             status: entry.status,
+            due_date: entry.due_date,
           },
           notes: callNotes,
         }),
       });
       if (res.ok) {
-        const { updates: aiUpdates } = await res.json();
+        const { updates: aiUpdates, new_items } = await res.json();
         const merged: Record<string, unknown> = {};
         if (aiUpdates.title) merged.title = aiUpdates.title;
         if (aiUpdates.priority) merged.priority = aiUpdates.priority;
         if (aiUpdates.status) merged.status = aiUpdates.status;
         if (aiUpdates.description !== undefined) merged.description = aiUpdates.description;
         if (aiUpdates.notes !== undefined) merged.notes = aiUpdates.notes;
+        if (aiUpdates.due_date !== undefined) merged.due_date = aiUpdates.due_date;
         setActions((prev) => prev.map((a) => a.id === id ? { ...a, ...merged } as ActionRow : a));
         setCallNotes("");
         setCallNotesId(null);
         supabase.from("action_items").update(merged).eq("id", id).then(({ error }) => { if (error) console.error("Save failed:", error); });
+        if (new_items?.length > 0 && onNewItemsSuggested) {
+          onNewItemsSuggested(new_items);
+        }
       }
     } catch (err) {
       console.error("AI save failed:", err);

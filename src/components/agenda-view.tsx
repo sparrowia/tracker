@@ -77,10 +77,12 @@ export function AgendaView({
   project,
   initialItems,
   onCountChange,
+  onNewItemsSuggested,
 }: {
   project: Project;
   initialItems: ProjectAgendaRow[];
   onCountChange?: (count: number) => void;
+  onNewItemsSuggested?: (items: { title: string; suggested_type?: string; priority?: string; description?: string }[]) => void;
 }) {
   const [items, setItems] = useState(initialItems);
 
@@ -250,7 +252,7 @@ export function AgendaView({
           return;
         }
 
-        const { updates: aiUpdates } = await res.json();
+        const { updates: aiUpdates, new_items } = await res.json();
 
         // Merge AI updates with current form values
         const merged = {
@@ -270,6 +272,7 @@ export function AgendaView({
           dbUpdates.impact_description = merged.context || null;
         }
         if (aiUpdates.status) dbUpdates.status = aiUpdates.status;
+        if (aiUpdates.due_date !== undefined) dbUpdates.due_date = aiUpdates.due_date;
 
         // AI done — optimistic: update UI immediately, save in background
         setItems((prev) =>
@@ -286,6 +289,10 @@ export function AgendaView({
         supabase.from(table).update(dbUpdates).eq("id", item.entity_id).then(({ error }) => {
           if (error) console.error("Save failed:", error);
         });
+
+        if (new_items?.length > 0 && onNewItemsSuggested) {
+          onNewItemsSuggested(new_items);
+        }
       } catch (err) {
         console.error("Save notes failed:", err);
         setSavingNotes(false);
