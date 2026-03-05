@@ -338,12 +338,12 @@ export function AgendaView({
   const [hasGenerated, setHasGenerated] = useState(initialItems.length > 0);
   const [mode, setMode] = useState<"auto" | "selected">("selected");
 
-  // Auto-load agenda on mount if not provided
+  // Always refresh agenda from RPC on mount to reflect latest include_in_meeting toggles
   useEffect(() => {
-    if (initialItems.length > 0) return;
     let cancelled = false;
-    supabase.rpc("generate_project_agenda_from_selected", { p_project_id: project.id, p_limit: 30 }).then(({ data }) => {
-      if (!cancelled && data && (data as ProjectAgendaRow[]).length > 0) {
+    const rpcName = mode === "selected" ? "generate_project_agenda_from_selected" : "generate_project_agenda";
+    supabase.rpc(rpcName, { p_project_id: project.id, p_limit: 30 }).then(({ data }) => {
+      if (!cancelled && data) {
         setItems(data as ProjectAgendaRow[]);
         setHasGenerated(true);
       }
