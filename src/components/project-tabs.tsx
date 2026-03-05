@@ -452,11 +452,11 @@ function BlockersPanel({
         <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Active Blockers ({blockers.length})</h2>
       </div>
       <div className="bg-gray-50 px-3 py-1 border-b border-gray-300">
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-4">
           <div className="flex-1" />
           <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide w-[68px] text-right">Priority</span>
           <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide w-[88px] text-right">Status</span>
-          <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide w-[130px] text-right">Owner</span>
+          <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide w-[150px] text-right">Owner</span>
           <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide w-12 text-right">Age</span>
         </div>
       </div>
@@ -472,7 +472,7 @@ function BlockersPanel({
                 className="bg-white px-3 py-2 border-b border-gray-200 last:border-b-0 cursor-pointer hover:bg-red-50/40"
                 onClick={() => toggleExpand(b.id)}
               >
-                <div className="flex items-center gap-2.5 min-w-0">
+                <div className="flex items-center gap-4 min-w-0">
                   {/* Complete button */}
                   <button
                     onClick={(e) => { e.stopPropagation(); handleResolve(b.id); }}
@@ -500,7 +500,7 @@ function BlockersPanel({
                   <div className="w-[88px] flex-shrink-0 flex justify-end">
                     <span className={`inline-flex px-1.5 py-0.5 text-xs rounded ${badge.className}`}>{badge.label}</span>
                   </div>
-                  <div className="w-[130px] flex-shrink-0 flex justify-end">
+                  <div className="w-[150px] flex-shrink-0 flex justify-end">
                     {b.owner ? (
                       <div className="flex items-center gap-1">
                         <span className="w-5 h-5 rounded-full bg-blue-100 text-[9px] font-medium text-blue-700 flex items-center justify-center flex-shrink-0">
@@ -692,7 +692,7 @@ type ActionColumnKey = "priority" | "status" | "owner" | "vendor" | "due_date" |
 const ACTION_COLUMNS: { key: ActionColumnKey; label: string; width: string }[] = [
   { key: "priority", label: "Priority", width: "w-[68px]" },
   { key: "status", label: "Status", width: "w-[88px]" },
-  { key: "owner", label: "Owner", width: "w-[130px]" },
+  { key: "owner", label: "Owner", width: "w-[150px]" },
   { key: "vendor", label: "Vendor", width: "w-[100px]" },
   { key: "due_date", label: "Due Date", width: "w-[80px]" },
   { key: "age", label: "Age", width: "w-12" },
@@ -777,7 +777,7 @@ function ActionItemsPanel({
         );
       case "owner":
         return (
-          <div className="w-[130px] flex-shrink-0 flex justify-end">
+          <div className="w-[150px] flex-shrink-0 flex justify-end">
             {a.owner ? (
               <div className="flex items-center gap-1">
                 <span className="w-5 h-5 rounded-full bg-blue-100 text-[9px] font-medium text-blue-700 flex items-center justify-center flex-shrink-0">
@@ -950,7 +950,7 @@ function ActionItemsPanel({
         </div>
       </div>
       <div className="bg-gray-50 px-3 py-1 border-b border-gray-300">
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-4">
           <div className="flex-1" />
           {ACTION_COLUMNS.filter((c) => visibleCols.includes(c.key)).map((col) => (
             <span key={col.key} className={`text-[10px] font-medium text-gray-400 uppercase tracking-wide ${col.width} text-right`}>
@@ -971,7 +971,7 @@ function ActionItemsPanel({
                 className="bg-white px-3 py-2 border-b border-gray-200 last:border-b-0 cursor-pointer hover:bg-gray-50"
                 onClick={() => toggleExpand(a.id)}
               >
-                <div className="flex items-center gap-2.5 min-w-0">
+                <div className="flex items-center gap-4 min-w-0">
                   {/* Complete button */}
                   <button
                     onClick={(e) => { e.stopPropagation(); handleResolve(a.id); }}
