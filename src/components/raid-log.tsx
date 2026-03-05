@@ -17,6 +17,7 @@ interface RaidLogProps {
   addUndo: (label: string, undo: () => Promise<void>) => void;
   onCountChange?: (count: number) => void;
   intakeSourceMap?: Record<string, string>;
+  onMeetingToggle?: () => void;
 }
 
 const raidTypes: RaidType[] = ["risk", "assumption", "issue", "decision"];
@@ -142,7 +143,7 @@ function InlineDate({ value, onSave }: { value: string | null; onSave: (v: strin
   );
 }
 
-export default function RaidLog({ initialEntries, project, people, vendors, onPersonAdded, addUndo, onCountChange, intakeSourceMap = {} }: RaidLogProps) {
+export default function RaidLog({ initialEntries, project, people, vendors, onPersonAdded, addUndo, onCountChange, intakeSourceMap = {}, onMeetingToggle }: RaidLogProps) {
   const [entries, setEntries] = useState<RaidRow[]>(initialEntries);
 
   useEffect(() => { onCountChange?.(entries.length); }, [entries.length, onCountChange]);
@@ -262,6 +263,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
     setEntries((prev) => prev.map((e) => e.id === id ? { ...e, include_in_meeting: newVal } : e));
     supabase.from("raid_entries").update({ include_in_meeting: newVal }).eq("id", id).then(({ error }) => {
       if (error) console.error("Toggle failed:", error);
+      else onMeetingToggle?.();
     });
   }
 

@@ -250,7 +250,7 @@ export default function ProjectTabs({
         </div>
 
         <div style={{ display: active === "raid" ? "block" : "none" }}>
-          <RaidLog initialEntries={raidEntries} project={project} people={peopleList} vendors={vendors} onPersonAdded={addPerson} addUndo={addUndo} onCountChange={setRaidCount} intakeSourceMap={intakeSourceMap} />
+          <RaidLog initialEntries={raidEntries} project={project} people={peopleList} vendors={vendors} onPersonAdded={addPerson} addUndo={addUndo} onCountChange={setRaidCount} intakeSourceMap={intakeSourceMap} onMeetingToggle={bumpAgendaRefresh} />
         </div>
 
         <div style={{ display: active === "actions" ? "block" : "none" }}>
