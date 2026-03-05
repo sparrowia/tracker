@@ -413,51 +413,53 @@ function BlockersPanel({
             <Fragment key={b.id}>
               {/* Collapsed row */}
               <div
-                className="bg-white p-3 border-b border-gray-200 last:border-b-0 cursor-pointer hover:bg-red-50/40"
+                className="bg-white px-3 py-2 border-b border-gray-200 last:border-b-0 cursor-pointer hover:bg-red-50/40"
                 onClick={() => toggleExpand(b.id)}
               >
-                <div className="flex items-center gap-2 flex-wrap">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="12"
-                    height="12"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className={`text-gray-400 transition-transform flex-shrink-0 ${isExpanded ? "rotate-90" : ""}`}
+                <div className="flex items-center gap-2.5 min-w-0">
+                  {/* Complete button */}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleResolve(b.id); }}
+                    className="w-[18px] h-[18px] rounded-full border-2 border-gray-300 hover:border-green-500 hover:bg-green-50 flex items-center justify-center flex-shrink-0 transition-colors group/check"
+                    title="Resolve"
                   >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-transparent group-hover/check:text-green-500 transition-colors">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  </button>
+                  {/* Expand chevron */}
+                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`text-gray-400 transition-transform flex-shrink-0 ${isExpanded ? "rotate-90" : ""}`}>
                     <polyline points="9 18 15 12 9 6" />
                   </svg>
+                  {/* Meeting toggle */}
                   <MeetingToggle active={b.include_in_meeting} onClick={(e) => { e.stopPropagation(); toggleMeeting(b.id); }} />
-                  <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border ${priorityColor(b.priority)}`}>{priorityLabel(b.priority)}</span>
-                  <span className={`inline-flex px-1.5 py-0.5 text-xs rounded ${badge.className}`}>{badge.label}</span>
-                  {b.age_days != null && (
-                    <span className="text-xs text-red-600 font-medium">{formatAge(b.age_days)}</span>
-                  )}
-                </div>
-                <p className="text-sm text-gray-900 font-semibold mt-1 ml-5">{b.title}</p>
-                <div className="flex items-center gap-3 mt-1 ml-5 text-xs text-gray-500">
+                  {/* Title */}
+                  <span className="text-sm font-semibold text-gray-900 truncate min-w-0">{b.title}</span>
+                  {/* Spacer */}
+                  <div className="flex-1" />
+                  {/* Metadata */}
+                  <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border flex-shrink-0 ${priorityColor(b.priority)}`}>{priorityLabel(b.priority)}</span>
+                  <span className={`inline-flex px-1.5 py-0.5 text-xs rounded flex-shrink-0 ${badge.className}`}>{badge.label}</span>
                   {b.owner ? (
-                    <div className="flex items-center gap-1">
-                      <span className="w-4 h-4 rounded-full bg-blue-100 text-[9px] font-medium text-blue-700 flex items-center justify-center flex-shrink-0">
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <span className="w-5 h-5 rounded-full bg-blue-100 text-[9px] font-medium text-blue-700 flex items-center justify-center">
                         {b.owner.full_name.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
                       </span>
-                      <span>{b.owner.full_name}</span>
+                      <span className="text-xs text-gray-600 max-w-[100px] truncate">{b.owner.full_name}</span>
                     </div>
                   ) : (
-                    <span className="text-gray-400 italic">Unassigned</span>
+                    <span className="text-xs text-gray-400 italic flex-shrink-0">Unassigned</span>
                   )}
-                  {b.vendor && <span className="text-gray-400">| {b.vendor.name}</span>}
+                  {b.age_days != null && (
+                    <span className="text-xs text-red-600 font-medium flex-shrink-0 w-12 text-right">{formatAge(b.age_days)}</span>
+                  )}
                   {intakeSourceMap[b.id] && (
                     <a
                       href={`/intake/${intakeSourceMap[b.id]}/review`}
                       onClick={(e) => e.stopPropagation()}
-                      className="text-blue-500 hover:text-blue-700 hover:underline"
+                      className="text-xs text-blue-500 hover:text-blue-700 hover:underline flex-shrink-0"
                     >
-                      View source
+                      Source
                     </a>
                   )}
                 </div>
@@ -874,51 +876,53 @@ function ActionItemsPanel({
             <Fragment key={a.id}>
               {/* Collapsed row */}
               <div
-                className="bg-white p-3 border-b border-gray-200 last:border-b-0 cursor-pointer hover:bg-gray-50"
+                className="bg-white px-3 py-2 border-b border-gray-200 last:border-b-0 cursor-pointer hover:bg-gray-50"
                 onClick={() => toggleExpand(a.id)}
               >
-                <div className="flex items-center gap-2 flex-wrap">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="12"
-                    height="12"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className={`text-gray-400 transition-transform flex-shrink-0 ${isExpanded ? "rotate-90" : ""}`}
+                <div className="flex items-center gap-2.5 min-w-0">
+                  {/* Complete button */}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleResolve(a.id); }}
+                    className="w-[18px] h-[18px] rounded-full border-2 border-gray-300 hover:border-green-500 hover:bg-green-50 flex items-center justify-center flex-shrink-0 transition-colors group/check"
+                    title="Complete"
                   >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-transparent group-hover/check:text-green-500 transition-colors">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  </button>
+                  {/* Expand chevron */}
+                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`text-gray-400 transition-transform flex-shrink-0 ${isExpanded ? "rotate-90" : ""}`}>
                     <polyline points="9 18 15 12 9 6" />
                   </svg>
+                  {/* Meeting toggle */}
                   <MeetingToggle active={a.include_in_meeting} onClick={(e) => { e.stopPropagation(); toggleMeeting(a.id); }} />
-                  <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border ${priorityColor(a.priority)}`}>{priorityLabel(a.priority)}</span>
-                  <span className={`inline-flex px-1.5 py-0.5 text-xs rounded ${badge.className}`}>{badge.label}</span>
-                  {a.age_days != null && (
-                    <span className="text-xs text-gray-500 font-medium">{formatAge(a.age_days)}</span>
-                  )}
-                </div>
-                <p className="text-sm text-gray-900 font-semibold mt-1 ml-5">{a.title}</p>
-                <div className="flex items-center gap-3 mt-1 ml-5 text-xs text-gray-500">
+                  {/* Title */}
+                  <span className="text-sm font-semibold text-gray-900 truncate min-w-0">{a.title}</span>
+                  {/* Spacer */}
+                  <div className="flex-1" />
+                  {/* Metadata */}
+                  <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border flex-shrink-0 ${priorityColor(a.priority)}`}>{priorityLabel(a.priority)}</span>
+                  <span className={`inline-flex px-1.5 py-0.5 text-xs rounded flex-shrink-0 ${badge.className}`}>{badge.label}</span>
                   {a.owner ? (
-                    <div className="flex items-center gap-1">
-                      <span className="w-4 h-4 rounded-full bg-blue-100 text-[9px] font-medium text-blue-700 flex items-center justify-center flex-shrink-0">
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <span className="w-5 h-5 rounded-full bg-blue-100 text-[9px] font-medium text-blue-700 flex items-center justify-center">
                         {a.owner.full_name.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
                       </span>
-                      <span>{a.owner.full_name}</span>
+                      <span className="text-xs text-gray-600 max-w-[100px] truncate">{a.owner.full_name}</span>
                     </div>
                   ) : (
-                    <span className="text-gray-400 italic">Unassigned</span>
+                    <span className="text-xs text-gray-400 italic flex-shrink-0">Unassigned</span>
                   )}
-                  {a.vendor && <span className="text-gray-400">| {a.vendor.name}</span>}
+                  {a.age_days != null && (
+                    <span className="text-xs text-gray-500 font-medium flex-shrink-0 w-12 text-right">{formatAge(a.age_days)}</span>
+                  )}
                   {intakeSourceMap[a.id] && (
                     <a
                       href={`/intake/${intakeSourceMap[a.id]}/review`}
                       onClick={(e) => e.stopPropagation()}
-                      className="text-blue-500 hover:text-blue-700 hover:underline"
+                      className="text-xs text-blue-500 hover:text-blue-700 hover:underline flex-shrink-0"
                     >
-                      View source
+                      Source
                     </a>
                   )}
                 </div>

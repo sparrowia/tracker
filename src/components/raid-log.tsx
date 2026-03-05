@@ -284,24 +284,25 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                 <Fragment key={entry.id}>
                   {/* Collapsed row */}
                   <div
-                    className="bg-white p-3 border-b border-gray-200 last:border-b-0 cursor-pointer hover:bg-gray-50"
+                    className="bg-white px-3 py-2 border-b border-gray-200 last:border-b-0 cursor-pointer hover:bg-gray-50"
                     onClick={() => toggleExpand(entry.id)}
                   >
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="12"
-                        height="12"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        className={`text-gray-400 transition-transform flex-shrink-0 ${isExpanded ? "rotate-90" : ""}`}
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      {/* Complete button */}
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleResolve(entry.id); }}
+                        className="w-[18px] h-[18px] rounded-full border-2 border-gray-300 hover:border-green-500 hover:bg-green-50 flex items-center justify-center flex-shrink-0 transition-colors group/check"
+                        title="Resolve"
                       >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-transparent group-hover/check:text-green-500 transition-colors">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                      </button>
+                      {/* Expand chevron */}
+                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`text-gray-400 transition-transform flex-shrink-0 ${isExpanded ? "rotate-90" : ""}`}>
                         <polyline points="9 18 15 12 9 6" />
                       </svg>
+                      {/* Meeting toggle */}
                       <button
                         onClick={(e) => { e.stopPropagation(); toggleMeeting(entry.id); }}
                         className={`p-0.5 rounded transition-colors flex-shrink-0 ${entry.include_in_meeting ? "text-blue-600" : "text-gray-400 hover:text-gray-500"}`}
@@ -312,30 +313,33 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                           <path d="M13.73 21a2 2 0 0 1-3.46 0" />
                         </svg>
                       </button>
-                      <span className="text-xs font-mono text-gray-400">{entry.display_id}</span>
-                      <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border ${priorityColor(entry.priority)}`}>{priorityLabel(entry.priority)}</span>
-                      <span className={`inline-flex px-1.5 py-0.5 text-xs rounded ${badge.className}`}>{badge.label}</span>
-                    </div>
-                    <p className="text-sm text-gray-900 font-semibold mt-1 ml-5">{entry.title}</p>
-                    <div className="flex items-center gap-3 mt-1 ml-5 text-xs text-gray-500">
+                      {/* Display ID */}
+                      <span className="text-xs font-mono text-gray-400 flex-shrink-0">{entry.display_id}</span>
+                      {/* Title */}
+                      <span className="text-sm font-semibold text-gray-900 truncate min-w-0">{entry.title}</span>
+                      {/* Spacer */}
+                      <div className="flex-1" />
+                      {/* Metadata */}
+                      <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border flex-shrink-0 ${priorityColor(entry.priority)}`}>{priorityLabel(entry.priority)}</span>
+                      <span className={`inline-flex px-1.5 py-0.5 text-xs rounded flex-shrink-0 ${badge.className}`}>{badge.label}</span>
                       {entry.owner ? (
-                        <div className="flex items-center gap-1">
-                          <span className="w-4 h-4 rounded-full bg-blue-100 text-[9px] font-medium text-blue-700 flex items-center justify-center flex-shrink-0">
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <span className="w-5 h-5 rounded-full bg-blue-100 text-[9px] font-medium text-blue-700 flex items-center justify-center">
                             {entry.owner.full_name.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
                           </span>
-                          <span>{entry.owner.full_name}</span>
+                          <span className="text-xs text-gray-600 max-w-[100px] truncate">{entry.owner.full_name}</span>
                         </div>
                       ) : (
-                        <span className="text-gray-400 italic">Unassigned</span>
+                        <span className="text-xs text-gray-400 italic flex-shrink-0">Unassigned</span>
                       )}
-                      <span>{formatAge(age)}</span>
+                      <span className="text-xs text-gray-500 font-medium flex-shrink-0 w-12 text-right">{formatAge(age)}</span>
                       {intakeSourceMap[entry.id] && (
                         <a
                           href={`/intake/${intakeSourceMap[entry.id]}/review`}
                           onClick={(e) => e.stopPropagation()}
-                          className="text-blue-500 hover:text-blue-700 hover:underline"
+                          className="text-xs text-blue-500 hover:text-blue-700 hover:underline flex-shrink-0"
                         >
-                          View source
+                          Source
                         </a>
                       )}
                     </div>
