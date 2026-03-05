@@ -167,8 +167,13 @@ Do NOT use `npx vercel` — the CLI is scoped to the wrong Vercel team. Rely on 
 
 ## Related Documentation
 
-- [`CLAUDE.md`](./CLAUDE.md) — AI assistant instructions, conventions, and guardrails
-- [`src/lib/types.ts`](./src/lib/types.ts) — all TypeScript interfaces and enums
-- [`src/lib/utils.ts`](./src/lib/utils.ts) — formatting helpers (priority colors, status badges, dates)
-- [`supabase/migrations/`](./supabase/migrations/) — full database schema history
-- [`.env.local.example`](./.env.local.example) — required environment variables
+All docs live in this repo: [github.com/sparrowia/tracker](https://github.com/sparrowia/tracker)
+
+| Document | Purpose |
+|----------|---------|
+| [`CLAUDE.md`](https://github.com/sparrowia/tracker/blob/main/CLAUDE.md) | AI assistant instructions, conventions, and guardrails |
+| [`src/lib/types.ts`](https://github.com/sparrowia/tracker/blob/main/src/lib/types.ts) | All TypeScript interfaces and enums |
+| [`src/lib/utils.ts`](https://github.com/sparrowia/tracker/blob/main/src/lib/utils.ts) | Formatting helpers (priority colors, status badges, dates) |
+| [`supabase/migrations/`](https://github.com/sparrowia/tracker/tree/main/supabase/migrations) | Full database schema history (7 migrations) |
+| [`.env.local.example`](https://github.com/sparrowia/tracker/blob/main/.env.local.example) | Required environment variables |
+| [`PROMPT.md`](https://github.com/sparrowia/tracker/blob/main/PROMPT.md) | Bootstrap prompt for AI assistants |
