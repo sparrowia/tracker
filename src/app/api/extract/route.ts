@@ -39,6 +39,18 @@ export async function POST(request: Request) {
 
     // Build source-specific hints
     const source = (intakeRecord as { source?: string } | null)?.source || "manual";
+
+    // Asana export: deterministic parser, skip DeepSeek entirely
+    if (source === "asana") {
+      const { parseAsanaExport } = await import("@/lib/parsers/asana");
+      const extracted = parseAsanaExport(raw_text, ctx.peopleNames);
+      await supabase
+        .from("intakes")
+        .update({ extracted_data: extracted, extraction_status: "complete" })
+        .eq("id", intake_id);
+      return NextResponse.json({ success: true, data: extracted });
+    }
+
     const sourceHint = SOURCE_HINTS[source] || SOURCE_HINTS.manual;
 
     // Compose full system prompt

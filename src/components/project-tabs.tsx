@@ -1560,6 +1560,7 @@ const SOURCE_LABELS: Record<IntakeSource, string> = {
   fathom_transcript: "Fathom",
   manual: "Manual",
   spreadsheet: "Spreadsheet",
+  asana: "Asana",
 };
 
 const SOURCE_COLORS: Record<IntakeSource, string> = {
@@ -1569,6 +1570,7 @@ const SOURCE_COLORS: Record<IntakeSource, string> = {
   fathom_transcript: "bg-yellow-100 text-yellow-700",
   manual: "bg-gray-100 text-gray-600",
   spreadsheet: "bg-orange-100 text-orange-700",
+  asana: "bg-pink-100 text-pink-700",
 };
 
 const EXTRACTION_STATUS_LABELS: Record<string, { label: string; className: string }> = {
