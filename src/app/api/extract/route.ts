@@ -57,13 +57,55 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: result.error }, { status: result.status });
     }
 
+    // Post-process: validate and repair source_quotes
+    const extracted = result.data as Record<string, { source_quote?: string }[]>;
+    const lowerText = raw_text.toLowerCase();
+    for (const items of Object.values(extracted)) {
+      if (!Array.isArray(items)) continue;
+      for (const item of items) {
+        if (!item.source_quote) continue;
+        // Check if quote exists verbatim
+        if (raw_text.includes(item.source_quote)) continue;
+        // Try case-insensitive match
+        const lowerQuote = item.source_quote.toLowerCase();
+        const ciIdx = lowerText.indexOf(lowerQuote);
+        if (ciIdx !== -1) {
+          // Replace with exact-case version from original text
+          item.source_quote = raw_text.slice(ciIdx, ciIdx + item.source_quote.length);
+          continue;
+        }
+        // Try sliding window: find best substring match using word overlap
+        const quoteWords = lowerQuote.split(/\s+/).filter(Boolean);
+        if (quoteWords.length < 3) { item.source_quote = null as unknown as string; continue; }
+        let bestScore = 0;
+        let bestStart = -1;
+        let bestLen = 0;
+        const textWords = raw_text.split(/\s+/);
+        for (let start = 0; start < textWords.length; start++) {
+          for (let len = Math.max(3, quoteWords.length - 2); len <= Math.min(textWords.length - start, quoteWords.length + 2); len++) {
+            const windowWords = textWords.slice(start, start + len).map((w: string) => w.toLowerCase());
+            const overlap = quoteWords.filter((w: string) => windowWords.includes(w)).length;
+            const score = overlap / Math.max(quoteWords.length, windowWords.length);
+            if (score > bestScore && score >= 0.6) {
+              bestScore = score;
+              bestStart = start;
+              bestLen = len;
+            }
+          }
+        }
+        if (bestStart >= 0) {
+          item.source_quote = textWords.slice(bestStart, bestStart + bestLen).join(" ");
+        }
+      }
+    }
+
     // Save extracted data to intake
     await supabase
       .from("intakes")
-      .update({ extracted_data: result.data, extraction_status: "complete" })
+      .update({ extracted_data: extracted, extraction_status: "complete" })
       .eq("id", intake_id);
 
-    return NextResponse.json({ success: true, data: result.data });
+    return NextResponse.json({ success: true, data: extracted });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Internal server error" },

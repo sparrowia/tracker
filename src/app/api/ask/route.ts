@@ -10,14 +10,28 @@ function detectCategories(q: string): Set<DataCategory> {
   const lq = q.toLowerCase();
   const cats = new Set<DataCategory>();
 
-  if (/action\s*item|task|todo|assigned|owner|due|overdue/.test(lq)) cats.add("actions");
-  if (/blocker|block|stuck|impediment/.test(lq)) cats.add("blockers");
-  if (/raid|risk|assumption|issue|decision|pending decision/.test(lq)) cats.add("raid");
-  if (/ticket|support|case/.test(lq)) cats.add("tickets");
-  if (/project|health|initiative|status/.test(lq)) cats.add("projects");
-  if (/vendor|company|partner/.test(lq)) cats.add("vendors");
-  if (/who|person|people|team|contact|assigned|owner/.test(lq)) cats.add("people");
-  if (/resolved|completed|done|closed|last week|recently|update/.test(lq)) cats.add("resolved");
+  if (/action\s*item|task|todo|assigned|owner|due|overdue|deliverable|follow.?up|pending|open items|work\s*item|responsible/.test(lq)) cats.add("actions");
+  if (/blocker|block|stuck|impediment|holding|waiting\s+on|depend|delay/.test(lq)) cats.add("blockers");
+  if (/raid|risk|assumption|issue|decision|pending decision|concern|escalat|threat|mitigat/.test(lq)) cats.add("raid");
+  if (/ticket|support|case|help\s*desk/.test(lq)) cats.add("tickets");
+  if (/project|health|initiative|status|progress|timeline|milestone|on\s*track/.test(lq)) cats.add("projects");
+  if (/vendor|company|partner|supplier|contractor/.test(lq)) cats.add("vendors");
+  if (/who|person|people|team|contact|assigned|owner|responsible|workload|capacity|most\s+task/.test(lq)) cats.add("people");
+  if (/resolved|completed|done|closed|last week|recently|update|this week|changed|progress/.test(lq)) cats.add("resolved");
+
+  // Questions about specific quantities or comparisons need both people and actions/blockers
+  if (/how\s+many|most|least|count|total|number\s+of/.test(lq)) {
+    cats.add("actions");
+    cats.add("blockers");
+    cats.add("people");
+  }
+
+  // "What should we" / priority questions need actions + blockers + raid
+  if (/what\s+should|prioriti[sz]|urgent|focus|next|important|critical/.test(lq)) {
+    cats.add("actions");
+    cats.add("blockers");
+    cats.add("raid");
+  }
 
   if (cats.size === 0 || (cats.size === 1 && cats.has("people"))) {
     cats.add("actions");
@@ -25,7 +39,7 @@ function detectCategories(q: string): Set<DataCategory> {
     cats.add("raid");
   }
 
-  if (/everything|all\s|summary|overview/.test(lq)) {
+  if (/everything|all\s|summary|overview|full\s+picture|brief|catch\s+me\s+up/.test(lq)) {
     cats.add("actions");
     cats.add("blockers");
     cats.add("raid");

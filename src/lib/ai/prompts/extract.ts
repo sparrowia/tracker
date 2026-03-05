@@ -12,6 +12,7 @@ Return a JSON object with these arrays (each can be empty):
       "priority": "critical|high|medium|low",
       "due_date": "YYYY-MM-DD or null",
       "notes": "Additional context",
+      "confidence": "high|medium|low",
       "source_quote": "Exact short phrase from the original text that this item was extracted from"
     }
   ],
@@ -21,6 +22,7 @@ Return a JSON object with these arrays (each can be empty):
       "rationale": "Why this was decided",
       "made_by": "Person's name or null",
       "decision_date": "YYYY-MM-DD or null",
+      "confidence": "high|medium|low",
       "source_quote": "Exact short phrase from the original text"
     }
   ],
@@ -35,6 +37,7 @@ Return a JSON object with these arrays (each can be empty):
       "attachments": "Screenshot/video URLs or references, or null",
       "notes": "Additional context or null",
       "updates": "Response/resolution/next-step info or null",
+      "confidence": "high|medium|low",
       "source_quote": "Exact short phrase from the original text"
     }
   ],
@@ -44,6 +47,7 @@ Return a JSON object with these arrays (each can be empty):
       "priority": "critical|high|medium|low",
       "impact": "Potential impact",
       "mitigation": "Suggested mitigation or null",
+      "confidence": "high|medium|low",
       "source_quote": "Exact short phrase from the original text"
     }
   ],
@@ -53,6 +57,7 @@ Return a JSON object with these arrays (each can be empty):
       "impact_description": "What this prevents",
       "owner_name": "Person responsible or null",
       "priority": "critical|high|medium|low",
+      "confidence": "high|medium|low",
       "source_quote": "Exact short phrase from the original text"
     }
   ],
@@ -61,6 +66,7 @@ Return a JSON object with these arrays (each can be empty):
       "subject": "What was updated",
       "new_status": "pending|in_progress|complete|needs_verification|paused|at_risk|blocked",
       "details": "Additional context",
+      "confidence": "high|medium|low",
       "source_quote": "Exact short phrase from the original text"
     }
   ]
@@ -72,8 +78,9 @@ Rules:
 - Infer priority from language (urgent, ASAP, critical = high/critical; when possible = low)
 - Dates should be in YYYY-MM-DD format
 - Keep titles concise but descriptive
+- confidence: "high" = explicitly stated with clear details; "medium" = clearly implied but requires some interpretation; "low" = inferred from vague or ambiguous language
 - Do not fabricate information not present in the text, EXCEPT for term corrections (see below) which MUST be applied
-- source_quote MUST be a verbatim substring copied exactly from the input text (5-15 words). It will be used for text search, so it must match exactly. Do NOT apply term corrections to source_quote — it must match the original text
+- source_quote MUST be a verbatim substring copied character-for-character from the input text (5-15 words). It will be used for indexOf() text search, so it MUST match exactly — same punctuation, same capitalization, same spacing. Do NOT apply term corrections to source_quote. If you cannot find a good verbatim substring, use the most distinctive 5-8 words from the relevant sentence
 - Return ONLY valid JSON, no other text`;
 
 export const SOURCE_HINTS: Record<string, string> = {

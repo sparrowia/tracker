@@ -165,33 +165,33 @@ export default function IntakePage() {
 
   async function ocrImages(images: PastedImage[]): Promise<string> {
     const { createWorker } = await import("tesseract.js");
-    const worker = await createWorker("eng");
-    const texts: string[] = [];
-    const MIN_CONFIDENCE = 40; // Skip blocks with very low confidence
+    const MIN_CONFIDENCE = 40;
 
-    for (let i = 0; i < images.length; i++) {
-      setProgressStep(`Preprocessing image ${i + 1} of ${images.length}...`);
-      const processed = await preprocessImage(images[i].dataUrl);
+    // Preprocess all images in parallel
+    setProgressStep(`Preprocessing ${images.length} image${images.length > 1 ? "s" : ""}...`);
+    const processed = await Promise.all(images.map((img) => preprocessImage(img.dataUrl)));
 
-      setProgressStep(`Reading image ${i + 1} of ${images.length}...`);
-      const { data } = await worker.recognize(processed);
+    // OCR all images in parallel with separate workers
+    setProgressStep(`Reading ${images.length} image${images.length > 1 ? "s" : ""}...`);
+    const ocrResults = await Promise.all(
+      processed.map(async (dataUrl) => {
+        const worker = await createWorker("eng");
+        const { data } = await worker.recognize(dataUrl);
+        await worker.terminate();
 
-      // Filter out low-confidence paragraphs via blocks
-      if (data.blocks && data.blocks.length > 0) {
-        const goodText = data.blocks
-          .flatMap((b) => b.paragraphs)
-          .filter((p) => p.confidence >= MIN_CONFIDENCE)
-          .map((p) => p.text.trim())
-          .filter(Boolean)
-          .join("\n");
-        if (goodText) texts.push(goodText);
-      } else if (data.text.trim()) {
-        texts.push(data.text.trim());
-      }
-    }
+        if (data.blocks && data.blocks.length > 0) {
+          return data.blocks
+            .flatMap((b) => b.paragraphs)
+            .filter((p) => p.confidence >= MIN_CONFIDENCE)
+            .map((p) => p.text.trim())
+            .filter(Boolean)
+            .join("\n");
+        }
+        return data.text.trim();
+      })
+    );
 
-    await worker.terminate();
-    return texts.join("\n\n");
+    return ocrResults.filter(Boolean).join("\n\n");
   }
 
   async function handleFileSelect(file: File) {

@@ -32,6 +32,7 @@ interface ExtractedItem {
   new_status?: string | null;
   details?: string | null;
   subject?: string | null;
+  confidence?: "high" | "medium" | "low" | null;
   source_quote?: string | null;
   date_reported?: string | null;
   attachments?: string | null;
@@ -57,6 +58,24 @@ const categoryLabels: Record<EntityCategory, string> = {
   blockers: "Blockers",
   status_updates: "Status Updates",
 };
+
+/** Simple Levenshtein distance for fuzzy name matching */
+function levenshtein(a: string, b: string): number {
+  const m = a.length, n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  const dp: number[] = Array.from({ length: n + 1 }, (_, i) => i);
+  for (let i = 1; i <= m; i++) {
+    let prev = i - 1;
+    dp[0] = i;
+    for (let j = 1; j <= n; j++) {
+      const tmp = dp[j];
+      dp[j] = a[i - 1] === b[j - 1] ? prev : 1 + Math.min(prev, dp[j], dp[j - 1]);
+      prev = tmp;
+    }
+  }
+  return dp[n];
+}
 
 const categoryColors: Record<EntityCategory, string> = {
   action_items: "border-blue-200 bg-blue-50",
@@ -248,43 +267,29 @@ export default function IntakeReviewPage() {
           status_updates: ed.status_updates || [],
         };
 
+        // Sort items by confidence: low first (needs most review), then medium, then high
+        const confidenceRank = { low: 0, medium: 1, high: 2 };
+        function sortByConfidence(items: ExtractedItem[]): ExtractedItem[] {
+          return [...items].sort((a, b) =>
+            (confidenceRank[a.confidence || "high"] ?? 2) - (confidenceRank[b.confidence || "high"] ?? 2)
+          );
+        }
+        function prepItems(items: ExtractedItem[]): ExtractedItem[] {
+          return sortByConfidence(items).map((i) => ({
+            ...i,
+            _accepted: undefined,
+            _project_id: defaultProjectId,
+            _vendor_id: defaultVendorId,
+          }));
+        }
+
         setExtracted({
-          action_items: (ed.action_items || []).map((i: ExtractedItem) => ({
-            ...i,
-            _accepted: undefined,
-            _project_id: defaultProjectId,
-            _vendor_id: defaultVendorId,
-          })),
-          decisions: (ed.decisions || []).map((i: ExtractedItem) => ({
-            ...i,
-            _accepted: undefined,
-            _project_id: defaultProjectId,
-            _vendor_id: defaultVendorId,
-          })),
-          issues: (ed.issues || []).map((i: ExtractedItem) => ({
-            ...i,
-            _accepted: undefined,
-            _project_id: defaultProjectId,
-            _vendor_id: defaultVendorId,
-          })),
-          risks: (ed.risks || []).map((i: ExtractedItem) => ({
-            ...i,
-            _accepted: undefined,
-            _project_id: defaultProjectId,
-            _vendor_id: defaultVendorId,
-          })),
-          blockers: (ed.blockers || []).map((i: ExtractedItem) => ({
-            ...i,
-            _accepted: undefined,
-            _project_id: defaultProjectId,
-            _vendor_id: defaultVendorId,
-          })),
-          status_updates: (ed.status_updates || []).map((i: ExtractedItem) => ({
-            ...i,
-            _accepted: undefined,
-            _project_id: defaultProjectId,
-            _vendor_id: defaultVendorId,
-          })),
+          action_items: prepItems(ed.action_items || []),
+          decisions: prepItems(ed.decisions || []),
+          issues: prepItems(ed.issues || []),
+          risks: prepItems(ed.risks || []),
+          blockers: prepItems(ed.blockers || []),
+          status_updates: prepItems(ed.status_updates || []),
         });
       }
 
@@ -438,6 +443,22 @@ export default function IntakeReviewPage() {
 
   function dismissMatch(category: EntityCategory, index: number, existingId: string) {
     setDismissedMatches((prev) => new Set([...prev, `${category}-${index}-${existingId}`]));
+    // Log match dismissal for feedback loop (fire-and-forget)
+    const item = extracted[category]?.[index];
+    if (item && intake) {
+      supabase.from("profiles").select("org_id").single().then(({ data: profile }) => {
+        if (!profile?.org_id) return;
+        supabase.from("correction_log").insert({
+          org_id: profile.org_id,
+          intake_id: intake.id,
+          extracted_category: category,
+          extracted_title: item.title || item.subject || "",
+          extracted_priority: item.priority || null,
+          correction_type: "match_dismissed",
+          corrected_value: existingId,
+        });
+      });
+    }
   }
 
   async function handleConfirm() {
@@ -476,19 +497,35 @@ export default function IntakeReviewPage() {
         }
       }
 
-      // Create missing people
-      for (const name of allOwnerNames) {
+      // Fuzzy person matching: check exact, substring, first/last name, and Levenshtein distance
+      function fuzzyFindPerson(name: string): string | null {
         const lower = name.toLowerCase();
-        let found = false;
-        if (peopleMap.has(lower)) { found = true; }
-        if (!found) {
-          for (const [fullName] of peopleMap) {
-            if (fullName.includes(lower) || lower.includes(fullName)) { found = true; break; }
-            const parts = fullName.split(" ");
-            if (parts.some((part) => part === lower)) { found = true; break; }
-          }
+        if (peopleMap.has(lower)) return peopleMap.get(lower)!;
+        // Substring / contains match
+        for (const [fullName, id] of peopleMap) {
+          if (fullName.includes(lower) || lower.includes(fullName)) return id;
         }
-        if (!found) {
+        // First or last name match
+        const inputParts = lower.split(/\s+/);
+        for (const [fullName, id] of peopleMap) {
+          const existingParts = fullName.split(/\s+/);
+          // Any input part matches any existing part (first name, last name)
+          if (inputParts.some((ip) => existingParts.some((ep) => ep === ip))) return id;
+        }
+        // Levenshtein distance ≤ 2 on full name (catches typos like "Jon" vs "John")
+        for (const [fullName, id] of peopleMap) {
+          if (levenshtein(lower, fullName) <= 2) return id;
+          // Also check individual parts for close matches
+          const existingParts = fullName.split(/\s+/);
+          if (inputParts.some((ip) => existingParts.some((ep) => levenshtein(ip, ep) <= 1))) return id;
+        }
+        return null;
+      }
+
+      // Create missing people (only if no fuzzy match found)
+      for (const name of allOwnerNames) {
+        const match = fuzzyFindPerson(name);
+        if (!match) {
           const { data: newPerson, error: personErr } = await supabase
             .from("people")
             .insert({ full_name: name, org_id: orgId, is_internal: false })
@@ -503,17 +540,8 @@ export default function IntakeReviewPage() {
 
       function findPersonId(name: string | null | undefined): string | null {
         if (!name) return null;
-        const lower = name.trim().toLowerCase();
-        if (peopleMap.has(lower)) return peopleMap.get(lower)!;
-        for (const [fullName, id] of peopleMap) {
-          if (fullName.includes(lower) || lower.includes(fullName)) return id;
-          const parts = fullName.split(" ");
-          if (parts.some((part) => part === lower)) return id;
-        }
-        return null;
+        return fuzzyFindPerson(name.trim());
       }
-
-      const errors: string[] = [];
 
       // Collect all accepted new items, grouped by effective type
       const byEffectiveType: Record<EntityCategory, ExtractedItem[]> = {
@@ -527,9 +555,29 @@ export default function IntakeReviewPage() {
         }
       }
 
-      // Create action items
-      if (byEffectiveType.action_items.length > 0) {
-        const { error: err } = await supabase.from("action_items").insert(
+      // Batch insert with rollback tracking: collect created IDs so we can clean up on failure
+      const createdIds: { table: string; ids: string[] }[] = [];
+
+      async function batchInsert(table: string, rows: Record<string, unknown>[]) {
+        if (rows.length === 0) return;
+        const { data, error: err } = await supabase.from(table).insert(rows).select("id");
+        if (err) throw new Error(`${table}: ${err.message}`);
+        if (data) createdIds.push({ table, ids: data.map((r: { id: string }) => r.id) });
+      }
+
+      async function rollbackCreated() {
+        for (const { table, ids } of createdIds) {
+          if (ids.length > 0) {
+            await supabase.from(table).delete().in("id", ids);
+          }
+        }
+      }
+
+      try {
+        const today = new Date().toISOString().split("T")[0];
+
+        // Create action items
+        await batchInsert("action_items",
           byEffectiveType.action_items.map((item) => ({
             org_id: orgId,
             title: item.title || item.subject,
@@ -538,100 +586,94 @@ export default function IntakeReviewPage() {
             project_id: item._project_id || null,
             priority: item.priority || "medium",
             due_date: item.due_date || null,
-            first_flagged_at: new Date().toISOString().split("T")[0],
+            first_flagged_at: today,
             notes: item.notes || item.details || item.rationale || item.impact_description || null,
           }))
         );
-        if (err) errors.push(`Action items: ${err.message}`);
-      }
 
-      // Create decisions as RAID entries
-      if (byEffectiveType.decisions.length > 0) {
-        const { count } = await supabase
-          .from("raid_entries")
-          .select("*", { count: "exact", head: true })
-          .eq("org_id", orgId)
-          .eq("raid_type", "decision");
+        // Create decisions as RAID entries
+        if (byEffectiveType.decisions.length > 0) {
+          const { count } = await supabase
+            .from("raid_entries")
+            .select("*", { count: "exact", head: true })
+            .eq("org_id", orgId)
+            .eq("raid_type", "decision");
 
-        const { error: err } = await supabase.from("raid_entries").insert(
-          byEffectiveType.decisions.map((item, idx) => ({
-            org_id: orgId,
-            raid_type: "decision" as const,
-            display_id: `D${(count || 0) + idx + 1}`,
-            title: item.title || item.subject,
-            description: item.rationale || item.notes || item.details || null,
-            owner_id: findPersonId(item.made_by || item.owner_name),
-            project_id: item._project_id || null,
-            decision_date: item.decision_date || null,
-            first_flagged_at: item.decision_date || new Date().toISOString().split("T")[0],
-            priority: "medium" as const,
-          }))
-        );
-        if (err) errors.push(`Decisions: ${err.message}`);
-      }
-
-      // Create issues as RAID entries
-      if (byEffectiveType.issues.length > 0) {
-        const { count } = await supabase
-          .from("raid_entries")
-          .select("*", { count: "exact", head: true })
-          .eq("org_id", orgId)
-          .eq("raid_type", "issue");
-
-        const { error: err } = await supabase.from("raid_entries").insert(
-          byEffectiveType.issues.map((item, idx) => {
-            const descParts: string[] = [];
-            if (item.reporter_name) descParts.push(`Reporter: ${item.reporter_name}`);
-            if (item.notes) descParts.push(item.notes);
-            if (item.updates) descParts.push(`--- Updates ---\n${item.updates}`);
-            if (item.attachments) descParts.push(`--- Screenshots/Videos ---\n${item.attachments}`);
-            const description = descParts.length > 0 ? descParts.join("\n\n") : (item.details || item.rationale || null);
-
-            return {
+          await batchInsert("raid_entries",
+            byEffectiveType.decisions.map((item, idx) => ({
               org_id: orgId,
-              raid_type: "issue" as const,
-              display_id: `I${(count || 0) + idx + 1}`,
+              raid_type: "decision" as const,
+              display_id: `D${(count || 0) + idx + 1}`,
+              title: item.title || item.subject,
+              description: item.rationale || item.notes || item.details || null,
+              owner_id: findPersonId(item.made_by || item.owner_name),
+              project_id: item._project_id || null,
+              decision_date: item.decision_date || null,
+              first_flagged_at: item.decision_date || today,
+              priority: "medium" as const,
+            }))
+          );
+        }
+
+        // Create issues as RAID entries
+        if (byEffectiveType.issues.length > 0) {
+          const { count } = await supabase
+            .from("raid_entries")
+            .select("*", { count: "exact", head: true })
+            .eq("org_id", orgId)
+            .eq("raid_type", "issue");
+
+          await batchInsert("raid_entries",
+            byEffectiveType.issues.map((item, idx) => {
+              const descParts: string[] = [];
+              if (item.reporter_name) descParts.push(`Reporter: ${item.reporter_name}`);
+              if (item.notes) descParts.push(item.notes);
+              if (item.updates) descParts.push(`--- Updates ---\n${item.updates}`);
+              if (item.attachments) descParts.push(`--- Screenshots/Videos ---\n${item.attachments}`);
+              const description = descParts.length > 0 ? descParts.join("\n\n") : (item.details || item.rationale || null);
+
+              return {
+                org_id: orgId,
+                raid_type: "issue" as const,
+                display_id: `I${(count || 0) + idx + 1}`,
+                title: item.title || item.subject,
+                impact: item.impact || item.impact_description || null,
+                description,
+                priority: item.priority || "medium",
+                owner_id: findPersonId(item.owner_name),
+                project_id: item._project_id || null,
+                vendor_id: item._vendor_id || null,
+                first_flagged_at: item.date_reported || today,
+              };
+            })
+          );
+        }
+
+        // Create risks as RAID entries
+        if (byEffectiveType.risks.length > 0) {
+          const { count } = await supabase
+            .from("raid_entries")
+            .select("*", { count: "exact", head: true })
+            .eq("org_id", orgId)
+            .eq("raid_type", "risk");
+
+          await batchInsert("raid_entries",
+            byEffectiveType.risks.map((item, idx) => ({
+              org_id: orgId,
+              raid_type: "risk" as const,
+              display_id: `R${(count || 0) + idx + 1}`,
               title: item.title || item.subject,
               impact: item.impact || item.impact_description || null,
-              description,
+              description: item.mitigation || item.notes || item.details || null,
               priority: item.priority || "medium",
-              owner_id: findPersonId(item.owner_name),
               project_id: item._project_id || null,
-              vendor_id: item._vendor_id || null,
-              first_flagged_at: item.date_reported || new Date().toISOString().split("T")[0],
-            };
-          })
-        );
-        if (err) errors.push(`Issues: ${err.message}`);
-      }
+              first_flagged_at: today,
+            }))
+          );
+        }
 
-      // Create risks as RAID entries
-      if (byEffectiveType.risks.length > 0) {
-        const { count } = await supabase
-          .from("raid_entries")
-          .select("*", { count: "exact", head: true })
-          .eq("org_id", orgId)
-          .eq("raid_type", "risk");
-
-        const { error: err } = await supabase.from("raid_entries").insert(
-          byEffectiveType.risks.map((item, idx) => ({
-            org_id: orgId,
-            raid_type: "risk" as const,
-            display_id: `R${(count || 0) + idx + 1}`,
-            title: item.title || item.subject,
-            impact: item.impact || item.impact_description || null,
-            description: item.mitigation || item.notes || item.details || null,
-            priority: item.priority || "medium",
-            project_id: item._project_id || null,
-            first_flagged_at: new Date().toISOString().split("T")[0],
-          }))
-        );
-        if (err) errors.push(`Risks: ${err.message}`);
-      }
-
-      // Create blockers
-      if (byEffectiveType.blockers.length > 0) {
-        const { error: err } = await supabase.from("blockers").insert(
+        // Create blockers
+        await batchInsert("blockers",
           byEffectiveType.blockers.map((item) => ({
             org_id: orgId,
             title: item.title || item.subject,
@@ -640,13 +682,17 @@ export default function IntakeReviewPage() {
             vendor_id: item._vendor_id || null,
             project_id: item._project_id || null,
             priority: item.priority || "high",
-            first_flagged_at: new Date().toISOString().split("T")[0],
+            first_flagged_at: today,
           }))
         );
-        if (err) errors.push(`Blockers: ${err.message}`);
+      } catch (batchErr) {
+        // Rollback all previously created items
+        await rollbackCreated();
+        throw batchErr;
       }
 
-      // Update linked items
+      // Update linked items (these are updates to existing records, tracked separately)
+      const errors: string[] = [];
       for (const [cat, items] of Object.entries(extracted) as [EntityCategory, ExtractedItem[]][]) {
         for (const item of items) {
           if (item._accepted !== true || !item._linked_to) continue;
@@ -1117,6 +1163,13 @@ export default function IntakeReviewPage() {
                               {item.priority && (
                                 <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border ${priorityColor(item.priority)}`}>
                                   {priorityLabel(item.priority)}
+                                </span>
+                              )}
+                              {item.confidence && item.confidence !== "high" && (
+                                <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border ${
+                                  item.confidence === "low" ? "border-red-300 bg-red-50 text-red-700" : "border-yellow-300 bg-yellow-50 text-yellow-700"
+                                }`}>
+                                  {item.confidence} confidence
                                 </span>
                               )}
                               {item.new_status && (
