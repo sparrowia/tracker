@@ -132,6 +132,10 @@ export default function ProjectTabs({
     return tabCounts[key];
   }
 
+  // Incremented when meeting toggles change so AgendaView remounts with fresh data
+  const [agendaRefreshKey, setAgendaRefreshKey] = useState(0);
+  const bumpAgendaRefresh = useCallback(() => setAgendaRefreshKey((k) => k + 1), []);
+
   const setBlockerCount = useCallback((n: number) => setTabCounts((p) => ({ ...p, blockers: n })), []);
   const setActionCount = useCallback((n: number) => setTabCounts((p) => ({ ...p, actions: n })), []);
   const setRaidCount = useCallback((n: number) => setTabCounts((p) => ({ ...p, raid: n })), []);
@@ -238,11 +242,11 @@ export default function ProjectTabs({
       {/* Tab content */}
       <div className="mt-6">
         {active === "agenda" && (
-          <AgendaView project={project} initialItems={agendaRows} onCountChange={setAgendaCount} onNewItemsSuggested={onNewItemsSuggested} />
+          <AgendaView key={agendaRefreshKey} project={project} initialItems={agendaRows} onCountChange={setAgendaCount} onNewItemsSuggested={onNewItemsSuggested} />
         )}
 
         {active === "blockers" && (
-          <BlockersPanel blockers={blockers} people={peopleList} vendors={vendors} onPersonAdded={addPerson} addUndo={addUndo} onCountChange={setBlockerCount} intakeSourceMap={intakeSourceMap} onNewItemsSuggested={onNewItemsSuggested} registerAdder={(fn) => { itemAddersRef.current.addBlocker = fn; return () => { itemAddersRef.current.addBlocker = undefined; }; }} />
+          <BlockersPanel blockers={blockers} people={peopleList} vendors={vendors} onPersonAdded={addPerson} addUndo={addUndo} onCountChange={setBlockerCount} intakeSourceMap={intakeSourceMap} onNewItemsSuggested={onNewItemsSuggested} registerAdder={(fn) => { itemAddersRef.current.addBlocker = fn; return () => { itemAddersRef.current.addBlocker = undefined; }; }} onMeetingToggle={bumpAgendaRefresh} />
         )}
 
         {active === "raid" && (
@@ -250,7 +254,7 @@ export default function ProjectTabs({
         )}
 
         {active === "actions" && (
-          <ActionItemsPanel actions={actions} people={peopleList} vendors={vendors} onPersonAdded={addPerson} addUndo={addUndo} onCountChange={setActionCount} intakeSourceMap={intakeSourceMap} onNewItemsSuggested={onNewItemsSuggested} registerAdder={(fn) => { itemAddersRef.current.addAction = fn; return () => { itemAddersRef.current.addAction = undefined; }; }} />
+          <ActionItemsPanel actions={actions} people={peopleList} vendors={vendors} onPersonAdded={addPerson} addUndo={addUndo} onCountChange={setActionCount} intakeSourceMap={intakeSourceMap} onNewItemsSuggested={onNewItemsSuggested} registerAdder={(fn) => { itemAddersRef.current.addAction = fn; return () => { itemAddersRef.current.addAction = undefined; }; }} onMeetingToggle={bumpAgendaRefresh} />
         )}
 
         {active === "intake" && (
@@ -604,6 +608,7 @@ function BlockersPanel({
   intakeSourceMap = {},
   onNewItemsSuggested,
   registerAdder,
+  onMeetingToggle,
 }: {
   blockers: BlockerRow[];
   people: Person[];
@@ -614,6 +619,7 @@ function BlockersPanel({
   intakeSourceMap?: Record<string, string>;
   onNewItemsSuggested?: (items: { title: string; suggested_type?: string; priority?: string; description?: string }[]) => void;
   registerAdder?: (fn: (item: BlockerRow) => void) => () => void;
+  onMeetingToggle?: () => void;
 }) {
   const [blockers, setBlockers] = useState<BlockerRow[]>(initialBlockers);
 
@@ -771,6 +777,7 @@ function BlockersPanel({
     setBlockers((prev) => prev.map((b) => b.id === id ? { ...b, include_in_meeting: newVal } : b));
     supabase.from("blockers").update({ include_in_meeting: newVal }).eq("id", id).then(({ error }) => {
       if (error) console.error("Toggle failed:", error);
+      else onMeetingToggle?.();
     });
   }
 
@@ -1094,6 +1101,7 @@ function ActionItemsPanel({
   intakeSourceMap = {},
   onNewItemsSuggested,
   registerAdder,
+  onMeetingToggle,
 }: {
   actions: ActionRow[];
   people: Person[];
@@ -1104,6 +1112,7 @@ function ActionItemsPanel({
   intakeSourceMap?: Record<string, string>;
   onNewItemsSuggested?: (items: { title: string; suggested_type?: string; priority?: string; description?: string }[]) => void;
   registerAdder?: (fn: (item: ActionRow) => void) => () => void;
+  onMeetingToggle?: () => void;
 }) {
   const [actions, setActions] = useState<ActionRow[]>(initialActions);
 
@@ -1261,6 +1270,7 @@ function ActionItemsPanel({
     setActions((prev) => prev.map((a) => a.id === id ? { ...a, include_in_meeting: newVal } : a));
     supabase.from("action_items").update({ include_in_meeting: newVal }).eq("id", id).then(({ error }) => {
       if (error) console.error("Toggle failed:", error);
+      else onMeetingToggle?.();
     });
   }
 
