@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Fragment } from "react";
+import { useState, useEffect, useRef, Fragment } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { priorityColor, priorityLabel, statusBadge, formatAge, formatDateShort } from "@/lib/utils";
 import type { RaidEntry, RaidType, PriorityLevel, ItemStatus, Person, Vendor, Project } from "@/lib/types";
@@ -25,6 +25,33 @@ const statusOptions: ItemStatus[] = ["pending", "in_progress", "complete", "need
 const riskStatusOptions: ItemStatus[] = ["identified", "assessing", "in_progress", "mitigated", "closed"];
 
 const typePrefix: Record<RaidType, string> = { risk: "R", assumption: "A", issue: "I", decision: "D" };
+
+type RaidColumnKey = "priority" | "status" | "owner" | "vendor" | "age" | "escalations" | "first_flagged";
+
+const RAID_COLUMNS: { key: RaidColumnKey; label: string; width: string }[] = [
+  { key: "priority", label: "Priority", width: "w-[68px]" },
+  { key: "status", label: "Status", width: "w-[88px]" },
+  { key: "owner", label: "Owner", width: "w-[150px]" },
+  { key: "vendor", label: "Vendor", width: "w-[100px]" },
+  { key: "age", label: "Age", width: "w-12" },
+  { key: "escalations", label: "Escalations", width: "w-[72px]" },
+  { key: "first_flagged", label: "Flagged", width: "w-[80px]" },
+];
+
+const DEFAULT_RAID_COLS: RaidColumnKey[] = ["priority", "status", "owner", "age"];
+const RAID_COL_STORAGE_KEY = "raid-columns";
+
+function loadRaidColumns(): RaidColumnKey[] {
+  if (typeof window === "undefined") return DEFAULT_RAID_COLS;
+  try {
+    const stored = localStorage.getItem(RAID_COL_STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored) as RaidColumnKey[];
+      if (parsed.length > 0 && parsed.every((k) => RAID_COLUMNS.some((c) => c.key === k))) return parsed;
+    }
+  } catch {}
+  return DEFAULT_RAID_COLS;
+}
 
 function ageFromDate(date: string): number {
   const diff = Date.now() - new Date(date).getTime();
@@ -124,7 +151,72 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
   const [addingType, setAddingType] = useState<RaidType | null>(null);
   const [addTitle, setAddTitle] = useState("");
   const [addPriority, setAddPriority] = useState<PriorityLevel>("medium");
+  const [visibleCols, setVisibleCols] = useState<RaidColumnKey[]>(loadRaidColumns);
+  const [showColPicker, setShowColPicker] = useState(false);
+  const colPickerRef = useRef<HTMLDivElement>(null);
   const supabase = createClient();
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (colPickerRef.current && !colPickerRef.current.contains(e.target as Node)) setShowColPicker(false);
+    }
+    if (showColPicker) document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showColPicker]);
+
+  function toggleColumn(key: RaidColumnKey) {
+    setVisibleCols((prev) => {
+      const next = prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key];
+      try { localStorage.setItem(RAID_COL_STORAGE_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }
+
+  function renderColumnCell(entry: RaidRow, col: RaidColumnKey) {
+    const badge = statusBadge(entry.status);
+    const age = ageFromDate(entry.first_flagged_at);
+    switch (col) {
+      case "priority":
+        return (
+          <div className="w-[68px] flex-shrink-0 flex justify-end">
+            <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border ${priorityColor(entry.priority)}`}>{priorityLabel(entry.priority)}</span>
+          </div>
+        );
+      case "status":
+        return (
+          <div className="w-[88px] flex-shrink-0 flex justify-end">
+            <span className={`inline-flex px-1.5 py-0.5 text-xs rounded ${badge.className}`}>{badge.label}</span>
+          </div>
+        );
+      case "owner":
+        return (
+          <div className="w-[150px] flex-shrink-0 flex justify-end">
+            {entry.owner ? (
+              <div className="flex items-center gap-1">
+                <span className="w-5 h-5 rounded-full bg-blue-100 text-[9px] font-medium text-blue-700 flex items-center justify-center flex-shrink-0">
+                  {entry.owner.full_name.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
+                </span>
+                <span className="text-xs text-gray-600 truncate">{entry.owner.full_name}</span>
+              </div>
+            ) : (
+              <span className="text-xs text-gray-400 italic">Unassigned</span>
+            )}
+          </div>
+        );
+      case "vendor":
+        return (
+          <div className="w-[100px] flex-shrink-0 text-right">
+            <span className="text-xs text-gray-600 truncate block">{entry.vendor?.name || "—"}</span>
+          </div>
+        );
+      case "age":
+        return <span className="text-xs text-gray-500 font-medium flex-shrink-0 w-12 text-right">{formatAge(age)}</span>;
+      case "escalations":
+        return <span className="text-xs text-gray-600 flex-shrink-0 w-[72px] text-right">{entry.escalation_count > 0 ? `${entry.escalation_count}x` : "None"}</span>;
+      case "first_flagged":
+        return <span className="text-xs text-gray-500 flex-shrink-0 w-[80px] text-right">{new Date(entry.first_flagged_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>;
+    }
+  }
 
   function saveField(id: string, field: string, value: string) {
     const entry = entries.find((e) => e.id === id);
@@ -253,12 +345,40 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
       <div className="rounded-lg border border-gray-300 overflow-hidden">
         <div className="bg-gray-700 px-4 h-9 flex items-center justify-between">
           <h3 className="text-xs font-semibold text-white uppercase tracking-wide">{label} ({items.length})</h3>
-          <button
-            onClick={() => { setAddingType(addingType === raidType ? null : raidType); setAddTitle(""); setAddPriority("medium"); }}
-            className="text-xs text-blue-300 hover:text-white transition-colors"
-          >
-            + Add {label.slice(0, -1)}
-          </button>
+          <div className="flex items-center gap-3">
+            <div className="relative" ref={colPickerRef}>
+              <button
+                onClick={() => setShowColPicker((p) => !p)}
+                className="text-white hover:text-gray-300 transition-colors"
+                title="Configure columns"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                </svg>
+              </button>
+              {showColPicker && (
+                <div className="absolute right-0 top-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg z-20 py-1 w-44">
+                  {RAID_COLUMNS.map((col) => (
+                    <label key={col.key} className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 cursor-pointer text-xs text-gray-700">
+                      <input
+                        type="checkbox"
+                        checked={visibleCols.includes(col.key)}
+                        onChange={() => toggleColumn(col.key)}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      {col.label}
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+            <button
+              onClick={() => { setAddingType(addingType === raidType ? null : raidType); setAddTitle(""); setAddPriority("medium"); }}
+              className="text-xs text-blue-300 hover:text-white transition-colors"
+            >
+              + Add {label.slice(0, -1)}
+            </button>
+          </div>
         </div>
         {addingType === raidType && (
           <div className="bg-blue-50 border-b border-blue-200 p-3">
@@ -304,10 +424,11 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
             <div className="bg-gray-50 px-3 py-1 border-b border-gray-300">
               <div className="flex items-center gap-4">
                 <div className="flex-1" />
-                <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide w-[68px] text-right">Priority</span>
-                <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide w-[88px] text-right">Status</span>
-                <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide w-[150px] text-right">Owner</span>
-                <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide w-12 text-right">Age</span>
+                {RAID_COLUMNS.filter((c) => visibleCols.includes(c.key)).map((col) => (
+                  <span key={col.key} className={`text-[10px] font-medium text-gray-400 uppercase tracking-wide ${col.width} text-right`}>
+                    {col.label}
+                  </span>
+                ))}
               </div>
             </div>
             {items.map((entry) => {
@@ -354,26 +475,10 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                       <span className="text-sm font-semibold text-gray-900 truncate min-w-0">{entry.title}</span>
                       {/* Spacer */}
                       <div className="flex-1" />
-                      {/* Metadata — fixed-width columns */}
-                      <div className="w-[68px] flex-shrink-0 flex justify-end">
-                        <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border ${priorityColor(entry.priority)}`}>{priorityLabel(entry.priority)}</span>
-                      </div>
-                      <div className="w-[88px] flex-shrink-0 flex justify-end">
-                        <span className={`inline-flex px-1.5 py-0.5 text-xs rounded ${badge.className}`}>{badge.label}</span>
-                      </div>
-                      <div className="w-[150px] flex-shrink-0 flex justify-end">
-                        {entry.owner ? (
-                          <div className="flex items-center gap-1">
-                            <span className="w-5 h-5 rounded-full bg-blue-100 text-[9px] font-medium text-blue-700 flex items-center justify-center flex-shrink-0">
-                              {entry.owner.full_name.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
-                            </span>
-                            <span className="text-xs text-gray-600 truncate">{entry.owner.full_name}</span>
-                          </div>
-                        ) : (
-                          <span className="text-xs text-gray-400 italic">Unassigned</span>
-                        )}
-                      </div>
-                      <span className="text-xs text-gray-500 font-medium flex-shrink-0 w-12 text-right">{formatAge(age)}</span>
+                      {/* Metadata — dynamic columns */}
+                      {visibleCols.map((col) => (
+                        <Fragment key={col}>{renderColumnCell(entry, col)}</Fragment>
+                      ))}
                       {intakeSourceMap[entry.id] && (
                         <a
                           href={`/intake/${intakeSourceMap[entry.id]}/review`}
