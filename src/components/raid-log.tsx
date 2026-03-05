@@ -618,85 +618,80 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
 
                   {/* Expanded detail — inline editable */}
                   {isExpanded && (
-                    <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
-                      <div className="space-y-2">
-                        <div>
-                          <span className="text-xs font-medium text-gray-500 uppercase">Title</span>
-                          <InlineText value={entry.title} onSave={(v) => saveField(entry.id, "title", v)} />
-                        </div>
-                        <div className="grid grid-cols-2 gap-3 text-sm">
-                          <div>
-                            <span className="text-xs font-medium text-gray-500 uppercase">Impact</span>
-                            <InlineText value={entry.impact || ""} onSave={(v) => saveField(entry.id, "impact", v)} multiline placeholder="Add impact..." />
-                          </div>
-                          <div>
-                            <span className="text-xs font-medium text-gray-500 uppercase">Description</span>
-                            <InlineText value={entry.description || ""} onSave={(v) => saveField(entry.id, "description", v)} multiline placeholder="Add description..." />
-                          </div>
-                          <div onClick={(e) => e.stopPropagation()}>
-                            <span className="text-xs font-medium text-gray-500 uppercase">Type</span>
+                    <div className="bg-white border-b border-gray-200" onClick={(e) => e.stopPropagation()}>
+                      {/* Title section */}
+                      <div className="px-5 pt-4 pb-3 text-base font-semibold text-gray-900">
+                        <InlineText value={entry.title} onSave={(v) => saveField(entry.id, "title", v)} />
+                      </div>
+
+                      {/* Properties grid */}
+                      <div className="border-t border-gray-100">
+                        <div className="grid grid-cols-[120px_1fr_120px_1fr] items-center">
+                          {/* Row: Type / Priority */}
+                          <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-100">Type</span>
+                          <div className="px-3 py-2.5 border-b border-gray-100">
                             <select
                               value={entry.raid_type}
                               onChange={(e) => saveField(entry.id, "raid_type", e.target.value)}
-                              className="block w-full text-sm rounded border border-transparent hover:border-gray-300 bg-transparent py-0.5 mt-0.5 focus:border-blue-500 focus:outline-none cursor-pointer"
+                              className="text-sm rounded border border-transparent hover:border-gray-300 bg-transparent py-0 focus:border-blue-500 focus:outline-none cursor-pointer -ml-0.5"
                             >
                               {raidTypes.map((t) => (
                                 <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
                               ))}
                             </select>
                           </div>
-                          <div onClick={(e) => e.stopPropagation()}>
-                            <span className="text-xs font-medium text-gray-500 uppercase">Priority</span>
+                          <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-100">Priority</span>
+                          <div className="px-3 py-2.5 border-b border-gray-100">
                             <select
                               value={entry.priority}
                               onChange={(e) => saveField(entry.id, "priority", e.target.value)}
-                              className="block w-full text-sm rounded border border-transparent hover:border-gray-300 bg-transparent py-0.5 mt-0.5 focus:border-blue-500 focus:outline-none cursor-pointer"
+                              className="text-sm rounded border border-transparent hover:border-gray-300 bg-transparent py-0 focus:border-blue-500 focus:outline-none cursor-pointer -ml-0.5"
                             >
                               {priorityOptions.map((p) => (
                                 <option key={p} value={p}>{priorityLabel(p)}</option>
                               ))}
                             </select>
                           </div>
-                          <div onClick={(e) => e.stopPropagation()}>
-                            <span className="text-xs font-medium text-gray-500 uppercase">Status</span>
+
+                          {/* Row: Status / Owner */}
+                          <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-100">Status</span>
+                          <div className="px-3 py-2.5 border-b border-gray-100">
                             <select
                               value={entry.status}
                               onChange={(e) => saveField(entry.id, "status", e.target.value)}
-                              className="block w-full text-sm rounded border border-transparent hover:border-gray-300 bg-transparent py-0.5 mt-0.5 focus:border-blue-500 focus:outline-none cursor-pointer"
+                              className="text-sm rounded border border-transparent hover:border-gray-300 bg-transparent py-0 focus:border-blue-500 focus:outline-none cursor-pointer -ml-0.5"
                             >
                               {(entry.raid_type === "risk" ? riskStatusOptions : statusOptions).map((s) => (
                                 <option key={s} value={s}>{s.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase())}</option>
                               ))}
                             </select>
                           </div>
-                          <div onClick={(e) => e.stopPropagation()}>
-                            <span className="text-xs font-medium text-gray-500 uppercase">Owner</span>
-                            <div className="mt-0.5">
-                              <OwnerPicker
-                                value={entry.owner_id || ""}
-                                onChange={(id) => saveField(entry.id, "owner_id", id)}
-                                people={people}
-                                onPersonAdded={onPersonAdded}
-                              />
-                            </div>
+                          <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-100">Owner</span>
+                          <div className="px-3 py-1.5 border-b border-gray-100">
+                            <OwnerPicker
+                              value={entry.owner_id || ""}
+                              onChange={(id) => saveField(entry.id, "owner_id", id)}
+                              people={people}
+                              onPersonAdded={onPersonAdded}
+                            />
                           </div>
-                          <div onClick={(e) => e.stopPropagation()}>
-                            <span className="text-xs font-medium text-gray-500 uppercase">Reporter</span>
-                            <div className="mt-0.5">
-                              <OwnerPicker
-                                value={entry.reporter_id || ""}
-                                onChange={(id) => saveField(entry.id, "reporter_id", id)}
-                                people={people}
-                                onPersonAdded={onPersonAdded}
-                              />
-                            </div>
+
+                          {/* Row: Reporter / Vendor */}
+                          <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-100">Reporter</span>
+                          <div className="px-3 py-1.5 border-b border-gray-100">
+                            <OwnerPicker
+                              value={entry.reporter_id || ""}
+                              onChange={(id) => saveField(entry.id, "reporter_id", id)}
+                              people={people}
+                              onPersonAdded={onPersonAdded}
+                            />
                           </div>
-                          <div onClick={(e) => e.stopPropagation()}>
-                            <span className="text-xs font-medium text-gray-500 uppercase">Vendor</span>
+                          <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-100">Vendor</span>
+                          <div className="px-3 py-2.5 border-b border-gray-100">
                             <select
                               value={entry.vendor_id || ""}
                               onChange={(e) => saveField(entry.id, "vendor_id", e.target.value)}
-                              className="block w-full text-sm rounded border border-transparent hover:border-gray-300 bg-transparent py-0.5 mt-0.5 focus:border-blue-500 focus:outline-none cursor-pointer"
+                              className="text-sm rounded border border-transparent hover:border-gray-300 bg-transparent py-0 focus:border-blue-500 focus:outline-none cursor-pointer -ml-0.5"
                             >
                               <option value="">None</option>
                               {vendors.map((v) => (
@@ -704,39 +699,76 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                               ))}
                             </select>
                           </div>
+
+                          {/* Row: Flagged / Escalations */}
+                          <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-100">Flagged</span>
+                          <div className="px-3 py-2.5 border-b border-gray-100">
+                            <span className="text-sm text-gray-700">{new Date(entry.first_flagged_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
+                          </div>
+                          <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-100">Escalations</span>
+                          <div className="px-3 py-2.5 border-b border-gray-100">
+                            <span className="text-sm text-gray-700">{entry.escalation_count > 0 ? `${entry.escalation_count}x` : "None"}</span>
+                          </div>
+
+                          {/* Conditional: Decision Date / Resolved */}
                           {entry.raid_type === "decision" && (
-                            <div>
-                              <span className="text-xs font-medium text-gray-500 uppercase">Decision Date</span>
-                              <InlineDate value={entry.decision_date} onSave={(v) => saveField(entry.id, "decision_date", v)} />
-                            </div>
+                            <>
+                              <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-100">Decision Date</span>
+                              <div className="px-3 py-2.5 border-b border-gray-100 col-span-3">
+                                <InlineDate value={entry.decision_date} onSave={(v) => saveField(entry.id, "decision_date", v)} />
+                              </div>
+                            </>
                           )}
-                          <div>
-                            <span className="text-xs font-medium text-gray-500 uppercase">First Flagged</span>
-                            <p className="text-gray-900 mt-0.5">{new Date(entry.first_flagged_at).toLocaleDateString()}</p>
-                          </div>
-                          <div>
-                            <span className="text-xs font-medium text-gray-500 uppercase">Escalations</span>
-                            <p className="text-gray-900 mt-0.5">{entry.escalation_count > 0 ? `${entry.escalation_count}x` : "None"}</p>
-                          </div>
                           {entry.resolved_at && (
-                            <div>
-                              <span className="text-xs font-medium text-gray-500 uppercase">Resolved</span>
-                              <p className="text-gray-900 mt-0.5">{formatDateShort(entry.resolved_at)}</p>
-                            </div>
+                            <>
+                              <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-100">Resolved</span>
+                              <div className="px-3 py-2.5 border-b border-gray-100 col-span-3">
+                                <span className="text-sm text-gray-700">{formatDateShort(entry.resolved_at)}</span>
+                              </div>
+                            </>
                           )}
                         </div>
-                        <div className="flex justify-end items-center gap-3 pt-2 border-t border-gray-300 mt-3">
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleDelete(entry.id); }}
-                            className="text-gray-400 hover:text-red-600 transition-colors"
-                            title="Delete"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <polyline points="3 6 5 6 21 6"/>
-                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                            </svg>
-                          </button>
-                        </div>
+                      </div>
+
+                      {/* Description & Impact */}
+                      <div className="px-5 py-3 space-y-3">
+                        {(entry.description || entry.impact) ? (
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Description</span>
+                              <InlineText value={entry.description || ""} onSave={(v) => saveField(entry.id, "description", v)} multiline placeholder="Add description..." />
+                            </div>
+                            <div>
+                              <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Impact</span>
+                              <InlineText value={entry.impact || ""} onSave={(v) => saveField(entry.id, "impact", v)} multiline placeholder="Add impact..." />
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Description</span>
+                              <InlineText value="" onSave={(v) => saveField(entry.id, "description", v)} multiline placeholder="Add description..." />
+                            </div>
+                            <div>
+                              <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Impact</span>
+                              <InlineText value="" onSave={(v) => saveField(entry.id, "impact", v)} multiline placeholder="Add impact..." />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Actions bar */}
+                      <div className="flex justify-end items-center gap-3 px-5 py-2 border-t border-gray-100">
+                        <button
+                          onClick={() => handleDelete(entry.id)}
+                          className="text-gray-400 hover:text-red-600 transition-colors"
+                          title="Delete"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="3 6 5 6 21 6"/>
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                          </svg>
+                        </button>
                       </div>
                     </div>
                   )}
