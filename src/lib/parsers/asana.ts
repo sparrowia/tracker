@@ -62,6 +62,13 @@ const SECTION_HEADERS = [
   "blocked",
 ];
 
+// Known Asana field names — NOT person names
+const KNOWN_FIELD_NAMES = new Set([
+  "status", "priority", "name", "description", "url", "os", "browser",
+  "issue type", "type", "content", "due", "assignee", "reporter",
+  "created", "modified", "completed", "section", "project", "tags",
+]);
+
 // Checkbox characters used in Asana PDF exports
 const CHECKBOX_RE = /^[□☐☑✓✔✅⬜]\s*/;
 
@@ -154,11 +161,32 @@ export function parseAsanaExport(
   return result;
 }
 
+/** Check if a line matches "Person Name: Task Title" (not a known field name) */
+function isPersonTitleLine(line: string): boolean {
+  const colonIdx = line.indexOf(":");
+  if (colonIdx <= 0 || colonIdx >= 40) return false;
+  const beforeColon = line.substring(0, colonIdx).trim();
+  const afterColon = line.substring(colonIdx + 1).trim();
+  if (!afterColon) return false;
+  if (KNOWN_FIELD_NAMES.has(beforeColon.toLowerCase())) return false;
+  return /^[A-Z][a-z]+(?: [A-Z][a-z]+)*$/.test(beforeColon);
+}
+
 /**
  * Split raw text into individual task blocks.
- * Each task starts with a checkbox character or "Name: Title" pattern.
+ * PDF exports: split on separator lines (─────).
+ * Text exports: split on checkboxes / "Name: Title" patterns.
  */
 function splitIntoBlocks(text: string): string[] {
+  // PDF-form-style export: split on separator lines
+  if (/[─━═]{5,}/.test(text)) {
+    return text
+      .split(/[─━═_]{5,}/)
+      .map((b) => b.trim())
+      .filter(Boolean);
+  }
+
+  // Original checkbox/name-based splitting for text exports
   const lines = text.split("\n");
   const blocks: string[] = [];
   let current: string[] = [];
@@ -166,11 +194,9 @@ function splitIntoBlocks(text: string): string[] {
   for (const line of lines) {
     const stripped = line.trim();
 
-    // Detect block boundary: checkbox line or "Name: Title" pattern at start
+    // Detect block boundary: checkbox or "Person: Title" (excluding field names)
     const isNewTask =
-      CHECKBOX_RE.test(stripped) ||
-      // "Assignee: Title" pattern — name before colon, text after
-      /^[A-Z][a-z]+(?: [A-Z][a-z]+)*:\s+\S/.test(stripped);
+      CHECKBOX_RE.test(stripped) || isPersonTitleLine(stripped);
 
     // Also check for section headers as boundaries
     const isSection = SECTION_HEADERS.some(
@@ -216,8 +242,54 @@ function parseBlock(
   const lines = block.split("\n").map((l) => l.trim()).filter(Boolean);
   if (lines.length === 0) return null;
 
+  // Find the actual task header line.
+  // PDF blocks start with preamble: "due DATE", project name, "Printed from Asana"
+  // The header is the "Person: Task Title" or checkbox line.
+  let headerIdx = -1;
+  let preambleDueDate: string | null = null;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    // Due date in preamble (first few lines only)
+    if (i < 4) {
+      const duePreamble = line.match(DUE_DATE_LINE_RE);
+      if (duePreamble) {
+        preambleDueDate = parseDateString(duePreamble[1]);
+        continue;
+      }
+    }
+
+    // Skip "Printed from Asana"
+    if (/^Printed from Asana$/i.test(line)) continue;
+
+    // Checkbox header
+    if (CHECKBOX_RE.test(line)) {
+      headerIdx = i;
+      break;
+    }
+
+    // "Person: Task Title" header (not a known field name)
+    if (isPersonTitleLine(line)) {
+      headerIdx = i;
+      break;
+    }
+  }
+
+  // If no person/checkbox header found, use first non-preamble line
+  if (headerIdx === -1) {
+    for (let i = 0; i < lines.length; i++) {
+      if (/^(Printed from Asana|due\s)/i.test(lines[i])) continue;
+      // Skip very short lines that are likely project names in preamble
+      if (i < 3 && lines[i].length < 30 && !lines[i].includes(":")) continue;
+      headerIdx = i;
+      break;
+    }
+    if (headerIdx === -1) return null;
+  }
+
   // Parse header line
-  let headerLine = lines[0];
+  let headerLine = lines[headerIdx];
   const hasCheckedBox = /^[☑✓✔✅]/.test(headerLine);
   headerLine = headerLine.replace(CHECKBOX_RE, "").trim();
 
@@ -232,15 +304,19 @@ function parseBlock(
   if (colonIdx > 0 && colonIdx < 40) {
     const beforeColon = headerLine.substring(0, colonIdx).trim();
     const afterColon = headerLine.substring(colonIdx + 1).trim();
-    // Only treat as "Assignee: Title" if before-colon looks like a name
-    if (/^[A-Z][a-z]+(?: [A-Z][a-z]+)*$/.test(beforeColon) && afterColon.length > 0) {
+    // Only treat as "Assignee: Title" if before-colon looks like a name and isn't a field
+    if (
+      /^[A-Z][a-z]+(?: [A-Z][a-z]+)*$/.test(beforeColon) &&
+      afterColon.length > 0 &&
+      !KNOWN_FIELD_NAMES.has(beforeColon.toLowerCase())
+    ) {
       assignee = beforeColon;
       title = afterColon;
     }
   }
 
   // Extract due date from header line
-  let dueDate: string | null = null;
+  let dueDate = preambleDueDate;
   const dueDateMatch = title.match(DUE_DATE_RE) || title.match(DUE_DATE_LINE_RE);
   if (dueDateMatch) {
     dueDate = parseDateString(dueDateMatch[1] || dueDateMatch[0]);
@@ -248,12 +324,12 @@ function parseBlock(
     title = title.replace(DUE_DATE_RE, "").replace(DUE_DATE_LINE_RE, "").trim();
   }
 
-  // Parse metadata fields from remaining lines
+  // Parse metadata fields from lines after the header
   const fields: Record<string, string> = {};
   let description = "";
   let inDescription = false;
 
-  for (let i = 1; i < lines.length; i++) {
+  for (let i = headerIdx + 1; i < lines.length; i++) {
     const line = lines[i];
 
     // Stop at separator
@@ -271,7 +347,17 @@ function parseBlock(
     const fieldMatch = line.match(/^\[?([A-Za-z\s/]+?)\]?:\s*(.*)/);
     if (fieldMatch) {
       const key = fieldMatch[1].trim().toLowerCase();
-      const value = fieldMatch[2].trim();
+      let value = fieldMatch[2].trim();
+
+      // Multi-line field: if value is empty, take the next line as the value
+      if (!value && i + 1 < lines.length) {
+        const nextLine = lines[i + 1];
+        // Only grab next line if it doesn't look like another field
+        if (!/^\[?[A-Za-z\s/]+?\]?:\s*/.test(nextLine)) {
+          value = nextLine;
+          i++; // skip the consumed value line
+        }
+      }
 
       if (key === "description") {
         inDescription = true;
@@ -328,7 +414,7 @@ function parseBlock(
   const reporter = fuzzyMatchPerson(reporterName, peopleNames) || reporterName || null;
 
   // Build source_quote from the header line for text highlighting
-  const sourceQuote = lines[0].replace(CHECKBOX_RE, "").trim();
+  const sourceQuote = lines[headerIdx].replace(CHECKBOX_RE, "").trim();
 
   const issue: ExtractedItem = {
     title,
