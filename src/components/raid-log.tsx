@@ -304,8 +304,8 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
             <div className="bg-gray-50 px-3 py-1 border-b border-gray-300">
               <div className="flex items-center gap-2.5">
                 <div className="flex-1" />
-                <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide w-[68px] text-center">Priority</span>
-                <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide w-[88px] text-center">Status</span>
+                <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide w-[68px] text-right">Priority</span>
+                <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide w-[88px] text-right">Status</span>
                 <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide w-[130px]">Owner</span>
                 <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide w-12 text-right">Age</span>
               </div>
@@ -355,10 +355,10 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                       {/* Spacer */}
                       <div className="flex-1" />
                       {/* Metadata — fixed-width columns */}
-                      <div className="w-[68px] flex-shrink-0 flex justify-center">
+                      <div className="w-[68px] flex-shrink-0 flex justify-end">
                         <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border ${priorityColor(entry.priority)}`}>{priorityLabel(entry.priority)}</span>
                       </div>
-                      <div className="w-[88px] flex-shrink-0 flex justify-center">
+                      <div className="w-[88px] flex-shrink-0 flex justify-end">
                         <span className={`inline-flex px-1.5 py-0.5 text-xs rounded ${badge.className}`}>{badge.label}</span>
                       </div>
                       <div className="w-[130px] flex-shrink-0">

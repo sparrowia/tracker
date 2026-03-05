@@ -454,8 +454,8 @@ function BlockersPanel({
       <div className="bg-gray-50 px-3 py-1 border-b border-gray-300">
         <div className="flex items-center gap-2.5">
           <div className="flex-1" />
-          <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide w-[68px] text-center">Priority</span>
-          <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide w-[88px] text-center">Status</span>
+          <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide w-[68px] text-right">Priority</span>
+          <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide w-[88px] text-right">Status</span>
           <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide w-[130px]">Owner</span>
           <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide w-12 text-right">Age</span>
         </div>
@@ -494,10 +494,10 @@ function BlockersPanel({
                   {/* Spacer */}
                   <div className="flex-1" />
                   {/* Metadata — fixed-width columns */}
-                  <div className="w-[68px] flex-shrink-0 flex justify-center">
+                  <div className="w-[68px] flex-shrink-0 flex justify-end">
                     <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border ${priorityColor(b.priority)}`}>{priorityLabel(b.priority)}</span>
                   </div>
-                  <div className="w-[88px] flex-shrink-0 flex justify-center">
+                  <div className="w-[88px] flex-shrink-0 flex justify-end">
                     <span className={`inline-flex px-1.5 py-0.5 text-xs rounded ${badge.className}`}>{badge.label}</span>
                   </div>
                   <div className="w-[130px] flex-shrink-0">
@@ -765,13 +765,13 @@ function ActionItemsPanel({
     switch (col) {
       case "priority":
         return (
-          <div className="w-[68px] flex-shrink-0 flex justify-center">
+          <div className="w-[68px] flex-shrink-0 flex justify-end">
             <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border ${priorityColor(a.priority)}`}>{priorityLabel(a.priority)}</span>
           </div>
         );
       case "status":
         return (
-          <div className="w-[88px] flex-shrink-0 flex justify-center">
+          <div className="w-[88px] flex-shrink-0 flex justify-end">
             <span className={`inline-flex px-1.5 py-0.5 text-xs rounded ${badge.className}`}>{badge.label}</span>
           </div>
         );
@@ -792,7 +792,7 @@ function ActionItemsPanel({
         );
       case "vendor":
         return (
-          <div className="w-[100px] flex-shrink-0">
+          <div className="w-[100px] flex-shrink-0 text-right">
             <span className="text-xs text-gray-600 truncate block">{a.vendor?.name || "—"}</span>
           </div>
         );
@@ -953,7 +953,7 @@ function ActionItemsPanel({
         <div className="flex items-center gap-2.5">
           <div className="flex-1" />
           {ACTION_COLUMNS.filter((c) => visibleCols.includes(c.key)).map((col) => (
-            <span key={col.key} className={`text-[10px] font-medium text-gray-400 uppercase tracking-wide ${col.width} ${col.key === "owner" || col.key === "vendor" ? "text-left" : "text-center"}`}>
+            <span key={col.key} className={`text-[10px] font-medium text-gray-400 uppercase tracking-wide ${col.width} ${col.key === "owner" ? "text-left" : "text-right"}`}>
               {col.label}
             </span>
           ))}
