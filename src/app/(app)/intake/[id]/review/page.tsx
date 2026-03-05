@@ -654,16 +654,24 @@ export default function IntakeReviewPage() {
           const linkedTo = item._linked_to;
           const table = linkedTo.table;
           const id = linkedTo.id;
+          const effectiveCat = item._save_as || cat;
 
-          const payload: Record<string, unknown> = {
-            title: item.title || item.subject,
-          };
+          const payload: Record<string, unknown> = {};
 
-          if (item.priority) payload.priority = item.priority;
+          // Status updates: apply new_status but don't overwrite the existing item's title
+          if (effectiveCat === "status_updates") {
+            if (item.new_status) payload.status = item.new_status;
+            // For status updates, use details as append content instead of overwriting title
+          } else {
+            // For non-status-updates, update title + priority
+            if (item.title || item.subject) payload.title = item.title || item.subject;
+            if (item.priority) payload.priority = item.priority;
+          }
+
           if (item.due_date) payload.due_date = item.due_date;
 
           // Owner — only update if extracted has one
-          const ownerName = cat === "decisions" ? item.made_by : item.owner_name;
+          const ownerName = effectiveCat === "decisions" ? item.made_by : item.owner_name;
           if (ownerName) {
             const ownerId = findPersonId(ownerName);
             if (ownerId) payload.owner_id = ownerId;
@@ -673,7 +681,15 @@ export default function IntakeReviewPage() {
           let appendField: string | null = null;
           let appendContent: string | null = null;
 
-          if (table === "action_items") {
+          if (effectiveCat === "status_updates") {
+            // Status updates: append details to the linked item's notes/description
+            const statusDetails = item.details || item.notes || null;
+            if (statusDetails) {
+              if (table === "action_items") { appendField = "notes"; appendContent = statusDetails; }
+              else if (table === "blockers") { appendField = "impact_description"; appendContent = statusDetails; }
+              else if (table === "raid_entries") { appendField = "description"; appendContent = statusDetails; }
+            }
+          } else if (table === "action_items") {
             appendField = "notes";
             appendContent = item.notes || null;
           } else if (table === "blockers") {

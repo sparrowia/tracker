@@ -68,7 +68,7 @@ Return a JSON object with these arrays (each can be empty):
 
 Rules:
 - Extract only what's explicitly stated or clearly implied
-- Use full names when mentioned. When you can match a name to the Known People list, use the EXACT full name from that list
+- Use full names when possible. When the text mentions someone by first name, last name, or nickname, match them to the Known People list and output the FULL name from the list. If multiple people share a first name, use context to disambiguate or output just the first name
 - Infer priority from language (urgent, ASAP, critical = high/critical; when possible = low)
 - Dates should be in YYYY-MM-DD format
 - Keep titles concise but descriptive

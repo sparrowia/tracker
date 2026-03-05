@@ -54,7 +54,7 @@ export function buildContextPrompt(ctx: OrgContext): string {
   }
   if (ctx.peopleNames.length > 0) {
     parts.push(
-      `Known People in this organization (use EXACT names from this list when you can match):\n${ctx.peopleNames.map((n) => `- ${n}`).join("\n")}`
+      `Known People in this organization:\n${ctx.peopleNames.map((n) => `- ${n}`).join("\n")}\n\nWhen the text mentions someone, match to this list using full name, first name, or last name. Always output the FULL name from this list (e.g. if text says "Sarah" and the list has "Sarah Martinez", output "Sarah Martinez"). If no match, output the name as written.`
     );
   }
 
@@ -65,5 +65,5 @@ export function buildContextPrompt(ctx: OrgContext): string {
 export function buildTermCorrectionsPrompt(corrections: { wrong_term: string; correct_term: string }[]): string {
   if (corrections.length === 0) return "";
   const lines = corrections.map((c) => `- "${c.wrong_term}" should be "${c.correct_term}"`);
-  return `\n\nMANDATORY Term Corrections — you MUST replace these terms everywhere in your output (titles, owner_name, made_by, notes, details, etc.) but NOT in source_quote. Also correct obvious misspellings, phonetic variations, and alternate spellings of the same name/term (e.g. if "Shireen" → "Cheeren", then "Shereen", "Shirin", etc. should also become "Cheeren"). This overrides the "do not fabricate" rule — these corrections are authoritative:\n${lines.join("\n")}`;
+  return `\n\nMANDATORY Term Corrections — you MUST replace these exact terms everywhere in your output (titles, owner_name, made_by, notes, details, etc.) but NOT in source_quote. If you encounter a clear misspelling of one of these wrong terms (e.g. off by one letter), apply the same correction. Do NOT apply corrections to unrelated similar-sounding words:\n${lines.join("\n")}`;
 }
