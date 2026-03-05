@@ -912,62 +912,57 @@ function BlockersPanel({
 
               {/* Expanded detail — inline editable */}
               {isExpanded && (
-                <div className="bg-red-50/30 px-4 py-3 border-b border-gray-200">
-                  <div className="space-y-2">
-                    <div>
-                      <span className="text-xs font-medium text-gray-500 uppercase">Title</span>
-                      <InlineText value={b.title} onSave={(v) => saveField(b.id, "title", v)} />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3 text-sm">
-                      <div>
-                        <span className="text-xs font-medium text-gray-500 uppercase">Impact</span>
-                        <InlineText value={b.impact_description || ""} onSave={(v) => saveField(b.id, "impact_description", v)} multiline placeholder="Add impact..." />
-                      </div>
-                      <div>
-                        <span className="text-xs font-medium text-gray-500 uppercase">Description</span>
-                        <InlineText value={b.description || ""} onSave={(v) => saveField(b.id, "description", v)} multiline placeholder="Add description..." />
-                      </div>
-                      <div onClick={(e) => e.stopPropagation()}>
-                        <span className="text-xs font-medium text-gray-500 uppercase">Priority</span>
+                <div className="bg-white border-b border-gray-200" onClick={(e) => e.stopPropagation()}>
+                  {/* Title section */}
+                  <div className="px-5 pt-4 pb-3 text-base font-semibold text-gray-900">
+                    <InlineText value={b.title} onSave={(v) => saveField(b.id, "title", v)} />
+                  </div>
+
+                  {/* Properties grid */}
+                  <div className="border-t border-gray-100">
+                    <div className="grid grid-cols-[120px_1fr_120px_1fr] items-center">
+                      {/* Row: Priority / Status */}
+                      <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-100">Priority</span>
+                      <div className="px-3 py-2.5 border-b border-gray-100">
                         <select
                           value={b.priority}
                           onChange={(e) => saveField(b.id, "priority", e.target.value)}
-                          className="block w-full text-sm rounded border border-transparent hover:border-gray-300 bg-transparent py-0.5 mt-0.5 focus:border-blue-500 focus:outline-none cursor-pointer"
+                          className="text-sm rounded border border-transparent hover:border-gray-300 bg-transparent py-0 focus:border-blue-500 focus:outline-none cursor-pointer -ml-0.5"
                         >
                           {blockerPriorityOptions.map((p) => (
                             <option key={p} value={p}>{priorityLabel(p)}</option>
                           ))}
                         </select>
                       </div>
-                      <div onClick={(e) => e.stopPropagation()}>
-                        <span className="text-xs font-medium text-gray-500 uppercase">Status</span>
+                      <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-100">Status</span>
+                      <div className="px-3 py-2.5 border-b border-gray-100">
                         <select
                           value={b.status}
                           onChange={(e) => saveField(b.id, "status", e.target.value)}
-                          className="block w-full text-sm rounded border border-transparent hover:border-gray-300 bg-transparent py-0.5 mt-0.5 focus:border-blue-500 focus:outline-none cursor-pointer"
+                          className="text-sm rounded border border-transparent hover:border-gray-300 bg-transparent py-0 focus:border-blue-500 focus:outline-none cursor-pointer -ml-0.5"
                         >
                           {blockerStatusOptions.map((s) => (
                             <option key={s} value={s}>{s.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase())}</option>
                           ))}
                         </select>
                       </div>
-                      <div onClick={(e) => e.stopPropagation()}>
-                        <span className="text-xs font-medium text-gray-500 uppercase">Owner</span>
-                        <div className="mt-0.5">
-                          <OwnerPicker
-                            value={b.owner_id || ""}
-                            onChange={(id) => saveField(b.id, "owner_id", id)}
-                            people={people}
-                            onPersonAdded={onPersonAdded}
-                          />
-                        </div>
+
+                      {/* Row: Owner / Vendor */}
+                      <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-100">Owner</span>
+                      <div className="px-3 py-1.5 border-b border-gray-100">
+                        <OwnerPicker
+                          value={b.owner_id || ""}
+                          onChange={(id) => saveField(b.id, "owner_id", id)}
+                          people={people}
+                          onPersonAdded={onPersonAdded}
+                        />
                       </div>
-                      <div onClick={(e) => e.stopPropagation()}>
-                        <span className="text-xs font-medium text-gray-500 uppercase">Vendor</span>
+                      <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-100">Vendor</span>
+                      <div className="px-3 py-2.5 border-b border-gray-100">
                         <select
                           value={b.vendor_id || ""}
                           onChange={(e) => saveField(b.id, "vendor_id", e.target.value)}
-                          className="block w-full text-sm rounded border border-transparent hover:border-gray-300 bg-transparent py-0.5 mt-0.5 focus:border-blue-500 focus:outline-none cursor-pointer"
+                          className="text-sm rounded border border-transparent hover:border-gray-300 bg-transparent py-0 focus:border-blue-500 focus:outline-none cursor-pointer -ml-0.5"
                         >
                           <option value="">None</option>
                           {vendors.map((v) => (
@@ -975,78 +970,98 @@ function BlockersPanel({
                           ))}
                         </select>
                       </div>
-                      <div>
-                        <span className="text-xs font-medium text-gray-500 uppercase">Due Date</span>
+
+                      {/* Row: Due Date / Flagged */}
+                      <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-100">Due Date</span>
+                      <div className="px-3 py-2.5 border-b border-gray-100">
                         <InlineDate value={b.due_date} onSave={(v) => saveField(b.id, "due_date", v)} />
                       </div>
-                      <div>
-                        <span className="text-xs font-medium text-gray-500 uppercase">First Flagged</span>
-                        <p className="text-gray-900 mt-0.5">{new Date(b.first_flagged_at).toLocaleDateString()}</p>
+                      <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-100">Flagged</span>
+                      <div className="px-3 py-2.5 border-b border-gray-100">
+                        <span className="text-sm text-gray-700">{new Date(b.first_flagged_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
                       </div>
-                      <div>
-                        <span className="text-xs font-medium text-gray-500 uppercase">Age</span>
-                        <p className="text-red-700 font-medium mt-0.5">{b.age_days != null ? formatAge(b.age_days) : "—"}</p>
+
+                      {/* Row: Age / Escalations */}
+                      <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-100">Age</span>
+                      <div className="px-3 py-2.5 border-b border-gray-100">
+                        <span className="text-sm text-red-700 font-medium">{b.age_days != null ? formatAge(b.age_days) : "—"}</span>
                       </div>
-                      <div>
-                        <span className="text-xs font-medium text-gray-500 uppercase">Escalations</span>
-                        <p className="text-gray-900 mt-0.5">{b.escalation_count > 0 ? `${b.escalation_count}x` : "None"}</p>
+                      <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-100">Escalations</span>
+                      <div className="px-3 py-2.5 border-b border-gray-100">
+                        <span className="text-sm text-gray-700">{b.escalation_count > 0 ? `${b.escalation_count}x` : "None"}</span>
                       </div>
                     </div>
-                    {/* Call Notes panel */}
-                    {callNotesId === b.id && (
-                      <div className="mt-3 pt-3 border-t border-gray-200">
-                        <label className="block text-xs font-medium text-gray-500 mb-1">Call Notes</label>
-                        <textarea
-                          value={callNotes}
-                          onChange={(e) => setCallNotes(e.target.value)}
-                          placeholder="Take notes during the call — AI will update fields automatically..."
-                          rows={4}
-                          className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                        <div className="flex gap-2 justify-end mt-2">
-                          <button
-                            onClick={(e) => { e.stopPropagation(); setCallNotesId(null); setCallNotes(""); }}
-                            className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded hover:bg-gray-50"
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); saveCallNotes(b.id); }}
-                            disabled={savingNotes || !callNotes.trim()}
-                            className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5"
-                          >
-                            {savingNotes && (
-                              <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-                              </svg>
-                            )}
-                            {savingNotes ? "Updating..." : "Process Notes"}
-                          </button>
-                        </div>
+                  </div>
+
+                  {/* Description & Impact */}
+                  <div className="px-5 py-3 space-y-3">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Impact</span>
+                        <InlineText value={b.impact_description || ""} onSave={(v) => saveField(b.id, "impact_description", v)} multiline placeholder="Add impact..." />
                       </div>
-                    )}
-                    <div className="flex justify-end items-center gap-3 pt-2 border-t border-gray-300 mt-3">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setCallNotesId(callNotesId === b.id ? null : b.id); setCallNotes(""); }}
-                        className={`text-xs font-medium px-2 py-1 rounded border transition-colors ${callNotesId === b.id ? "text-blue-700 border-blue-300 bg-blue-50" : "text-gray-500 border-gray-300 hover:text-blue-600 hover:border-blue-300"}`}
-                        title="Call Notes"
-                      >
-                        Call Notes
-                      </button>
-                      <div className="flex-1" />
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleDelete(b.id); }}
-                        className="text-gray-400 hover:text-red-600 transition-colors"
-                        title="Delete"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="3 6 5 6 21 6"/>
-                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                        </svg>
-                      </button>
+                      <div>
+                        <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Description</span>
+                        <InlineText value={b.description || ""} onSave={(v) => saveField(b.id, "description", v)} multiline placeholder="Add description..." />
+                      </div>
                     </div>
+                  </div>
+
+                  {/* Call Notes panel */}
+                  {callNotesId === b.id && (
+                    <div className="px-5 pb-3">
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Call Notes</label>
+                      <textarea
+                        value={callNotes}
+                        onChange={(e) => setCallNotes(e.target.value)}
+                        placeholder="Take notes during the call — AI will update fields automatically..."
+                        rows={4}
+                        className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
+                      />
+                      <div className="flex gap-2 justify-end mt-2">
+                        <button
+                          onClick={() => { setCallNotesId(null); setCallNotes(""); }}
+                          className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded hover:bg-gray-50"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={() => saveCallNotes(b.id)}
+                          disabled={savingNotes || !callNotes.trim()}
+                          className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5"
+                        >
+                          {savingNotes && (
+                            <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                            </svg>
+                          )}
+                          {savingNotes ? "Updating..." : "Process Notes"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Actions bar */}
+                  <div className="flex justify-end items-center gap-3 px-5 py-2 border-t border-gray-100">
+                    <button
+                      onClick={() => { setCallNotesId(callNotesId === b.id ? null : b.id); setCallNotes(""); }}
+                      className={`text-xs font-medium px-2 py-1 rounded border transition-colors ${callNotesId === b.id ? "text-blue-700 border-blue-300 bg-blue-50" : "text-gray-500 border-gray-300 hover:text-blue-600 hover:border-blue-300"}`}
+                      title="Call Notes"
+                    >
+                      Call Notes
+                    </button>
+                    <div className="flex-1" />
+                    <button
+                      onClick={() => handleDelete(b.id)}
+                      className="text-gray-400 hover:text-red-600 transition-colors"
+                      title="Delete"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="3 6 5 6 21 6"/>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                      </svg>
+                    </button>
                   </div>
                 </div>
               )}
@@ -1405,62 +1420,57 @@ function ActionItemsPanel({
 
               {/* Expanded detail — inline editable */}
               {isExpanded && (
-                <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
-                  <div className="space-y-2">
-                    <div>
-                      <span className="text-xs font-medium text-gray-500 uppercase">Title</span>
-                      <InlineText value={a.title} onSave={(v) => saveField(a.id, "title", v)} />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3 text-sm">
-                      <div>
-                        <span className="text-xs font-medium text-gray-500 uppercase">Description</span>
-                        <InlineText value={a.description || ""} onSave={(v) => saveField(a.id, "description", v)} multiline placeholder="Add description..." />
-                      </div>
-                      <div>
-                        <span className="text-xs font-medium text-gray-500 uppercase">Notes</span>
-                        <InlineText value={a.notes || ""} onSave={(v) => saveField(a.id, "notes", v)} multiline placeholder="Add notes..." />
-                      </div>
-                      <div onClick={(e) => e.stopPropagation()}>
-                        <span className="text-xs font-medium text-gray-500 uppercase">Priority</span>
+                <div className="bg-white border-b border-gray-200" onClick={(e) => e.stopPropagation()}>
+                  {/* Title section */}
+                  <div className="px-5 pt-4 pb-3 text-base font-semibold text-gray-900">
+                    <InlineText value={a.title} onSave={(v) => saveField(a.id, "title", v)} />
+                  </div>
+
+                  {/* Properties grid */}
+                  <div className="border-t border-gray-100">
+                    <div className="grid grid-cols-[120px_1fr_120px_1fr] items-center">
+                      {/* Row: Priority / Status */}
+                      <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-100">Priority</span>
+                      <div className="px-3 py-2.5 border-b border-gray-100">
                         <select
                           value={a.priority}
                           onChange={(e) => saveField(a.id, "priority", e.target.value)}
-                          className="block w-full text-sm rounded border border-transparent hover:border-gray-300 bg-transparent py-0.5 mt-0.5 focus:border-blue-500 focus:outline-none cursor-pointer"
+                          className="text-sm rounded border border-transparent hover:border-gray-300 bg-transparent py-0 focus:border-blue-500 focus:outline-none cursor-pointer -ml-0.5"
                         >
                           {actionPriorityOptions.map((p) => (
                             <option key={p} value={p}>{priorityLabel(p)}</option>
                           ))}
                         </select>
                       </div>
-                      <div onClick={(e) => e.stopPropagation()}>
-                        <span className="text-xs font-medium text-gray-500 uppercase">Status</span>
+                      <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-100">Status</span>
+                      <div className="px-3 py-2.5 border-b border-gray-100">
                         <select
                           value={a.status}
                           onChange={(e) => saveField(a.id, "status", e.target.value)}
-                          className="block w-full text-sm rounded border border-transparent hover:border-gray-300 bg-transparent py-0.5 mt-0.5 focus:border-blue-500 focus:outline-none cursor-pointer"
+                          className="text-sm rounded border border-transparent hover:border-gray-300 bg-transparent py-0 focus:border-blue-500 focus:outline-none cursor-pointer -ml-0.5"
                         >
                           {actionStatusOptions.map((s) => (
                             <option key={s} value={s}>{s.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase())}</option>
                           ))}
                         </select>
                       </div>
-                      <div onClick={(e) => e.stopPropagation()}>
-                        <span className="text-xs font-medium text-gray-500 uppercase">Owner</span>
-                        <div className="mt-0.5">
-                          <OwnerPicker
-                            value={a.owner_id || ""}
-                            onChange={(id) => saveField(a.id, "owner_id", id)}
-                            people={people}
-                            onPersonAdded={onPersonAdded}
-                          />
-                        </div>
+
+                      {/* Row: Owner / Vendor */}
+                      <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-100">Owner</span>
+                      <div className="px-3 py-1.5 border-b border-gray-100">
+                        <OwnerPicker
+                          value={a.owner_id || ""}
+                          onChange={(id) => saveField(a.id, "owner_id", id)}
+                          people={people}
+                          onPersonAdded={onPersonAdded}
+                        />
                       </div>
-                      <div onClick={(e) => e.stopPropagation()}>
-                        <span className="text-xs font-medium text-gray-500 uppercase">Vendor</span>
+                      <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-100">Vendor</span>
+                      <div className="px-3 py-2.5 border-b border-gray-100">
                         <select
                           value={a.vendor_id || ""}
                           onChange={(e) => saveField(a.id, "vendor_id", e.target.value)}
-                          className="block w-full text-sm rounded border border-transparent hover:border-gray-300 bg-transparent py-0.5 mt-0.5 focus:border-blue-500 focus:outline-none cursor-pointer"
+                          className="text-sm rounded border border-transparent hover:border-gray-300 bg-transparent py-0 focus:border-blue-500 focus:outline-none cursor-pointer -ml-0.5"
                         >
                           <option value="">None</option>
                           {vendors.map((v) => (
@@ -1468,78 +1478,98 @@ function ActionItemsPanel({
                           ))}
                         </select>
                       </div>
-                      <div>
-                        <span className="text-xs font-medium text-gray-500 uppercase">Due Date</span>
+
+                      {/* Row: Due Date / Flagged */}
+                      <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-100">Due Date</span>
+                      <div className="px-3 py-2.5 border-b border-gray-100">
                         <InlineDate value={a.due_date} onSave={(v) => saveField(a.id, "due_date", v)} />
                       </div>
-                      <div>
-                        <span className="text-xs font-medium text-gray-500 uppercase">First Flagged</span>
-                        <p className="text-gray-900 mt-0.5">{new Date(a.first_flagged_at).toLocaleDateString()}</p>
+                      <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-100">Flagged</span>
+                      <div className="px-3 py-2.5 border-b border-gray-100">
+                        <span className="text-sm text-gray-700">{new Date(a.first_flagged_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
                       </div>
-                      <div>
-                        <span className="text-xs font-medium text-gray-500 uppercase">Age</span>
-                        <p className="text-gray-600 font-medium mt-0.5">{a.age_days != null ? formatAge(a.age_days) : "—"}</p>
+
+                      {/* Row: Age / Escalations */}
+                      <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-100">Age</span>
+                      <div className="px-3 py-2.5 border-b border-gray-100">
+                        <span className="text-sm text-gray-600 font-medium">{a.age_days != null ? formatAge(a.age_days) : "—"}</span>
                       </div>
-                      <div>
-                        <span className="text-xs font-medium text-gray-500 uppercase">Escalations</span>
-                        <p className="text-gray-900 mt-0.5">{a.escalation_count > 0 ? `${a.escalation_count}x` : "None"}</p>
+                      <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-100">Escalations</span>
+                      <div className="px-3 py-2.5 border-b border-gray-100">
+                        <span className="text-sm text-gray-700">{a.escalation_count > 0 ? `${a.escalation_count}x` : "None"}</span>
                       </div>
                     </div>
-                    {/* Call Notes panel */}
-                    {callNotesId === a.id && (
-                      <div className="mt-3 pt-3 border-t border-gray-200">
-                        <label className="block text-xs font-medium text-gray-500 mb-1">Call Notes</label>
-                        <textarea
-                          value={callNotes}
-                          onChange={(e) => setCallNotes(e.target.value)}
-                          placeholder="Take notes during the call — AI will update fields automatically..."
-                          rows={4}
-                          className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                        <div className="flex gap-2 justify-end mt-2">
-                          <button
-                            onClick={(e) => { e.stopPropagation(); setCallNotesId(null); setCallNotes(""); }}
-                            className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded hover:bg-gray-50"
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); saveCallNotes(a.id); }}
-                            disabled={savingNotes || !callNotes.trim()}
-                            className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5"
-                          >
-                            {savingNotes && (
-                              <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-                              </svg>
-                            )}
-                            {savingNotes ? "Updating..." : "Process Notes"}
-                          </button>
-                        </div>
+                  </div>
+
+                  {/* Description & Notes */}
+                  <div className="px-5 py-3 space-y-3">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Description</span>
+                        <InlineText value={a.description || ""} onSave={(v) => saveField(a.id, "description", v)} multiline placeholder="Add description..." />
                       </div>
-                    )}
-                    <div className="flex justify-end items-center gap-3 pt-2 border-t border-gray-300 mt-3">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setCallNotesId(callNotesId === a.id ? null : a.id); setCallNotes(""); }}
-                        className={`text-xs font-medium px-2 py-1 rounded border transition-colors ${callNotesId === a.id ? "text-blue-700 border-blue-300 bg-blue-50" : "text-gray-500 border-gray-300 hover:text-blue-600 hover:border-blue-300"}`}
-                        title="Call Notes"
-                      >
-                        Call Notes
-                      </button>
-                      <div className="flex-1" />
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleDelete(a.id); }}
-                        className="text-gray-400 hover:text-red-600 transition-colors"
-                        title="Delete"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="3 6 5 6 21 6"/>
-                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                        </svg>
-                      </button>
+                      <div>
+                        <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Notes</span>
+                        <InlineText value={a.notes || ""} onSave={(v) => saveField(a.id, "notes", v)} multiline placeholder="Add notes..." />
+                      </div>
                     </div>
+                  </div>
+
+                  {/* Call Notes panel */}
+                  {callNotesId === a.id && (
+                    <div className="px-5 pb-3">
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Call Notes</label>
+                      <textarea
+                        value={callNotes}
+                        onChange={(e) => setCallNotes(e.target.value)}
+                        placeholder="Take notes during the call — AI will update fields automatically..."
+                        rows={4}
+                        className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
+                      />
+                      <div className="flex gap-2 justify-end mt-2">
+                        <button
+                          onClick={() => { setCallNotesId(null); setCallNotes(""); }}
+                          className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded hover:bg-gray-50"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={() => saveCallNotes(a.id)}
+                          disabled={savingNotes || !callNotes.trim()}
+                          className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5"
+                        >
+                          {savingNotes && (
+                            <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                            </svg>
+                          )}
+                          {savingNotes ? "Updating..." : "Process Notes"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Actions bar */}
+                  <div className="flex justify-end items-center gap-3 px-5 py-2 border-t border-gray-100">
+                    <button
+                      onClick={() => { setCallNotesId(callNotesId === a.id ? null : a.id); setCallNotes(""); }}
+                      className={`text-xs font-medium px-2 py-1 rounded border transition-colors ${callNotesId === a.id ? "text-blue-700 border-blue-300 bg-blue-50" : "text-gray-500 border-gray-300 hover:text-blue-600 hover:border-blue-300"}`}
+                      title="Call Notes"
+                    >
+                      Call Notes
+                    </button>
+                    <div className="flex-1" />
+                    <button
+                      onClick={() => handleDelete(a.id)}
+                      className="text-gray-400 hover:text-red-600 transition-colors"
+                      title="Delete"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="3 6 5 6 21 6"/>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                      </svg>
+                    </button>
                   </div>
                 </div>
               )}
