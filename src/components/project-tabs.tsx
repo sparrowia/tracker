@@ -109,6 +109,13 @@ export default function ProjectTabs({
   // Staging area for AI-suggested new items
   const [pendingSuggestions, setPendingSuggestions] = useState<SuggestedItem[]>([]);
 
+  // Callback registry so StagingArea can push items directly into mounted panels
+  const itemAddersRef = useRef<{
+    addBlocker?: (item: BlockerRow) => void;
+    addAction?: (item: ActionRow) => void;
+    addRaid?: (item: RaidEntry & { owner: Person | null; vendor: Vendor | null }) => void;
+  }>({});
+
   const onNewItemsSuggested = useCallback((items: { title: string; suggested_type?: string; priority?: string; description?: string }[]) => {
     const mapped: SuggestedItem[] = items.map((item) => ({
       id: crypto.randomUUID(),
@@ -224,7 +231,7 @@ export default function ProjectTabs({
           people={peopleList}
           onPersonAdded={addPerson}
           supabase={supabase}
-          onAccepted={() => router.refresh()}
+          itemAddersRef={itemAddersRef}
         />
       )}
 
@@ -235,7 +242,7 @@ export default function ProjectTabs({
         )}
 
         {active === "blockers" && (
-          <BlockersPanel blockers={blockers} people={peopleList} vendors={vendors} onPersonAdded={addPerson} addUndo={addUndo} onCountChange={setBlockerCount} intakeSourceMap={intakeSourceMap} onNewItemsSuggested={onNewItemsSuggested} />
+          <BlockersPanel blockers={blockers} people={peopleList} vendors={vendors} onPersonAdded={addPerson} addUndo={addUndo} onCountChange={setBlockerCount} intakeSourceMap={intakeSourceMap} onNewItemsSuggested={onNewItemsSuggested} registerAdder={(fn) => { itemAddersRef.current.addBlocker = fn; return () => { itemAddersRef.current.addBlocker = undefined; }; }} />
         )}
 
         {active === "raid" && (
@@ -243,7 +250,7 @@ export default function ProjectTabs({
         )}
 
         {active === "actions" && (
-          <ActionItemsPanel actions={actions} people={peopleList} vendors={vendors} onPersonAdded={addPerson} addUndo={addUndo} onCountChange={setActionCount} intakeSourceMap={intakeSourceMap} onNewItemsSuggested={onNewItemsSuggested} />
+          <ActionItemsPanel actions={actions} people={peopleList} vendors={vendors} onPersonAdded={addPerson} addUndo={addUndo} onCountChange={setActionCount} intakeSourceMap={intakeSourceMap} onNewItemsSuggested={onNewItemsSuggested} registerAdder={(fn) => { itemAddersRef.current.addAction = fn; return () => { itemAddersRef.current.addAction = undefined; }; }} />
         )}
 
         {active === "intake" && (
@@ -398,7 +405,7 @@ function StagingArea({
   people,
   onPersonAdded,
   supabase,
-  onAccepted,
+  itemAddersRef,
 }: {
   suggestions: SuggestedItem[];
   setSuggestions: React.Dispatch<React.SetStateAction<SuggestedItem[]>>;
@@ -406,7 +413,11 @@ function StagingArea({
   people: Person[];
   onPersonAdded: (person: Person) => void;
   supabase: SupabaseClient;
-  onAccepted: () => void;
+  itemAddersRef: React.RefObject<{
+    addBlocker?: (item: BlockerRow) => void;
+    addAction?: (item: ActionRow) => void;
+    addRaid?: (item: RaidEntry & { owner: Person | null; vendor: Vendor | null }) => void;
+  }>;
 }) {
   const [accepting, setAccepting] = useState<Set<string>>(new Set());
 
@@ -425,7 +436,8 @@ function StagingArea({
   async function accept(item: SuggestedItem) {
     setAccepting((prev) => new Set(prev).add(item.id));
     const now = new Date().toISOString();
-    const base = {
+    const owner = item.owner_id ? people.find((p) => p.id === item.owner_id) || null : null;
+    const baseFields = {
       project_id: project.id,
       org_id: project.org_id,
       title: item.title,
@@ -439,26 +451,26 @@ function StagingArea({
 
     let error = null;
     if (item.suggested_type === "action_item") {
-      const { error: e } = await supabase.from("action_items").insert({ ...base, description: item.description || null, notes: null });
+      const insertData = { ...baseFields, description: item.description || null, notes: null };
+      const { data, error: e } = await supabase.from("action_items").insert(insertData).select().single();
       error = e;
+      if (!e && data && itemAddersRef.current.addAction) {
+        itemAddersRef.current.addAction({ ...data, owner, vendor: null } as ActionRow);
+      }
     } else if (item.suggested_type === "blocker") {
-      const { error: e } = await supabase.from("blockers").insert({ ...base, description: item.description || null, impact_description: null });
+      const insertData = { ...baseFields, description: item.description || null, impact_description: null };
+      const { data, error: e } = await supabase.from("blockers").insert(insertData).select().single();
       error = e;
+      if (!e && data && itemAddersRef.current.addBlocker) {
+        itemAddersRef.current.addBlocker({ ...data, owner, vendor: null } as BlockerRow);
+      }
     } else {
       // RAID types: risk, issue, decision, assumption
       const raidTypeMap: Record<string, string> = { risk: "risk", issue: "issue", decision: "decision", assumption: "assumption" };
       const { error: e } = await supabase.from("raid_entries").insert({
-        project_id: project.id,
-        org_id: project.org_id,
+        ...baseFields,
         raid_type: raidTypeMap[item.suggested_type] || "risk",
-        title: item.title,
         description: item.description || null,
-        priority: item.priority,
-        status: "pending",
-        first_flagged_at: now,
-        escalation_count: 0,
-        include_in_meeting: false,
-        ...(item.owner_id ? { owner_id: item.owner_id } : {}),
       });
       error = e;
     }
@@ -469,7 +481,6 @@ function StagingArea({
     } else {
       setSuggestions((prev) => prev.filter((s) => s.id !== item.id));
       setAccepting((prev) => { const next = new Set(prev); next.delete(item.id); return next; });
-      onAccepted();
     }
   }
 
@@ -592,6 +603,7 @@ function BlockersPanel({
   onCountChange,
   intakeSourceMap = {},
   onNewItemsSuggested,
+  registerAdder,
 }: {
   blockers: BlockerRow[];
   people: Person[];
@@ -601,8 +613,16 @@ function BlockersPanel({
   onCountChange?: (count: number) => void;
   intakeSourceMap?: Record<string, string>;
   onNewItemsSuggested?: (items: { title: string; suggested_type?: string; priority?: string; description?: string }[]) => void;
+  registerAdder?: (fn: (item: BlockerRow) => void) => () => void;
 }) {
   const [blockers, setBlockers] = useState<BlockerRow[]>(initialBlockers);
+
+  useEffect(() => {
+    if (!registerAdder) return;
+    return registerAdder((newItem: BlockerRow) => {
+      setBlockers((prev) => [...prev, newItem]);
+    });
+  }, [registerAdder]);
 
   useEffect(() => { onCountChange?.(blockers.length); }, [blockers.length, onCountChange]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -1082,6 +1102,7 @@ function ActionItemsPanel({
   onCountChange,
   intakeSourceMap = {},
   onNewItemsSuggested,
+  registerAdder,
 }: {
   actions: ActionRow[];
   people: Person[];
@@ -1091,8 +1112,16 @@ function ActionItemsPanel({
   onCountChange?: (count: number) => void;
   intakeSourceMap?: Record<string, string>;
   onNewItemsSuggested?: (items: { title: string; suggested_type?: string; priority?: string; description?: string }[]) => void;
+  registerAdder?: (fn: (item: ActionRow) => void) => () => void;
 }) {
   const [actions, setActions] = useState<ActionRow[]>(initialActions);
+
+  useEffect(() => {
+    if (!registerAdder) return;
+    return registerAdder((newItem: ActionRow) => {
+      setActions((prev) => [...prev, newItem]);
+    });
+  }, [registerAdder]);
 
   useEffect(() => { onCountChange?.(actions.length); }, [actions.length, onCountChange]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
