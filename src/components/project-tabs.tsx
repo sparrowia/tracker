@@ -1694,6 +1694,7 @@ function IntakePanel({
     setLoading(true);
     setError(null);
     setProgressStep("");
+    let intake: { id: string } | null = null;
 
     try {
       let combinedText = rawText.trim();
@@ -1718,7 +1719,7 @@ function IntakePanel({
         .eq("id", user.user?.id)
         .single();
 
-      const { data: intake, error: insertError } = await supabase
+      const { data: insertedIntake, error: insertError } = await supabase
         .from("intakes")
         .insert({
           raw_text: combinedText,
@@ -1733,24 +1734,30 @@ function IntakePanel({
         .single();
 
       if (insertError) throw insertError;
+      intake = insertedIntake;
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 90_000);
 
       const response = await fetch("/api/extract", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          intake_id: intake.id,
+          intake_id: intake!.id,
           raw_text: combinedText,
           vendor_id: vendorId && vendorId !== "none" ? vendorId : null,
           project_id: project.id,
         }),
+        signal: controller.signal,
       });
+      clearTimeout(timeout);
 
       if (!response.ok) {
         const err = await response.json();
         throw new Error(err.error || "Extraction failed");
       }
 
-      const updatedIntake = { ...intake, extraction_status: "complete" } as Intake;
+      const updatedIntake = { ...intake!, extraction_status: "complete" } as Intake;
       setIntakes((prev) => [updatedIntake, ...prev]);
       setRawText("");
       setPastedImages([]);
@@ -1758,9 +1765,16 @@ function IntakePanel({
       setVendorId("");
       setShowForm(false);
 
-      router.push(`/intake/${intake.id}/review`);
+      router.push(`/intake/${intake!.id}/review`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      // Mark intake as failed so it doesn't stay "processing"
+      if (intake?.id) {
+        try { await supabase.from("intakes").update({ extraction_status: "failed" }).eq("id", intake.id); } catch { /* best-effort */ }
+      }
+      const message = err instanceof Error && err.name === "AbortError"
+        ? "Extraction timed out. Please try again."
+        : err instanceof Error ? err.message : "Something went wrong";
+      setError(message);
     } finally {
       setLoading(false);
       setProgressStep("");

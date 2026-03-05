@@ -38,7 +38,13 @@ export async function POST(request: Request) {
     const ctx = await fetchOrgContext(supabase, orgId, vendor_id, project_id);
 
     // Build source-specific hints
-    const source = (intakeRecord as { source?: string } | null)?.source || "manual";
+    let source = (intakeRecord as { source?: string } | null)?.source || "manual";
+
+    // Auto-detect Asana export from content (in case source wasn't set correctly)
+    if (source !== "asana" && /Printed from Asana/i.test(raw_text)) {
+      source = "asana";
+      await supabase.from("intakes").update({ source: "asana" }).eq("id", intake_id);
+    }
 
     // Asana export: deterministic parser, skip DeepSeek entirely
     if (source === "asana") {
@@ -119,6 +125,14 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, data: extracted });
   } catch (err) {
+    // Mark intake as failed if we have an intake_id
+    try {
+      const body = await request.clone().json().catch(() => null);
+      if (body?.intake_id) {
+        const supabase = await createClient();
+        await supabase.from("intakes").update({ extraction_status: "failed" }).eq("id", body.intake_id);
+      }
+    } catch { /* best-effort cleanup */ }
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Internal server error" },
       { status: 500 }

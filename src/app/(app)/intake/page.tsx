@@ -306,6 +306,7 @@ export default function IntakePage() {
     setError(null);
     setProgressStep("Preparing...");
     setElapsed(0);
+    let intakeId: string | null = null;
 
     const timer = setInterval(() => setElapsed((s) => s + 1), 1000);
 
@@ -385,8 +386,12 @@ export default function IntakePage() {
         .single();
 
       if (insertError) throw insertError;
+      intakeId = intake.id;
 
       setProgressStep("Analyzing and extracting items...");
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 90_000);
+
       const response = await fetch("/api/extract", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -396,7 +401,9 @@ export default function IntakePage() {
           vendor_id: resolvedVendorId,
           project_id: resolvedProjectId,
         }),
+        signal: controller.signal,
       });
+      clearTimeout(timeout);
 
       if (!response.ok) {
         const err = await response.json();
@@ -408,7 +415,14 @@ export default function IntakePage() {
       router.push(`/intake/${intake.id}/review`);
     } catch (err) {
       clearInterval(timer);
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      // Mark intake as failed so it doesn't stay "processing"
+      if (intakeId) {
+        try { await supabase.from("intakes").update({ extraction_status: "failed" }).eq("id", intakeId); } catch { /* best-effort */ }
+      }
+      const message = err instanceof Error && err.name === "AbortError"
+        ? "Extraction timed out. Please try again."
+        : err instanceof Error ? err.message : "Something went wrong";
+      setError(message);
       setLoading(false);
       setProgressStep("");
     }

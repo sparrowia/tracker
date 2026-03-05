@@ -179,9 +179,11 @@ function isPersonTitleLine(line: string): boolean {
  */
 function splitIntoBlocks(text: string): string[] {
   // PDF-form-style export: split on separator lines
-  if (/[─━═]{5,}/.test(text)) {
+  // Includes ─ (U+2500), ━ (U+2501), ═ (U+2550), ⸻ (U+2E3B three-em dash),
+  // — (U+2014 em dash), ― (U+2015 horizontal bar), _ (underscore)
+  if (/[─━═⸻—―_]{5,}/.test(text)) {
     return text
-      .split(/[─━═_]{5,}/)
+      .split(/[─━═⸻—―_]{5,}/)
       .map((b) => b.trim())
       .filter(Boolean);
   }
@@ -206,7 +208,7 @@ function splitIntoBlocks(text: string): string[] {
     );
 
     // Separator lines
-    const isSeparator = /^[_─━═]{3,}$/.test(stripped);
+    const isSeparator = /^[_─━═⸻—―]{3,}$/.test(stripped);
 
     if ((isNewTask || isSection) && current.length > 0) {
       blocks.push(current.join("\n"));
@@ -333,7 +335,7 @@ function parseBlock(
     const line = lines[i];
 
     // Stop at separator
-    if (/^[_─━═]{3,}$/.test(line)) {
+    if (/^[_─━═⸻—―]{3,}$/.test(line)) {
       inDescription = false;
       continue;
     }
