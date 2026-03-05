@@ -208,18 +208,91 @@ export default function ProjectTabs({
 const blockerPriorityOptions: PriorityLevel[] = ["critical", "high", "medium", "low"];
 const blockerStatusOptions: ItemStatus[] = ["pending", "in_progress", "complete", "needs_verification", "paused", "at_risk", "blocked"];
 
-interface BlockerEditForm {
-  title: string;
-  priority: PriorityLevel;
-  status: ItemStatus;
-  owner_id: string;
-  vendor_id: string;
-  impact_description: string;
-  description: string;
-  due_date: string;
+type BlockerRow = Blocker & { owner: Person | null; vendor: Vendor | null };
+
+function InlineText({ value, onSave, placeholder, multiline }: { value: string; onSave: (v: string) => void; placeholder?: string; multiline?: boolean }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+
+  useEffect(() => { setDraft(value); }, [value]);
+
+  function commit() {
+    setEditing(false);
+    if (draft !== value) onSave(draft);
+  }
+
+  function cancel() {
+    setEditing(false);
+    setDraft(value);
+  }
+
+  if (!editing) {
+    return (
+      <p
+        className="text-gray-900 mt-0.5 hover:bg-gray-100 rounded cursor-pointer px-1 -mx-1 py-0.5"
+        onClick={(e) => { e.stopPropagation(); setEditing(true); }}
+      >
+        {value || <span className="text-gray-400">{placeholder || "—"}</span>}
+      </p>
+    );
+  }
+
+  if (multiline) {
+    return (
+      <textarea
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => { if (e.key === "Escape") cancel(); }}
+        rows={2}
+        autoFocus
+        className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y mt-0.5"
+        onClick={(e) => e.stopPropagation()}
+      />
+    );
+  }
+
+  return (
+    <input
+      type="text"
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => { if (e.key === "Enter") commit(); if (e.key === "Escape") cancel(); }}
+      autoFocus
+      className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 mt-0.5"
+      onClick={(e) => e.stopPropagation()}
+    />
+  );
 }
 
-type BlockerRow = Blocker & { owner: Person | null; vendor: Vendor | null };
+function InlineDate({ value, onSave }: { value: string | null; onSave: (v: string) => void }) {
+  const [editing, setEditing] = useState(false);
+
+  if (!editing) {
+    return (
+      <p
+        className="text-gray-900 mt-0.5 hover:bg-gray-100 rounded cursor-pointer px-1 -mx-1 py-0.5"
+        onClick={(e) => { e.stopPropagation(); setEditing(true); }}
+      >
+        {value ? formatDateShort(value) : <span className="text-gray-400">—</span>}
+      </p>
+    );
+  }
+
+  return (
+    <input
+      type="date"
+      value={value || ""}
+      onChange={(e) => { onSave(e.target.value); setEditing(false); }}
+      onBlur={() => setEditing(false)}
+      onKeyDown={(e) => { if (e.key === "Escape") setEditing(false); }}
+      autoFocus
+      className="w-48 rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 mt-0.5"
+      onClick={(e) => e.stopPropagation()}
+    />
+  );
+}
 
 function MeetingToggle({ active, onClick }: { active: boolean; onClick: (e: React.MouseEvent) => void }) {
   return (
@@ -257,14 +330,72 @@ function BlockersPanel({
 
   useEffect(() => { onCountChange?.(blockers.length); }, [blockers.length, onCountChange]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState<BlockerEditForm>({
-    title: "", priority: "high", status: "pending",
-    owner_id: "", vendor_id: "", impact_description: "", description: "", due_date: "",
-  });
+  const [callNotesId, setCallNotesId] = useState<string | null>(null);
   const [callNotes, setCallNotes] = useState("");
   const [savingNotes, setSavingNotes] = useState(false);
   const supabase = createClient();
+
+  function saveField(id: string, field: string, value: string) {
+    const dbUpdates: Record<string, unknown> = {};
+
+    if (field === "owner_id") {
+      const newOwner = people.find((p) => p.id === value) || null;
+      dbUpdates.owner_id = value || null;
+      setBlockers((prev) => prev.map((b) => b.id === id ? { ...b, owner_id: value || null, owner: newOwner } as BlockerRow : b));
+    } else if (field === "vendor_id") {
+      const newVendor = vendors.find((v) => v.id === value) || null;
+      dbUpdates.vendor_id = value || null;
+      setBlockers((prev) => prev.map((b) => b.id === id ? { ...b, vendor_id: value || null, vendor: newVendor } as BlockerRow : b));
+    } else {
+      dbUpdates[field] = value || null;
+      setBlockers((prev) => prev.map((b) => b.id === id ? { ...b, [field]: value || null } as BlockerRow : b));
+    }
+
+    supabase.from("blockers").update(dbUpdates).eq("id", id).then(({ error }) => {
+      if (error) console.error("Save failed:", error);
+    });
+  }
+
+  async function saveCallNotes(id: string) {
+    const entry = blockers.find((b) => b.id === id);
+    if (!entry || !callNotes.trim()) return;
+
+    setSavingNotes(true);
+    try {
+      const res = await fetch("/api/agenda-notes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          entity_type: "blocker",
+          current: {
+            title: entry.title,
+            impact_description: entry.impact_description,
+            description: entry.description,
+            priority: entry.priority,
+            status: entry.status,
+          },
+          notes: callNotes,
+        }),
+      });
+      if (res.ok) {
+        const { updates: aiUpdates } = await res.json();
+        const merged: Record<string, unknown> = {};
+        if (aiUpdates.title) merged.title = aiUpdates.title;
+        if (aiUpdates.priority) merged.priority = aiUpdates.priority;
+        if (aiUpdates.status) merged.status = aiUpdates.status;
+        if (aiUpdates.impact_description !== undefined) merged.impact_description = aiUpdates.impact_description;
+        if (aiUpdates.description !== undefined) merged.description = aiUpdates.description;
+        setBlockers((prev) => prev.map((b) => b.id === id ? { ...b, ...merged } as BlockerRow : b));
+        setCallNotes("");
+        setCallNotesId(null);
+        supabase.from("blockers").update(merged).eq("id", id).then(({ error }) => { if (error) console.error("Save failed:", error); });
+      }
+    } catch (err) {
+      console.error("AI save failed:", err);
+    } finally {
+      setSavingNotes(false);
+    }
+  }
 
   function toggleMeeting(id: string) {
     const blocker = blockers.find((b) => b.id === id);
@@ -278,89 +409,6 @@ function BlockersPanel({
 
   function toggleExpand(id: string) {
     setExpandedId((prev) => (prev === id ? null : id));
-    if (editingId && editingId !== id) setEditingId(null);
-  }
-
-  function startEdit(b: BlockerRow) {
-    setEditingId(b.id);
-    setEditForm({
-      title: b.title,
-      priority: b.priority,
-      status: b.status,
-      owner_id: b.owner_id || "",
-      vendor_id: b.vendor_id || "",
-      impact_description: b.impact_description || "",
-      description: b.description || "",
-      due_date: b.due_date || "",
-    });
-    setCallNotes("");
-  }
-
-  async function saveEdit(id: string) {
-    const newOwner = people.find((p) => p.id === editForm.owner_id) || null;
-    const newVendor = vendors.find((v) => v.id === editForm.vendor_id) || null;
-
-    // If call notes present, process through AI (can't be optimistic — need AI response)
-    if (callNotes.trim()) {
-      setSavingNotes(true);
-      try {
-        const res = await fetch("/api/agenda-notes", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            entity_type: "blocker",
-            current: {
-              title: editForm.title,
-              impact_description: editForm.impact_description,
-              description: editForm.description,
-              priority: editForm.priority,
-              status: editForm.status,
-            },
-            notes: callNotes,
-          }),
-        });
-        if (res.ok) {
-          const { updates: aiUpdates } = await res.json();
-          const merged = {
-            title: aiUpdates.title || editForm.title,
-            priority: aiUpdates.priority || editForm.priority,
-            status: aiUpdates.status || editForm.status,
-            owner_id: editForm.owner_id || null,
-            vendor_id: editForm.vendor_id || null,
-            impact_description: aiUpdates.impact_description !== undefined ? aiUpdates.impact_description : editForm.impact_description || null,
-            description: aiUpdates.description !== undefined ? aiUpdates.description : editForm.description || null,
-            due_date: editForm.due_date || null,
-          };
-          setBlockers((prev) => prev.map((b) => b.id === id ? { ...b, ...merged, owner: newOwner, vendor: newVendor } as BlockerRow : b));
-          setCallNotes("");
-          setEditingId(null);
-          setSavingNotes(false);
-          // Fire DB save in background
-          supabase.from("blockers").update(merged).eq("id", id).then(({ error }) => { if (error) console.error("Save failed:", error); });
-        }
-      } catch (err) {
-        console.error("AI save failed:", err);
-        setSavingNotes(false);
-      }
-      return;
-    }
-
-    // No notes — optimistic: update UI immediately, save in background
-    const updates = {
-      title: editForm.title,
-      priority: editForm.priority,
-      status: editForm.status,
-      owner_id: editForm.owner_id || null,
-      vendor_id: editForm.vendor_id || null,
-      impact_description: editForm.impact_description || null,
-      description: editForm.description || null,
-      due_date: editForm.due_date || null,
-    };
-
-    setBlockers((prev) => prev.map((b) => b.id === id ? { ...b, ...updates, owner: newOwner, vendor: newVendor } as BlockerRow : b));
-    setEditingId(null);
-
-    supabase.from("blockers").update(updates).eq("id", id).then(({ error }) => { if (error) console.error("Save failed:", error); });
   }
 
   async function handleResolve(id: string) {
@@ -406,7 +454,6 @@ function BlockersPanel({
       <div>
         {blockers.map((b) => {
           const isExpanded = expandedId === b.id;
-          const isEditing = editingId === b.id;
           const badge = statusBadge(b.status);
 
           return (
@@ -465,215 +512,153 @@ function BlockersPanel({
                 </div>
               </div>
 
-              {/* Expanded detail */}
+              {/* Expanded detail — inline editable */}
               {isExpanded && (
                 <div className="bg-red-50/30 px-4 py-3 border-b border-gray-200">
-                  {isEditing ? (
+                  <div className="space-y-2">
                     <div>
-                      <div className="flex gap-4">
-                        <div className="flex-1 space-y-3 min-w-0">
-                          <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1">Title</label>
-                            <input
-                              type="text"
-                              value={editForm.title}
-                              onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
-                              className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            />
-                          </div>
-                          <div className="grid grid-cols-2 gap-3">
-                            <div>
-                              <label className="block text-xs font-medium text-gray-500 mb-1">Priority</label>
-                              <select
-                                value={editForm.priority}
-                                onChange={(e) => setEditForm({ ...editForm, priority: e.target.value as PriorityLevel })}
-                                className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                              >
-                                {blockerPriorityOptions.map((p) => (
-                                  <option key={p} value={p}>{priorityLabel(p)}</option>
-                                ))}
-                              </select>
-                            </div>
-                            <div>
-                              <label className="block text-xs font-medium text-gray-500 mb-1">Status</label>
-                              <select
-                                value={editForm.status}
-                                onChange={(e) => setEditForm({ ...editForm, status: e.target.value as ItemStatus })}
-                                className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                              >
-                                {blockerStatusOptions.map((s) => (
-                                  <option key={s} value={s}>{s.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase())}</option>
-                                ))}
-                              </select>
-                            </div>
-                            <div>
-                              <label className="block text-xs font-medium text-gray-500 mb-1">Owner</label>
-                              <OwnerPicker
-                                value={editForm.owner_id}
-                                onChange={(id) => setEditForm({ ...editForm, owner_id: id })}
-                                people={people}
-                                onPersonAdded={onPersonAdded}
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-xs font-medium text-gray-500 mb-1">Vendor</label>
-                              <select
-                                value={editForm.vendor_id}
-                                onChange={(e) => setEditForm({ ...editForm, vendor_id: e.target.value })}
-                                className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                              >
-                                <option value="">None</option>
-                                {vendors.map((v) => (
-                                  <option key={v.id} value={v.id}>{v.name}</option>
-                                ))}
-                              </select>
-                            </div>
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1">Due Date</label>
-                            <input
-                              type="date"
-                              value={editForm.due_date}
-                              onChange={(e) => setEditForm({ ...editForm, due_date: e.target.value })}
-                              className="w-48 rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1">Impact</label>
-                            <textarea
-                              value={editForm.impact_description}
-                              onChange={(e) => setEditForm({ ...editForm, impact_description: e.target.value })}
-                              rows={2}
-                              className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1">Description</label>
-                            <textarea
-                              value={editForm.description}
-                              onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-                              rows={2}
-                              className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
-                            />
-                          </div>
-                        </div>
-                        <div className="w-72 flex-shrink-0 space-y-1.5">
-                          <label className="block text-xs font-medium text-gray-500 mb-1">Call Notes</label>
-                          <textarea
-                            value={callNotes}
-                            onChange={(e) => setCallNotes(e.target.value)}
-                            placeholder="Take notes during the call..."
-                            rows={12}
-                            className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
+                      <span className="text-xs font-medium text-gray-500 uppercase">Title</span>
+                      <InlineText value={b.title} onSave={(v) => saveField(b.id, "title", v)} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <span className="text-xs font-medium text-gray-500 uppercase">Impact</span>
+                        <InlineText value={b.impact_description || ""} onSave={(v) => saveField(b.id, "impact_description", v)} multiline placeholder="Add impact..." />
+                      </div>
+                      <div>
+                        <span className="text-xs font-medium text-gray-500 uppercase">Description</span>
+                        <InlineText value={b.description || ""} onSave={(v) => saveField(b.id, "description", v)} multiline placeholder="Add description..." />
+                      </div>
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <span className="text-xs font-medium text-gray-500 uppercase">Priority</span>
+                        <select
+                          value={b.priority}
+                          onChange={(e) => saveField(b.id, "priority", e.target.value)}
+                          className="block w-full text-sm rounded border border-transparent hover:border-gray-300 bg-transparent py-0.5 mt-0.5 focus:border-blue-500 focus:outline-none cursor-pointer"
+                        >
+                          {blockerPriorityOptions.map((p) => (
+                            <option key={p} value={p}>{priorityLabel(p)}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <span className="text-xs font-medium text-gray-500 uppercase">Status</span>
+                        <select
+                          value={b.status}
+                          onChange={(e) => saveField(b.id, "status", e.target.value)}
+                          className="block w-full text-sm rounded border border-transparent hover:border-gray-300 bg-transparent py-0.5 mt-0.5 focus:border-blue-500 focus:outline-none cursor-pointer"
+                        >
+                          {blockerStatusOptions.map((s) => (
+                            <option key={s} value={s}>{s.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase())}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <span className="text-xs font-medium text-gray-500 uppercase">Owner</span>
+                        <div className="mt-0.5">
+                          <OwnerPicker
+                            value={b.owner_id || ""}
+                            onChange={(id) => saveField(b.id, "owner_id", id)}
+                            people={people}
+                            onPersonAdded={onPersonAdded}
                           />
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 mt-3">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); setEditingId(null); }}
-                          className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded hover:bg-gray-50"
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <span className="text-xs font-medium text-gray-500 uppercase">Vendor</span>
+                        <select
+                          value={b.vendor_id || ""}
+                          onChange={(e) => saveField(b.id, "vendor_id", e.target.value)}
+                          className="block w-full text-sm rounded border border-transparent hover:border-gray-300 bg-transparent py-0.5 mt-0.5 focus:border-blue-500 focus:outline-none cursor-pointer"
                         >
-                          Cancel
-                        </button>
-                        <div className="flex-1" />
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleResolve(b.id); }}
-                          className="px-3 py-1.5 text-xs font-medium text-green-700 bg-white border border-green-300 rounded hover:bg-green-50"
-                        >
-                          Resolve
-                        </button>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); saveEdit(b.id); }}
-                          disabled={savingNotes}
-                          className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5"
-                        >
-                          {savingNotes && (
-                            <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-                            </svg>
-                          )}
-                          {savingNotes ? "Updating..." : "Save"}
-                        </button>
+                          <option value="">None</option>
+                          {vendors.map((v) => (
+                            <option key={v.id} value={v.id}>{v.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <span className="text-xs font-medium text-gray-500 uppercase">Due Date</span>
+                        <InlineDate value={b.due_date} onSave={(v) => saveField(b.id, "due_date", v)} />
+                      </div>
+                      <div>
+                        <span className="text-xs font-medium text-gray-500 uppercase">First Flagged</span>
+                        <p className="text-gray-900 mt-0.5">{new Date(b.first_flagged_at).toLocaleDateString()}</p>
+                      </div>
+                      <div>
+                        <span className="text-xs font-medium text-gray-500 uppercase">Age</span>
+                        <p className="text-red-700 font-medium mt-0.5">{b.age_days != null ? formatAge(b.age_days) : "—"}</p>
+                      </div>
+                      <div>
+                        <span className="text-xs font-medium text-gray-500 uppercase">Escalations</span>
+                        <p className="text-gray-900 mt-0.5">{b.escalation_count > 0 ? `${b.escalation_count}x` : "None"}</p>
                       </div>
                     </div>
-                  ) : (
-                    <div className="space-y-2">
-                      <div className="grid grid-cols-2 gap-3 text-sm">
-                        <div>
-                          <span className="text-xs font-medium text-gray-500 uppercase">Impact</span>
-                          <p className="text-gray-900 mt-0.5">{b.impact_description || "—"}</p>
-                        </div>
-                        <div>
-                          <span className="text-xs font-medium text-gray-500 uppercase">Description</span>
-                          <p className="text-gray-900 mt-0.5">{b.description || "—"}</p>
-                        </div>
-                        <div>
-                          <span className="text-xs font-medium text-gray-500 uppercase">Owner</span>
-                          <p className="text-gray-900 mt-0.5">{b.owner?.full_name || "Unassigned"}</p>
-                        </div>
-                        <div>
-                          <span className="text-xs font-medium text-gray-500 uppercase">Vendor</span>
-                          <p className="text-gray-900 mt-0.5">{b.vendor?.name || "—"}</p>
-                        </div>
-                        <div>
-                          <span className="text-xs font-medium text-gray-500 uppercase">Status</span>
-                          <p className="text-gray-900 mt-0.5">{b.status.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase())}</p>
-                        </div>
-                        <div>
-                          <span className="text-xs font-medium text-gray-500 uppercase">Priority</span>
-                          <p className="text-gray-900 mt-0.5">{priorityLabel(b.priority)}</p>
-                        </div>
-                        <div>
-                          <span className="text-xs font-medium text-gray-500 uppercase">Due Date</span>
-                          <p className="text-gray-900 mt-0.5">{b.due_date ? formatDateShort(b.due_date) : "—"}</p>
-                        </div>
-                        <div>
-                          <span className="text-xs font-medium text-gray-500 uppercase">First Flagged</span>
-                          <p className="text-gray-900 mt-0.5">{new Date(b.first_flagged_at).toLocaleDateString()}</p>
-                        </div>
-                        <div>
-                          <span className="text-xs font-medium text-gray-500 uppercase">Age</span>
-                          <p className="text-red-700 font-medium mt-0.5">{b.age_days != null ? formatAge(b.age_days) : "—"}</p>
-                        </div>
-                        <div>
-                          <span className="text-xs font-medium text-gray-500 uppercase">Escalations</span>
-                          <p className="text-gray-900 mt-0.5">{b.escalation_count > 0 ? `${b.escalation_count}x` : "None"}</p>
+                    {/* Call Notes panel */}
+                    {callNotesId === b.id && (
+                      <div className="mt-3 pt-3 border-t border-gray-200">
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Call Notes</label>
+                        <textarea
+                          value={callNotes}
+                          onChange={(e) => setCallNotes(e.target.value)}
+                          placeholder="Take notes during the call — AI will update fields automatically..."
+                          rows={4}
+                          className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                        <div className="flex gap-2 justify-end mt-2">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setCallNotesId(null); setCallNotes(""); }}
+                            className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded hover:bg-gray-50"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); saveCallNotes(b.id); }}
+                            disabled={savingNotes || !callNotes.trim()}
+                            className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5"
+                          >
+                            {savingNotes && (
+                              <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                              </svg>
+                            )}
+                            {savingNotes ? "Updating..." : "Process Notes"}
+                          </button>
                         </div>
                       </div>
-                      <div className="flex justify-end items-center gap-3 pt-2 border-t border-gray-300 mt-3">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); startEdit(b); }}
-                          className="text-gray-400 hover:text-blue-600 transition-colors"
-                          title="Edit"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                          </svg>
-                        </button>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleDelete(b.id); }}
-                          className="text-gray-400 hover:text-red-600 transition-colors"
-                          title="Delete"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="3 6 5 6 21 6"/>
-                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                          </svg>
-                        </button>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleResolve(b.id); }}
-                          className="text-gray-400 hover:text-green-600 transition-colors"
-                          title="Resolve"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="20 6 9 17 4 12"/>
-                          </svg>
-                        </button>
-                      </div>
+                    )}
+                    <div className="flex justify-end items-center gap-3 pt-2 border-t border-gray-300 mt-3">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setCallNotesId(callNotesId === b.id ? null : b.id); setCallNotes(""); }}
+                        className={`text-xs font-medium px-2 py-1 rounded border transition-colors ${callNotesId === b.id ? "text-blue-700 border-blue-300 bg-blue-50" : "text-gray-500 border-gray-300 hover:text-blue-600 hover:border-blue-300"}`}
+                        title="Call Notes"
+                      >
+                        Call Notes
+                      </button>
+                      <div className="flex-1" />
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDelete(b.id); }}
+                        className="text-gray-400 hover:text-red-600 transition-colors"
+                        title="Delete"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="3 6 5 6 21 6"/>
+                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                        </svg>
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleResolve(b.id); }}
+                        className="text-gray-400 hover:text-green-600 transition-colors"
+                        title="Resolve"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                      </button>
                     </div>
-                  )}
+                  </div>
                 </div>
               )}
             </Fragment>
@@ -686,17 +671,6 @@ function BlockersPanel({
 
 const actionPriorityOptions: PriorityLevel[] = ["critical", "high", "medium", "low"];
 const actionStatusOptions: ItemStatus[] = ["pending", "in_progress", "complete", "needs_verification", "paused", "at_risk", "blocked"];
-
-interface ActionEditForm {
-  title: string;
-  description: string;
-  notes: string;
-  priority: PriorityLevel;
-  status: ItemStatus;
-  owner_id: string;
-  vendor_id: string;
-  due_date: string;
-}
 
 type ActionRow = ActionItem & { owner: Person | null; vendor: Vendor | null };
 
@@ -721,14 +695,72 @@ function ActionItemsPanel({
 
   useEffect(() => { onCountChange?.(actions.length); }, [actions.length, onCountChange]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState<ActionEditForm>({
-    title: "", description: "", notes: "", priority: "medium", status: "pending",
-    owner_id: "", vendor_id: "", due_date: "",
-  });
+  const [callNotesId, setCallNotesId] = useState<string | null>(null);
   const [callNotes, setCallNotes] = useState("");
   const [savingNotes, setSavingNotes] = useState(false);
   const supabase = createClient();
+
+  function saveField(id: string, field: string, value: string) {
+    const dbUpdates: Record<string, unknown> = {};
+
+    if (field === "owner_id") {
+      const newOwner = people.find((p) => p.id === value) || null;
+      dbUpdates.owner_id = value || null;
+      setActions((prev) => prev.map((a) => a.id === id ? { ...a, owner_id: value || null, owner: newOwner } as ActionRow : a));
+    } else if (field === "vendor_id") {
+      const newVendor = vendors.find((v) => v.id === value) || null;
+      dbUpdates.vendor_id = value || null;
+      setActions((prev) => prev.map((a) => a.id === id ? { ...a, vendor_id: value || null, vendor: newVendor } as ActionRow : a));
+    } else {
+      dbUpdates[field] = value || null;
+      setActions((prev) => prev.map((a) => a.id === id ? { ...a, [field]: value || null } as ActionRow : a));
+    }
+
+    supabase.from("action_items").update(dbUpdates).eq("id", id).then(({ error }) => {
+      if (error) console.error("Save failed:", error);
+    });
+  }
+
+  async function saveCallNotes(id: string) {
+    const entry = actions.find((a) => a.id === id);
+    if (!entry || !callNotes.trim()) return;
+
+    setSavingNotes(true);
+    try {
+      const res = await fetch("/api/agenda-notes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          entity_type: "action_item",
+          current: {
+            title: entry.title,
+            description: entry.description,
+            notes: entry.notes,
+            priority: entry.priority,
+            status: entry.status,
+          },
+          notes: callNotes,
+        }),
+      });
+      if (res.ok) {
+        const { updates: aiUpdates } = await res.json();
+        const merged: Record<string, unknown> = {};
+        if (aiUpdates.title) merged.title = aiUpdates.title;
+        if (aiUpdates.priority) merged.priority = aiUpdates.priority;
+        if (aiUpdates.status) merged.status = aiUpdates.status;
+        if (aiUpdates.description !== undefined) merged.description = aiUpdates.description;
+        if (aiUpdates.notes !== undefined) merged.notes = aiUpdates.notes;
+        setActions((prev) => prev.map((a) => a.id === id ? { ...a, ...merged } as ActionRow : a));
+        setCallNotes("");
+        setCallNotesId(null);
+        supabase.from("action_items").update(merged).eq("id", id).then(({ error }) => { if (error) console.error("Save failed:", error); });
+      }
+    } catch (err) {
+      console.error("AI save failed:", err);
+    } finally {
+      setSavingNotes(false);
+    }
+  }
 
   function toggleMeeting(id: string) {
     const action = actions.find((a) => a.id === id);
@@ -742,88 +774,6 @@ function ActionItemsPanel({
 
   function toggleExpand(id: string) {
     setExpandedId((prev) => (prev === id ? null : id));
-    if (editingId && editingId !== id) setEditingId(null);
-  }
-
-  function startEdit(a: ActionRow) {
-    setEditingId(a.id);
-    setEditForm({
-      title: a.title,
-      description: a.description || "",
-      notes: a.notes || "",
-      priority: a.priority,
-      status: a.status,
-      owner_id: a.owner_id || "",
-      vendor_id: a.vendor_id || "",
-      due_date: a.due_date || "",
-    });
-    setCallNotes("");
-  }
-
-  async function saveEdit(id: string) {
-    const newOwner = people.find((p) => p.id === editForm.owner_id) || null;
-    const newVendor = vendors.find((v) => v.id === editForm.vendor_id) || null;
-
-    // If call notes present, process through AI (can't be optimistic — need AI response)
-    if (callNotes.trim()) {
-      setSavingNotes(true);
-      try {
-        const res = await fetch("/api/agenda-notes", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            entity_type: "action_item",
-            current: {
-              title: editForm.title,
-              description: editForm.description,
-              notes: editForm.notes,
-              priority: editForm.priority,
-              status: editForm.status,
-            },
-            notes: callNotes,
-          }),
-        });
-        if (res.ok) {
-          const { updates: aiUpdates } = await res.json();
-          const merged = {
-            title: aiUpdates.title || editForm.title,
-            priority: aiUpdates.priority || editForm.priority,
-            status: aiUpdates.status || editForm.status,
-            owner_id: editForm.owner_id || null,
-            vendor_id: editForm.vendor_id || null,
-            description: aiUpdates.description !== undefined ? aiUpdates.description : editForm.description || null,
-            notes: aiUpdates.notes !== undefined ? aiUpdates.notes : editForm.notes || null,
-            due_date: editForm.due_date || null,
-          };
-          setActions((prev) => prev.map((a) => a.id === id ? { ...a, ...merged, owner: newOwner, vendor: newVendor } as ActionRow : a));
-          setCallNotes("");
-          setEditingId(null);
-          setSavingNotes(false);
-          supabase.from("action_items").update(merged).eq("id", id).then(({ error }) => { if (error) console.error("Save failed:", error); });
-        }
-      } catch (err) {
-        console.error("AI save failed:", err);
-        setSavingNotes(false);
-      }
-      return;
-    }
-
-    // No notes — optimistic: update UI immediately, save in background
-    const updates = {
-      title: editForm.title,
-      description: editForm.description || null,
-      notes: editForm.notes || null,
-      priority: editForm.priority,
-      status: editForm.status,
-      owner_id: editForm.owner_id || null,
-      vendor_id: editForm.vendor_id || null,
-      due_date: editForm.due_date || null,
-    };
-
-    setActions((prev) => prev.map((a) => a.id === id ? { ...a, ...updates, owner: newOwner, vendor: newVendor } as ActionRow : a));
-    setEditingId(null);
-
-    supabase.from("action_items").update(updates).eq("id", id).then(({ error }) => { if (error) console.error("Save failed:", error); });
   }
 
   async function handleResolve(id: string) {
@@ -869,7 +819,6 @@ function ActionItemsPanel({
       <div>
         {actions.map((a) => {
           const isExpanded = expandedId === a.id;
-          const isEditing = editingId === a.id;
           const badge = statusBadge(a.status);
 
           return (
@@ -928,215 +877,153 @@ function ActionItemsPanel({
                 </div>
               </div>
 
-              {/* Expanded detail */}
+              {/* Expanded detail — inline editable */}
               {isExpanded && (
                 <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
-                  {isEditing ? (
+                  <div className="space-y-2">
                     <div>
-                      <div className="flex gap-4">
-                        <div className="flex-1 space-y-3 min-w-0">
-                          <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1">Title</label>
-                            <input
-                              type="text"
-                              value={editForm.title}
-                              onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
-                              className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            />
-                          </div>
-                          <div className="grid grid-cols-2 gap-3">
-                            <div>
-                              <label className="block text-xs font-medium text-gray-500 mb-1">Priority</label>
-                              <select
-                                value={editForm.priority}
-                                onChange={(e) => setEditForm({ ...editForm, priority: e.target.value as PriorityLevel })}
-                                className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                              >
-                                {actionPriorityOptions.map((p) => (
-                                  <option key={p} value={p}>{priorityLabel(p)}</option>
-                                ))}
-                              </select>
-                            </div>
-                            <div>
-                              <label className="block text-xs font-medium text-gray-500 mb-1">Status</label>
-                              <select
-                                value={editForm.status}
-                                onChange={(e) => setEditForm({ ...editForm, status: e.target.value as ItemStatus })}
-                                className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                              >
-                                {actionStatusOptions.map((s) => (
-                                  <option key={s} value={s}>{s.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase())}</option>
-                                ))}
-                              </select>
-                            </div>
-                            <div>
-                              <label className="block text-xs font-medium text-gray-500 mb-1">Owner</label>
-                              <OwnerPicker
-                                value={editForm.owner_id}
-                                onChange={(id) => setEditForm({ ...editForm, owner_id: id })}
-                                people={people}
-                                onPersonAdded={onPersonAdded}
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-xs font-medium text-gray-500 mb-1">Vendor</label>
-                              <select
-                                value={editForm.vendor_id}
-                                onChange={(e) => setEditForm({ ...editForm, vendor_id: e.target.value })}
-                                className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                              >
-                                <option value="">None</option>
-                                {vendors.map((v) => (
-                                  <option key={v.id} value={v.id}>{v.name}</option>
-                                ))}
-                              </select>
-                            </div>
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1">Due Date</label>
-                            <input
-                              type="date"
-                              value={editForm.due_date}
-                              onChange={(e) => setEditForm({ ...editForm, due_date: e.target.value })}
-                              className="w-48 rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1">Description</label>
-                            <textarea
-                              value={editForm.description}
-                              onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-                              rows={2}
-                              className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1">Notes</label>
-                            <textarea
-                              value={editForm.notes}
-                              onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
-                              rows={2}
-                              className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
-                            />
-                          </div>
-                        </div>
-                        <div className="w-72 flex-shrink-0 space-y-1.5">
-                          <label className="block text-xs font-medium text-gray-500 mb-1">Call Notes</label>
-                          <textarea
-                            value={callNotes}
-                            onChange={(e) => setCallNotes(e.target.value)}
-                            placeholder="Take notes during the call..."
-                            rows={14}
-                            className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
+                      <span className="text-xs font-medium text-gray-500 uppercase">Title</span>
+                      <InlineText value={a.title} onSave={(v) => saveField(a.id, "title", v)} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <span className="text-xs font-medium text-gray-500 uppercase">Description</span>
+                        <InlineText value={a.description || ""} onSave={(v) => saveField(a.id, "description", v)} multiline placeholder="Add description..." />
+                      </div>
+                      <div>
+                        <span className="text-xs font-medium text-gray-500 uppercase">Notes</span>
+                        <InlineText value={a.notes || ""} onSave={(v) => saveField(a.id, "notes", v)} multiline placeholder="Add notes..." />
+                      </div>
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <span className="text-xs font-medium text-gray-500 uppercase">Priority</span>
+                        <select
+                          value={a.priority}
+                          onChange={(e) => saveField(a.id, "priority", e.target.value)}
+                          className="block w-full text-sm rounded border border-transparent hover:border-gray-300 bg-transparent py-0.5 mt-0.5 focus:border-blue-500 focus:outline-none cursor-pointer"
+                        >
+                          {actionPriorityOptions.map((p) => (
+                            <option key={p} value={p}>{priorityLabel(p)}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <span className="text-xs font-medium text-gray-500 uppercase">Status</span>
+                        <select
+                          value={a.status}
+                          onChange={(e) => saveField(a.id, "status", e.target.value)}
+                          className="block w-full text-sm rounded border border-transparent hover:border-gray-300 bg-transparent py-0.5 mt-0.5 focus:border-blue-500 focus:outline-none cursor-pointer"
+                        >
+                          {actionStatusOptions.map((s) => (
+                            <option key={s} value={s}>{s.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase())}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <span className="text-xs font-medium text-gray-500 uppercase">Owner</span>
+                        <div className="mt-0.5">
+                          <OwnerPicker
+                            value={a.owner_id || ""}
+                            onChange={(id) => saveField(a.id, "owner_id", id)}
+                            people={people}
+                            onPersonAdded={onPersonAdded}
                           />
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 mt-3">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); setEditingId(null); }}
-                          className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded hover:bg-gray-50"
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <span className="text-xs font-medium text-gray-500 uppercase">Vendor</span>
+                        <select
+                          value={a.vendor_id || ""}
+                          onChange={(e) => saveField(a.id, "vendor_id", e.target.value)}
+                          className="block w-full text-sm rounded border border-transparent hover:border-gray-300 bg-transparent py-0.5 mt-0.5 focus:border-blue-500 focus:outline-none cursor-pointer"
                         >
-                          Cancel
-                        </button>
-                        <div className="flex-1" />
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleResolve(a.id); }}
-                          className="px-3 py-1.5 text-xs font-medium text-green-700 bg-white border border-green-300 rounded hover:bg-green-50"
-                        >
-                          Resolve
-                        </button>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); saveEdit(a.id); }}
-                          disabled={savingNotes}
-                          className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5"
-                        >
-                          {savingNotes && (
-                            <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-                            </svg>
-                          )}
-                          {savingNotes ? "Updating..." : "Save"}
-                        </button>
+                          <option value="">None</option>
+                          {vendors.map((v) => (
+                            <option key={v.id} value={v.id}>{v.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <span className="text-xs font-medium text-gray-500 uppercase">Due Date</span>
+                        <InlineDate value={a.due_date} onSave={(v) => saveField(a.id, "due_date", v)} />
+                      </div>
+                      <div>
+                        <span className="text-xs font-medium text-gray-500 uppercase">First Flagged</span>
+                        <p className="text-gray-900 mt-0.5">{new Date(a.first_flagged_at).toLocaleDateString()}</p>
+                      </div>
+                      <div>
+                        <span className="text-xs font-medium text-gray-500 uppercase">Age</span>
+                        <p className="text-gray-600 font-medium mt-0.5">{a.age_days != null ? formatAge(a.age_days) : "—"}</p>
+                      </div>
+                      <div>
+                        <span className="text-xs font-medium text-gray-500 uppercase">Escalations</span>
+                        <p className="text-gray-900 mt-0.5">{a.escalation_count > 0 ? `${a.escalation_count}x` : "None"}</p>
                       </div>
                     </div>
-                  ) : (
-                    <div className="space-y-2">
-                      <div className="grid grid-cols-2 gap-3 text-sm">
-                        <div>
-                          <span className="text-xs font-medium text-gray-500 uppercase">Description</span>
-                          <p className="text-gray-900 mt-0.5">{a.description || "—"}</p>
-                        </div>
-                        <div>
-                          <span className="text-xs font-medium text-gray-500 uppercase">Notes</span>
-                          <p className="text-gray-900 mt-0.5">{a.notes || "—"}</p>
-                        </div>
-                        <div>
-                          <span className="text-xs font-medium text-gray-500 uppercase">Owner</span>
-                          <p className="text-gray-900 mt-0.5">{a.owner?.full_name || "Unassigned"}</p>
-                        </div>
-                        <div>
-                          <span className="text-xs font-medium text-gray-500 uppercase">Vendor</span>
-                          <p className="text-gray-900 mt-0.5">{a.vendor?.name || "—"}</p>
-                        </div>
-                        <div>
-                          <span className="text-xs font-medium text-gray-500 uppercase">Status</span>
-                          <p className="text-gray-900 mt-0.5">{a.status.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase())}</p>
-                        </div>
-                        <div>
-                          <span className="text-xs font-medium text-gray-500 uppercase">Priority</span>
-                          <p className="text-gray-900 mt-0.5">{priorityLabel(a.priority)}</p>
-                        </div>
-                        <div>
-                          <span className="text-xs font-medium text-gray-500 uppercase">Due Date</span>
-                          <p className="text-gray-900 mt-0.5">{a.due_date ? formatDateShort(a.due_date) : "—"}</p>
-                        </div>
-                        <div>
-                          <span className="text-xs font-medium text-gray-500 uppercase">First Flagged</span>
-                          <p className="text-gray-900 mt-0.5">{new Date(a.first_flagged_at).toLocaleDateString()}</p>
-                        </div>
-                        <div>
-                          <span className="text-xs font-medium text-gray-500 uppercase">Age</span>
-                          <p className="text-gray-600 font-medium mt-0.5">{a.age_days != null ? formatAge(a.age_days) : "—"}</p>
-                        </div>
-                        <div>
-                          <span className="text-xs font-medium text-gray-500 uppercase">Escalations</span>
-                          <p className="text-gray-900 mt-0.5">{a.escalation_count > 0 ? `${a.escalation_count}x` : "None"}</p>
+                    {/* Call Notes panel */}
+                    {callNotesId === a.id && (
+                      <div className="mt-3 pt-3 border-t border-gray-200">
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Call Notes</label>
+                        <textarea
+                          value={callNotes}
+                          onChange={(e) => setCallNotes(e.target.value)}
+                          placeholder="Take notes during the call — AI will update fields automatically..."
+                          rows={4}
+                          className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                        <div className="flex gap-2 justify-end mt-2">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setCallNotesId(null); setCallNotes(""); }}
+                            className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded hover:bg-gray-50"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); saveCallNotes(a.id); }}
+                            disabled={savingNotes || !callNotes.trim()}
+                            className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5"
+                          >
+                            {savingNotes && (
+                              <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                              </svg>
+                            )}
+                            {savingNotes ? "Updating..." : "Process Notes"}
+                          </button>
                         </div>
                       </div>
-                      <div className="flex justify-end items-center gap-3 pt-2 border-t border-gray-300 mt-3">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); startEdit(a); }}
-                          className="text-gray-400 hover:text-blue-600 transition-colors"
-                          title="Edit"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                          </svg>
-                        </button>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleDelete(a.id); }}
-                          className="text-gray-400 hover:text-red-600 transition-colors"
-                          title="Delete"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="3 6 5 6 21 6"/>
-                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                          </svg>
-                        </button>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleResolve(a.id); }}
-                          className="text-gray-400 hover:text-green-600 transition-colors"
-                          title="Resolve"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="20 6 9 17 4 12"/>
-                          </svg>
-                        </button>
-                      </div>
+                    )}
+                    <div className="flex justify-end items-center gap-3 pt-2 border-t border-gray-300 mt-3">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setCallNotesId(callNotesId === a.id ? null : a.id); setCallNotes(""); }}
+                        className={`text-xs font-medium px-2 py-1 rounded border transition-colors ${callNotesId === a.id ? "text-blue-700 border-blue-300 bg-blue-50" : "text-gray-500 border-gray-300 hover:text-blue-600 hover:border-blue-300"}`}
+                        title="Call Notes"
+                      >
+                        Call Notes
+                      </button>
+                      <div className="flex-1" />
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDelete(a.id); }}
+                        className="text-gray-400 hover:text-red-600 transition-colors"
+                        title="Delete"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="3 6 5 6 21 6"/>
+                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                        </svg>
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleResolve(a.id); }}
+                        className="text-gray-400 hover:text-green-600 transition-colors"
+                        title="Resolve"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                      </button>
                     </div>
-                  )}
+                  </div>
                 </div>
               )}
             </Fragment>
