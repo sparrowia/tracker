@@ -154,8 +154,41 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
   const [addPriority, setAddPriority] = useState<PriorityLevel>("medium");
   const [visibleCols, setVisibleCols] = useState<RaidColumnKey[]>(loadRaidColumns);
   const [showColPicker, setShowColPicker] = useState(false);
+  const [filterPriority, setFilterPriority] = useState<PriorityLevel | "">("");
+  const [filterStatus, setFilterStatus] = useState<ItemStatus | "">("");
+  const [filterOwner, setFilterOwner] = useState("");
+  const [filterAge, setFilterAge] = useState("");
   const colPickerRef = useRef<HTMLDivElement>(null);
   const supabase = createClient();
+
+  const hasActiveFilters = filterPriority || filterStatus || filterOwner || filterAge;
+
+  function applyFilters(items: RaidRow[]): RaidRow[] {
+    let filtered = items;
+    if (filterPriority) filtered = filtered.filter((e) => e.priority === filterPriority);
+    if (filterStatus) filtered = filtered.filter((e) => e.status === filterStatus);
+    if (filterOwner) {
+      if (filterOwner === "__unassigned__") {
+        filtered = filtered.filter((e) => !e.owner_id);
+      } else {
+        filtered = filtered.filter((e) => e.owner_id === filterOwner);
+      }
+    }
+    if (filterAge) {
+      filtered = filtered.filter((e) => {
+        const age = ageFromDate(e.first_flagged_at);
+        switch (filterAge) {
+          case "today": return age === 0;
+          case "1-3": return age >= 1 && age <= 3;
+          case "4-7": return age >= 4 && age <= 7;
+          case "8-14": return age >= 8 && age <= 14;
+          case "15+": return age >= 15;
+          default: return true;
+        }
+      });
+    }
+    return filtered;
+  }
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -342,11 +375,20 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
     }
   }
 
-  function renderQuadrant(label: string, raidType: RaidType, items: RaidRow[]) {
+  function renderQuadrant(label: string, raidType: RaidType, allItems: RaidRow[]) {
+    const items = applyFilters(allItems);
+    const statusesForType = raidType === "risk" ? riskStatusOptions : statusOptions;
+    // Collect unique owners from unfiltered items for the filter dropdown
+    const ownerOptions = Array.from(
+      new Map(allItems.filter((e) => e.owner).map((e) => [e.owner!.id, e.owner!.full_name])).entries()
+    ).sort((a, b) => a[1].localeCompare(b[1]));
+    const filteredCount = items.length !== allItems.length;
     return (
       <div className="rounded-lg border border-gray-300 overflow-hidden">
         <div className="bg-gray-700 px-4 h-9 flex items-center justify-between">
-          <h3 className="text-xs font-semibold text-white uppercase tracking-wide">{label} ({items.length})</h3>
+          <h3 className="text-xs font-semibold text-white uppercase tracking-wide">
+            {label} ({filteredCount ? `${items.length}/${allItems.length}` : allItems.length})
+          </h3>
           <div className="flex items-center gap-3">
             <div className="relative" ref={colPickerRef}>
               <button
@@ -419,7 +461,68 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
             </div>
           </div>
         )}
-        {items.length === 0 && addingType !== raidType ? (
+        {/* Filter bar */}
+        {allItems.length > 0 && (
+          <div className="bg-white border-b border-gray-200 px-3 py-1.5">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide mr-1">Filters</span>
+              <select
+                value={filterPriority}
+                onChange={(e) => setFilterPriority(e.target.value as PriorityLevel | "")}
+                className={`rounded border px-1.5 py-0.5 text-xs focus:border-blue-500 focus:outline-none ${filterPriority ? "border-blue-400 bg-blue-50 text-blue-700" : "border-gray-300 text-gray-600"}`}
+              >
+                <option value="">Priority</option>
+                {priorityOptions.map((p) => (
+                  <option key={p} value={p}>{priorityLabel(p)}</option>
+                ))}
+              </select>
+              <select
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value as ItemStatus | "")}
+                className={`rounded border px-1.5 py-0.5 text-xs focus:border-blue-500 focus:outline-none ${filterStatus ? "border-blue-400 bg-blue-50 text-blue-700" : "border-gray-300 text-gray-600"}`}
+              >
+                <option value="">Status</option>
+                {statusesForType.map((s) => (
+                  <option key={s} value={s}>{s.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase())}</option>
+                ))}
+              </select>
+              <select
+                value={filterOwner}
+                onChange={(e) => setFilterOwner(e.target.value)}
+                className={`rounded border px-1.5 py-0.5 text-xs focus:border-blue-500 focus:outline-none ${filterOwner ? "border-blue-400 bg-blue-50 text-blue-700" : "border-gray-300 text-gray-600"}`}
+              >
+                <option value="">Owner</option>
+                <option value="__unassigned__">Unassigned</option>
+                {ownerOptions.map(([id, name]) => (
+                  <option key={id} value={id}>{name}</option>
+                ))}
+              </select>
+              <select
+                value={filterAge}
+                onChange={(e) => setFilterAge(e.target.value)}
+                className={`rounded border px-1.5 py-0.5 text-xs focus:border-blue-500 focus:outline-none ${filterAge ? "border-blue-400 bg-blue-50 text-blue-700" : "border-gray-300 text-gray-600"}`}
+              >
+                <option value="">Age</option>
+                <option value="today">Today</option>
+                <option value="1-3">1–3 days</option>
+                <option value="4-7">4–7 days</option>
+                <option value="8-14">1–2 weeks</option>
+                <option value="15+">2+ weeks</option>
+              </select>
+              {hasActiveFilters && (
+                <button
+                  onClick={() => { setFilterPriority(""); setFilterStatus(""); setFilterOwner(""); setFilterAge(""); }}
+                  className="text-[10px] text-gray-400 hover:text-red-500 ml-1"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+        {items.length === 0 && allItems.length > 0 && hasActiveFilters ? (
+          <p className="text-sm text-gray-400 p-4">No items match filters.</p>
+        ) : items.length === 0 && addingType !== raidType ? (
           <p className="text-sm text-gray-400 p-4">None</p>
         ) : items.length === 0 ? null : (
           <div>
