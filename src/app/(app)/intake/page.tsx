@@ -198,8 +198,24 @@ export default function IntakePage() {
   async function handleFileSelect(file: File) {
     setError(null);
     const ext = file.name.split(".").pop()?.toLowerCase();
-    if (!ext || !["csv", "xls", "xlsx"].includes(ext)) {
-      setError("Please upload a CSV, XLS, or XLSX file.");
+    if (!ext || !["csv", "xls", "xlsx", "pdf"].includes(ext)) {
+      setError("Please upload a CSV, XLS, XLSX, or PDF file.");
+      return;
+    }
+
+    // PDF → extract text into rawText (not spreadsheet mode)
+    if (ext === "pdf") {
+      try {
+        const { extractPdfText } = await import("@/lib/pdf");
+        const text = await extractPdfText(file);
+        if (!text.trim()) {
+          setError("Could not extract any text from this PDF.");
+          return;
+        }
+        setRawText((prev) => (prev.trim() ? prev + "\n\n" + text : text));
+      } catch {
+        setError("Failed to read the PDF file.");
+      }
       return;
     }
 
@@ -507,7 +523,7 @@ export default function IntakePage() {
         {/* File Upload Zone */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Upload Spreadsheet
+            Upload Spreadsheet or PDF
           </label>
           {parsedFile ? (
             <div className="flex items-center gap-3 rounded-md border border-blue-300 bg-blue-50 px-4 py-3">
@@ -559,12 +575,12 @@ export default function IntakePage() {
                 <line x1="12" y1="3" x2="12" y2="15"/>
               </svg>
               <p className="text-sm text-gray-500">
-                Drop a CSV, XLS, or XLSX file here, or <span className="text-blue-600 font-medium">browse</span>
+                Drop a CSV, XLS, XLSX, or PDF file here, or <span className="text-blue-600 font-medium">browse</span>
               </p>
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".csv,.xls,.xlsx"
+                accept=".csv,.xls,.xlsx,.pdf"
                 className="hidden"
                 onChange={(e) => {
                   const file = e.target.files?.[0];

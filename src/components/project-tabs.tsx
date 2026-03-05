@@ -1612,8 +1612,30 @@ function IntakePanel({
   const [progressStep, setProgressStep] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [isDraggingPdf, setIsDraggingPdf] = useState(false);
+  const pdfInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const supabase = createClient();
+
+  async function handlePdfDrop(file: File) {
+    const ext = file.name.split(".").pop()?.toLowerCase();
+    if (ext !== "pdf") {
+      setError("Please drop a PDF file.");
+      return;
+    }
+    try {
+      const { extractPdfText } = await import("@/lib/pdf");
+      const text = await extractPdfText(file);
+      if (!text.trim()) {
+        setError("Could not extract any text from this PDF.");
+        return;
+      }
+      setRawText((prev) => (prev.trim() ? prev + "\n\n" + text : text));
+      setError(null);
+    } catch {
+      setError("Failed to read the PDF file.");
+    }
+  }
 
   useEffect(() => { onCountChange?.(intakes.length); }, [intakes.length, onCountChange]);
 
@@ -1780,6 +1802,42 @@ function IntakePanel({
               </select>
             </div>
           </div>
+          {/* PDF Drop Zone */}
+          <div
+            onDragOver={(e) => { e.preventDefault(); setIsDraggingPdf(true); }}
+            onDragLeave={() => setIsDraggingPdf(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setIsDraggingPdf(false);
+              const file = e.dataTransfer.files[0];
+              if (file) handlePdfDrop(file);
+            }}
+            onClick={() => pdfInputRef.current?.click()}
+            className={`flex items-center justify-center gap-2 rounded-md border-2 border-dashed px-3 py-3 cursor-pointer transition-colors ${
+              isDraggingPdf
+                ? "border-blue-400 bg-blue-50"
+                : "border-gray-300 hover:border-gray-400 hover:bg-gray-50"
+            }`}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400 flex-shrink-0">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+            </svg>
+            <p className="text-xs text-gray-500">
+              Drop a PDF here to extract text, or <span className="text-blue-600 font-medium">browse</span>
+            </p>
+            <input
+              ref={pdfInputRef}
+              type="file"
+              accept=".pdf"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handlePdfDrop(file);
+                e.target.value = "";
+              }}
+            />
+          </div>
           <div>
             <div className="flex items-center justify-between mb-1">
               <label className="block text-xs font-medium text-gray-500">Raw Text</label>
@@ -1809,7 +1867,7 @@ function IntakePanel({
               onPaste={onTextareaPaste}
               rows={6}
               required={pastedImages.length === 0}
-              placeholder="Paste Slack message, email, meeting notes, or any text here. You can also paste screenshots (Cmd+V)."
+              placeholder="Paste text here, drop a PDF above, or paste screenshots (Cmd+V)."
               className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm font-mono focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
             {pastedImages.length > 0 && (
