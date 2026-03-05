@@ -1701,7 +1701,7 @@ function IntakePanel({
         .insert({
           raw_text: combinedText,
           source,
-          vendor_id: vendorId || null,
+          vendor_id: vendorId && vendorId !== "none" ? vendorId : null,
           project_id: project.id,
           submitted_by: user.user?.id || null,
           org_id: profile?.org_id,
@@ -1718,7 +1718,7 @@ function IntakePanel({
         body: JSON.stringify({
           intake_id: intake.id,
           raw_text: combinedText,
-          vendor_id: vendorId || null,
+          vendor_id: vendorId && vendorId !== "none" ? vendorId : null,
           project_id: project.id,
         }),
       });
@@ -1773,6 +1773,7 @@ function IntakePanel({
                 className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               >
                 <option value="">Any / Auto-detect</option>
+                <option value="none">None</option>
                 {vendors.map((v) => (
                   <option key={v.id} value={v.id}>{v.name}</option>
                 ))}
