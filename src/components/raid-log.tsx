@@ -148,9 +148,13 @@ function InlineDate({ value, onSave }: { value: string | null; onSave: (v: strin
 export default function RaidLog({ initialEntries, project, people, vendors, onPersonAdded, addUndo, onCountChange, intakeSourceMap = {}, onMeetingToggle }: RaidLogProps) {
   const [entries, setEntries] = useState<RaidRow[]>(initialEntries);
 
-  useEffect(() => { onCountChange?.(entries.length); }, [entries.length, onCountChange]);
+  const activeEntries = entries.filter((e) => !e.resolved_at);
+  const archivedEntries = entries.filter((e) => e.resolved_at).sort((a, b) => new Date(b.resolved_at!).getTime() - new Date(a.resolved_at!).getTime());
+
+  useEffect(() => { onCountChange?.(activeEntries.length); }, [activeEntries.length, onCountChange]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<RaidType>("risk");
+  const [showArchived, setShowArchived] = useState(false);
   const [addingType, setAddingType] = useState<RaidType | null>(null);
   const [addTitle, setAddTitle] = useState("");
   const [addPriority, setAddPriority] = useState<PriorityLevel>("medium");
@@ -321,10 +325,10 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
     });
   }
 
-  const risks = entries.filter((r) => r.raid_type === "risk");
-  const assumptions = entries.filter((r) => r.raid_type === "assumption");
-  const issues = entries.filter((r) => r.raid_type === "issue");
-  const decisions = entries.filter((r) => r.raid_type === "decision");
+  const risks = activeEntries.filter((r) => r.raid_type === "risk");
+  const assumptions = activeEntries.filter((r) => r.raid_type === "assumption");
+  const issues = activeEntries.filter((r) => r.raid_type === "issue");
+  const decisions = activeEntries.filter((r) => r.raid_type === "decision");
 
   function toggleExpand(id: string) {
     setExpandedId((prev) => (prev === id ? null : id));
@@ -338,12 +342,22 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
     const resolveStatus = entry.raid_type === "risk" ? "closed" : "complete";
     const { error } = await supabase.from("raid_entries").update({ status: resolveStatus, resolved_at: now }).eq("id", id);
     if (!error) {
-      setEntries((prev) => prev.filter((e) => e.id !== id));
+      setEntries((prev) => prev.map((e) => e.id === id ? { ...e, status: resolveStatus as ItemStatus, resolved_at: now } : e));
       if (expandedId === id) setExpandedId(null);
       addUndo(`Resolved "${entry.title}"`, async () => {
         const { error: err } = await supabase.from("raid_entries").update({ status: prevStatus, resolved_at: null }).eq("id", id);
-        if (!err) setEntries((prev) => [...prev, { ...entry, status: prevStatus, resolved_at: null }]);
+        if (!err) setEntries((prev) => prev.map((e) => e.id === id ? { ...e, status: prevStatus, resolved_at: null } : e));
       });
+    }
+  }
+
+  async function handleReopen(id: string) {
+    const entry = entries.find((e) => e.id === id);
+    if (!entry) return;
+    const newStatus = entry.raid_type === "risk" ? "identified" : "pending";
+    const { error } = await supabase.from("raid_entries").update({ status: newStatus, resolved_at: null }).eq("id", id);
+    if (!error) {
+      setEntries((prev) => prev.map((e) => e.id === id ? { ...e, status: newStatus as ItemStatus, resolved_at: null } : e));
     }
   }
 
@@ -798,6 +812,71 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
 
   const activeItems = tabs.find((t) => t.type === activeTab)!;
 
+  const typeLabel: Record<RaidType, string> = { risk: "Risk", assumption: "Assumption", issue: "Issue", decision: "Decision" };
+
+  function renderArchived() {
+    return (
+      <div className="rounded-lg border border-gray-300 overflow-hidden">
+        <div className="bg-gray-700 px-4 h-9 flex items-center">
+          <h3 className="text-xs font-semibold text-white uppercase tracking-wide">
+            Archived ({archivedEntries.length})
+          </h3>
+        </div>
+        {archivedEntries.length === 0 ? (
+          <p className="text-sm text-gray-400 p-4">No resolved items.</p>
+        ) : (
+          <div>
+            <div className="bg-gray-50 px-3 py-1 border-b border-gray-300">
+              <div className="flex items-center gap-4">
+                <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide w-[80px]">Type</span>
+                <div className="flex-1" />
+                <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide w-[68px] text-right">Priority</span>
+                <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide w-[150px] text-right">Owner</span>
+                <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide w-[80px] text-right">Resolved</span>
+                <span className="w-[68px]" />
+              </div>
+            </div>
+            {archivedEntries.map((entry) => (
+              <div key={entry.id} className="bg-white px-3 py-2 border-b border-gray-200 last:border-b-0">
+                <div className="flex items-center gap-4 min-w-0">
+                  <span className="text-xs text-gray-500 font-medium w-[80px] flex-shrink-0">{typeLabel[entry.raid_type]}</span>
+                  <span className="text-sm font-semibold text-gray-900 truncate min-w-0">{entry.title}</span>
+                  <div className="flex-1" />
+                  <div className="w-[68px] flex-shrink-0 flex justify-end">
+                    <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border ${priorityColor(entry.priority)}`}>{priorityLabel(entry.priority)}</span>
+                  </div>
+                  <div className="w-[150px] flex-shrink-0 flex justify-end">
+                    {entry.owner ? (
+                      <div className="flex items-center gap-1">
+                        <span className="w-5 h-5 rounded-full bg-blue-100 text-[9px] font-medium text-blue-700 flex items-center justify-center flex-shrink-0">
+                          {entry.owner.full_name.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
+                        </span>
+                        <span className="text-xs text-gray-600 truncate">{entry.owner.full_name}</span>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-gray-400 italic">Unassigned</span>
+                    )}
+                  </div>
+                  <span className="text-xs text-gray-500 w-[80px] text-right flex-shrink-0">
+                    {entry.resolved_at ? new Date(entry.resolved_at).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—"}
+                  </span>
+                  <div className="w-[68px] flex-shrink-0 flex justify-end">
+                    <button
+                      onClick={() => handleReopen(entry.id)}
+                      className="text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors"
+                    >
+                      Reopen
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="flex gap-[10px]">
       {/* Left sidebar tabs */}
@@ -805,7 +884,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
         {tabs.map((tab, i) => (
           <button
             key={tab.type}
-            onClick={() => setActiveTab(tab.type)}
+            onClick={() => { setActiveTab(tab.type); setShowArchived(false); }}
             className={`px-3 text-sm font-medium text-left border border-gray-300 transition-colors ${
               i > 0 ? "-mt-px" : ""
             } ${
@@ -813,7 +892,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
             } ${
               i === tabs.length - 1 ? "rounded-b-lg" : ""
             } ${
-              activeTab === tab.type
+              !showArchived && activeTab === tab.type
                 ? "bg-gray-800 text-white border-gray-800 z-10 relative"
                 : "bg-white text-gray-700 hover:bg-gray-100"
             }`}
@@ -821,11 +900,17 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
             {tab.label} ({tab.items.length})
           </button>
         ))}
+        <button
+          onClick={() => setShowArchived(true)}
+          className={`mt-3 px-3 text-xs text-left transition-colors ${showArchived ? "text-gray-900 font-medium" : "text-gray-400 hover:text-gray-600"}`}
+        >
+          Archived ({archivedEntries.length})
+        </button>
       </div>
 
       {/* Right panel */}
       <div className="flex-1">
-        {renderQuadrant(activeItems.label, activeItems.type as RaidType, activeItems.items)}
+        {showArchived ? renderArchived() : renderQuadrant(activeItems.label, activeItems.type as RaidType, activeItems.items)}
       </div>
     </div>
   );
