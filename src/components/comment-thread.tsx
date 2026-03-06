@@ -41,15 +41,26 @@ export default function CommentThread({ raidEntryId, actionItemId, blockerId, or
   const [comments, setComments] = useState<CommentRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [body, setBody] = useState("");
-  const [authorId, setAuthorId] = useState("");
+  const [currentUser, setCurrentUser] = useState<Person | null>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [posting, setPosting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const supabase = createClient();
 
   useEffect(() => {
+    resolveCurrentUser();
+  }, []);
+
+  useEffect(() => {
     fetchComments();
   }, [raidEntryId, actionItemId, blockerId]);
+
+  async function resolveCurrentUser() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const person = people.find((p) => p.profile_id === user.id);
+    if (person) setCurrentUser(person);
+  }
 
   async function fetchComments() {
     setLoading(true);
@@ -76,7 +87,7 @@ export default function CommentThread({ raidEntryId, actionItemId, blockerId, or
     const insert: Record<string, unknown> = {
       org_id: orgId,
       body: body.trim(),
-      author_id: authorId || null,
+      author_id: currentUser?.id || null,
     };
     if (raidEntryId) insert.raid_entry_id = raidEntryId;
     if (actionItemId) insert.action_item_id = actionItemId;
@@ -184,16 +195,16 @@ export default function CommentThread({ raidEntryId, actionItemId, blockerId, or
       {/* Compose */}
       <div className="mt-2 mb-3">
         <div className="flex gap-2 mb-2 items-start">
-          <select
-            value={authorId}
-            onChange={(e) => setAuthorId(e.target.value)}
-            className="rounded border border-gray-300 px-2 py-1.5 text-xs focus:border-blue-500 focus:outline-none flex-shrink-0 w-[140px]"
-          >
-            <option value="">Anonymous</option>
-            {people.map((p) => (
-              <option key={p.id} value={p.id}>{p.full_name}</option>
-            ))}
-          </select>
+          {/* Current user avatar */}
+          {currentUser ? (
+            <span className="w-7 h-7 rounded-full bg-blue-100 text-[10px] font-medium text-blue-700 flex items-center justify-center flex-shrink-0 mt-0.5">
+              {initials(currentUser.full_name)}
+            </span>
+          ) : (
+            <span className="w-7 h-7 rounded-full bg-gray-200 text-[10px] font-medium text-gray-500 flex items-center justify-center flex-shrink-0 mt-0.5">
+              ?
+            </span>
+          )}
           <textarea
             value={body}
             onChange={(e) => setBody(e.target.value)}
@@ -206,7 +217,7 @@ export default function CommentThread({ raidEntryId, actionItemId, blockerId, or
 
         {/* Pending files */}
         {files.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 mb-2 ml-[148px]">
+          <div className="flex flex-wrap gap-1.5 mb-2 ml-9">
             {files.map((f, i) => (
               <span key={i} className="inline-flex items-center gap-1 text-xs bg-gray-100 text-gray-600 rounded px-2 py-1">
                 <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -223,7 +234,7 @@ export default function CommentThread({ raidEntryId, actionItemId, blockerId, or
           </div>
         )}
 
-        <div className="flex items-center gap-2 ml-[148px]">
+        <div className="flex items-center gap-2 ml-9">
           <input
             ref={fileInputRef}
             type="file"
@@ -280,7 +291,7 @@ export default function CommentThread({ raidEntryId, actionItemId, blockerId, or
                   {/* Header */}
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-semibold text-gray-800">
-                      {c.author?.full_name || "Anonymous"}
+                      {c.author?.full_name || "Unknown"}
                     </span>
                     <span className="text-[10px] text-gray-400">{timeAgo(c.created_at)}</span>
                     <button
