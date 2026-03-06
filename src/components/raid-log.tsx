@@ -800,12 +800,6 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                   {/* Expanded detail — inline editable */}
                   {isExpanded && (
                     <div className="bg-white border-b border-gray-200" onClick={(e) => e.stopPropagation()}>
-                      {/* Title section */}
-                      <div className="px-5 pt-4 pb-3">
-                        <span className="text-xs font-mono text-gray-400 mr-2">{entry.display_id}</span>
-                        <span className="text-base font-semibold text-gray-900"><InlineText value={entry.title} onSave={(v) => saveField(entry.id, "title", v)} /></span>
-                      </div>
-
                       {/* Properties grid */}
                       <div className="border-t border-gray-200">
                         <div className="grid grid-cols-[120px_1fr_120px_1fr] items-stretch">
