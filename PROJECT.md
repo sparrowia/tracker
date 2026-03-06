@@ -62,7 +62,7 @@ src/
 ├── components/
 │   ├── agenda-view.tsx       # Asana-style agenda with priority groups
 │   ├── project-tabs.tsx      # Tab nav + staging area for AI suggestions
-│   ├── raid-log.tsx          # RAID quadrants with archived view + resolve animation
+│   ├── raid-log.tsx          # RAID quadrants with subtasks, drag-and-drop, archived view
 │   ├── comment-thread.tsx    # Reusable comment thread with file attachments
 │   ├── vendor-picker.tsx     # Vendor selection dropdown with inline creation
 │   ├── project-header.tsx    # Project name + health badge
@@ -102,7 +102,7 @@ src/
 | `projects` | Tracked projects with health status |
 | `action_items` | Tasks with owner, priority, due date, meeting toggle |
 | `blockers` | Blocking issues with impact description |
-| `raid_entries` | Risks, assumptions, issues, decisions (with owner + reporter) |
+| `raid_entries` | Risks, assumptions, issues, decisions (owner, reporter, parent_id subtasks, sort_order) |
 | `agenda_items` | Vendor/project meeting topics with severity/context/ask |
 | `support_tickets` | External support requests |
 | `intakes` | Raw text submissions for AI extraction |
@@ -139,7 +139,7 @@ All tables have row-level security policies scoped to `org_id` via the `user_org
 ## Key Features
 
 1. **Vendor Accountability** — track action items + blockers per vendor with age and escalation counts
-2. **Project RAID Log** — four-quadrant Risk/Assumption/Issue/Decision matrix with configurable columns (priority, status, owner, reporter, vendor, age, escalations, flagged), filters (priority/status/owner/age), and property-table detail view
+2. **Project RAID Log** — four-quadrant Risk/Assumption/Issue/Decision matrix with configurable columns, filters, property-table detail view, subtasks (parent-child via `parent_id`), and drag-and-drop reordering/nesting (sort_order persisted)
 3. **Meeting Agenda** — toggle items for meeting inclusion via bell icon; auto-ranked by priority/severity/age/escalation score
 4. **AI Call Notes** — paste meeting notes on any item; DeepSeek updates fields + suggests new items in a staging area
 5. **AI Intake** — paste raw text, upload images (OCR), drop PDFs, or import spreadsheets; DeepSeek extracts structured items with 90s timeout and error recovery
@@ -149,6 +149,8 @@ All tables have row-level security policies scoped to `org_id` via the `user_org
 9. **Comments & Attachments** — threaded comments on RAID entries, action items, and blockers with file attachment support (Supabase Storage). Author auto-detected from logged-in user. Newest-first display with Cmd+Enter posting.
 10. **RAID Archived View** — "Archived" link below RAID type tabs shows all resolved items sorted by resolution date. Type label replaces ID, reopen button on each row. Resolve animation: green flash + collapse (350ms ease-out).
 11. **Vendor Picker** — all org vendors shown in RAID/Actions/Blockers detail panels with inline "+ Add Vendor" creation (like OwnerPicker for people)
+12. **RAID Subtasks** — self-referencing `parent_id` on raid_entries. Disclosure triangle toggles children visible/hidden. Children indented with ↳ arrow. Parent dropdown in detail panel.
+13. **RAID Drag-and-Drop** — native HTML5 drag-and-drop for reordering and nesting. Top/bottom 25% = reorder (blue line indicator), middle 50% = nest as subtask (blue highlight). Sort order via `sort_order` integer column with midpoint gaps.
 
 ## UI Design System
 
@@ -160,7 +162,7 @@ All tables have row-level security policies scoped to `org_id` via the `user_org
 - **Responsible column:** blue initials avatar (`bg-blue-100 text-blue-700`) + full name
 - **Priority badges:** colored pills via `priorityColor()` in `lib/utils.ts`
 - **Agenda view:** Asana-style collapsible priority groups with dark bar headers
-- **Expanded detail:** Property-table layout — editable title at top, label/value grid with subtle gray label backgrounds, description/notes below, actions bar at bottom. Consistent across RAID log, blockers, and action items.
+- **Expanded detail:** Property-table layout — label/value grid (`items-stretch` for aligned borders, `border-gray-200`), Impact as Low/Medium/High select, full-width description below, actions bar at bottom. No duplicate title. Consistent across RAID log, blockers, and action items.
 - **Reporter column:** Purple initials avatar (`bg-purple-100 text-purple-700`) to distinguish from blue owner avatar
 - **Comments section:** Below description in expanded detail panels. Author avatar + name + relative time, delete on hover, file attachment chips.
 - **Resolve animation:** Green flash (`bg-green-100`) + fade out + collapse via inline `transition: all 350ms ease-out`
@@ -182,6 +184,8 @@ All in `supabase/migrations/`:
 | `20260305000003_add_asana_source.sql` | Add `asana` to intake_source enum |
 | `20260305000004_raid_reporter.sql` | Add `reporter_id` to raid_entries |
 | `20260306000001_comments.sql` | Comments + comment_attachments tables, RLS, Supabase Storage bucket |
+| `20260306000002_raid_subtasks.sql` | Self-referencing `parent_id` on raid_entries for subtask nesting |
+| `20260306000003_raid_sort_order.sql` | `sort_order` integer column on raid_entries for drag-and-drop reordering |
 
 ## Deployment
 
@@ -201,6 +205,6 @@ All docs live in this repo: [github.com/sparrowia/tracker](https://github.com/sp
 | [`CLAUDE.md`](https://github.com/sparrowia/tracker/blob/main/CLAUDE.md) | AI assistant instructions, conventions, and guardrails |
 | [`src/lib/types.ts`](https://github.com/sparrowia/tracker/blob/main/src/lib/types.ts) | All TypeScript interfaces and enums |
 | [`src/lib/utils.ts`](https://github.com/sparrowia/tracker/blob/main/src/lib/utils.ts) | Formatting helpers (priority colors, status badges, dates) |
-| [`supabase/migrations/`](https://github.com/sparrowia/tracker/tree/main/supabase/migrations) | Full database schema history (11 migrations) |
+| [`supabase/migrations/`](https://github.com/sparrowia/tracker/tree/main/supabase/migrations) | Full database schema history (13 migrations) |
 | [`.env.local.example`](https://github.com/sparrowia/tracker/blob/main/.env.local.example) | Required environment variables |
 | [`PROMPT.md`](https://github.com/sparrowia/tracker/blob/main/PROMPT.md) | Bootstrap prompt for AI assistants |

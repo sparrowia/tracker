@@ -54,7 +54,7 @@ src/
 ├── components/
 │   ├── agenda-view.tsx           # Asana-style list layout for vendor agendas
 │   ├── project-tabs.tsx          # Project detail tabs (blockers, actions, RAID, intake)
-│   ├── raid-log.tsx              # RAID log with configurable columns, filters, archived view
+│   ├── raid-log.tsx              # RAID log with columns, filters, archived view, subtasks, drag-and-drop
 │   ├── comment-thread.tsx        # Threaded comments with file attachments
 │   ├── owner-picker.tsx          # Person selection dropdown with inline creation
 │   ├── vendor-picker.tsx         # Vendor selection dropdown with inline creation
@@ -87,6 +87,10 @@ The app uses a consistent Asana-inspired visual style across all pages:
 - **Reporter column:** Purple initials avatar (`bg-purple-100 text-purple-700`) — distinct from blue owner avatar
 - **RAID log filters:** Priority, status, owner, age dropdowns; active filters highlight blue; header shows filtered/total count
 - **RAID archived view:** "Archived (N)" text link below type tabs; flat list sorted by resolved_at desc; type label, priority, owner, resolved date columns; reopen button
+- **RAID subtasks:** Self-referencing `parent_id` on raid_entries. Subtask disclosure triangle (▶) before the complete circle; children hidden by default, click to expand. Child rows indented with ↳ arrow. Count badge next to parent title.
+- **RAID drag-and-drop:** Native HTML5 drag-and-drop for reordering and nesting. Cursor position determines action: top 25% = insert above (blue line), middle 50% = nest as subtask (blue highlight), bottom 25% = insert below (blue line). Sort order persisted via `sort_order` integer column with midpoint calculation.
+- **RAID row dividers:** `border-gray-400` for list rows
+- **Expanded detail panels:** No duplicate title (shown in row). Property-table grid with `items-stretch` for aligned borders. Impact as Low/Medium/High select (not free text). All detail borders `border-gray-200`.
 - **Resolve animation:** Inline `transition: all 350ms ease-out` — green flash + fade + collapse
 - **Comments:** Below description in expanded detail panels; auto-author from logged-in user; Cmd+Enter posting; file attachments via Supabase Storage bucket `comment-attachments`
 - **VendorPicker:** Inline "+ Add Vendor" creation, same pattern as OwnerPicker
@@ -101,7 +105,7 @@ Defined in `src/lib/types.ts`:
 - **ActionItem** — tasks with owner, priority, due date, age
 - **Blocker** — blocking issues with impact description
 - **AgendaItem** — vendor meeting topics with severity/context/ask
-- **RaidEntry** — risks, assumptions, issues, decisions (with owner + reporter)
+- **RaidEntry** — risks, assumptions, issues, decisions (with owner, reporter, parent_id for subtasks, sort_order for drag-and-drop)
 - **Comment** — threaded comments on RAID entries, action items, blockers (polymorphic parent)
 - **CommentAttachment** — file attachments on comments (Supabase Storage)
 - **SupportTicket** — external support requests
