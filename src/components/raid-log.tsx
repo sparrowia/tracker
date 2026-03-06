@@ -621,7 +621,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                 <Fragment key={entry.id}>
                   {/* Collapsed row */}
                   <div
-                    className={`border-b last:border-b-0 cursor-pointer ${isResolving ? "bg-green-100 opacity-0 border-transparent" : "bg-white hover:bg-gray-50 border-gray-200"}`}
+                    className={`border-b last:border-b-0 cursor-pointer ${isResolving ? "bg-green-100 opacity-0 border-transparent" : "bg-gray-50 hover:bg-gray-100 border-gray-200"}`}
                     style={{ transition: "all 350ms ease-out", paddingLeft: isChild ? "2rem" : "0.75rem", paddingRight: "0.75rem", ...(isResolving ? { maxHeight: 0, paddingTop: 0, paddingBottom: 0, overflow: "hidden" } : { maxHeight: 200, paddingTop: "0.5rem", paddingBottom: "0.5rem" }) }}
                     onClick={() => toggleExpand(entry.id)}
                   >
@@ -639,10 +639,28 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                           <polyline points="20 6 9 17 4 12" />
                         </svg>
                       </button>
-                      {/* Expand chevron */}
-                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`text-gray-400 transition-transform flex-shrink-0 ${isExpanded ? "rotate-90" : ""}`}>
-                        <polyline points="9 18 15 12 9 6" />
-                      </svg>
+                      {/* Subtask toggle (replaces expand chevron) */}
+                      {childCount > 0 ? (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setExpandedParents((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(entry.id)) next.delete(entry.id);
+                              else next.add(entry.id);
+                              return next;
+                            });
+                          }}
+                          className="flex items-center gap-1 text-[10px] text-gray-400 hover:text-gray-600 flex-shrink-0 transition-colors w-[20px] justify-center"
+                          title={expandedParents.has(entry.id) ? "Hide subtasks" : "Show subtasks"}
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="currentColor" stroke="none" className={`transition-transform ${expandedParents.has(entry.id) ? "rotate-90" : ""}`}>
+                            <polygon points="6,4 20,12 6,20" />
+                          </svg>
+                        </button>
+                      ) : (
+                        <span className="w-[20px] flex-shrink-0" />
+                      )}
                       {/* Meeting toggle */}
                       <button
                         onClick={(e) => { e.stopPropagation(); toggleMeeting(entry.id); }}
@@ -659,24 +677,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                       {/* Title */}
                       <span className={`text-sm font-semibold truncate min-w-0 ${isChild ? "text-gray-700" : "text-gray-900"}`}>{entry.title}</span>
                       {childCount > 0 && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setExpandedParents((prev) => {
-                              const next = new Set(prev);
-                              if (next.has(entry.id)) next.delete(entry.id);
-                              else next.add(entry.id);
-                              return next;
-                            });
-                          }}
-                          className="flex items-center gap-1 text-[10px] text-gray-400 hover:text-gray-600 flex-shrink-0 transition-colors"
-                          title={expandedParents.has(entry.id) ? "Hide subtasks" : "Show subtasks"}
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="currentColor" stroke="none" className={`transition-transform ${expandedParents.has(entry.id) ? "rotate-90" : ""}`}>
-                            <polygon points="6,4 20,12 6,20" />
-                          </svg>
-                          <span>{childCount}</span>
-                        </button>
+                        <span className="text-[10px] text-gray-400 bg-gray-200 rounded px-1.5 py-0.5 flex-shrink-0">{childCount}</span>
                       )}
                       {/* Spacer */}
                       <div className="flex-1" />
