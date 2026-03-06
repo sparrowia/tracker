@@ -1,0 +1,329 @@
+"use client";
+
+import { useState, useEffect, useRef } from "react";
+import { createClient } from "@/lib/supabase/client";
+import type { Comment, CommentAttachment, Person } from "@/lib/types";
+
+interface CommentThreadProps {
+  raidEntryId?: string;
+  actionItemId?: string;
+  blockerId?: string;
+  orgId: string;
+  people: Person[];
+}
+
+type CommentRow = Comment & { author: Person | null; attachments: CommentAttachment[] };
+
+function timeAgo(date: string): string {
+  const seconds = Math.floor((Date.now() - new Date(date).getTime()) / 1000);
+  if (seconds < 60) return "just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days === 1) return "1 day ago";
+  return `${days} days ago`;
+}
+
+function formatFileSize(bytes: number | null): string {
+  if (!bytes) return "";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function initials(name: string): string {
+  return name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
+}
+
+export default function CommentThread({ raidEntryId, actionItemId, blockerId, orgId, people }: CommentThreadProps) {
+  const [comments, setComments] = useState<CommentRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [body, setBody] = useState("");
+  const [authorId, setAuthorId] = useState("");
+  const [files, setFiles] = useState<File[]>([]);
+  const [posting, setPosting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const supabase = createClient();
+
+  useEffect(() => {
+    fetchComments();
+  }, [raidEntryId, actionItemId, blockerId]);
+
+  async function fetchComments() {
+    setLoading(true);
+    const parentFilter = raidEntryId
+      ? { column: "raid_entry_id" as const, value: raidEntryId }
+      : blockerId
+      ? { column: "blocker_id" as const, value: blockerId }
+      : { column: "action_item_id" as const, value: actionItemId! };
+
+    const { data } = await supabase
+      .from("comments")
+      .select("*, author:people(*), attachments:comment_attachments(*)")
+      .eq(parentFilter.column, parentFilter.value)
+      .order("created_at", { ascending: false });
+
+    setComments((data as CommentRow[]) || []);
+    setLoading(false);
+  }
+
+  async function handlePost() {
+    if (!body.trim() || posting) return;
+    setPosting(true);
+
+    const insert: Record<string, unknown> = {
+      org_id: orgId,
+      body: body.trim(),
+      author_id: authorId || null,
+    };
+    if (raidEntryId) insert.raid_entry_id = raidEntryId;
+    if (actionItemId) insert.action_item_id = actionItemId;
+    if (blockerId) insert.blocker_id = blockerId;
+
+    const { data: comment, error } = await supabase
+      .from("comments")
+      .insert(insert)
+      .select("*, author:people(*)")
+      .single();
+
+    if (error || !comment) {
+      console.error("Failed to post comment:", error);
+      setPosting(false);
+      return;
+    }
+
+    let attachments: CommentAttachment[] = [];
+
+    if (files.length > 0) {
+      attachments = await uploadAttachments(comment.id);
+    }
+
+    const newComment: CommentRow = {
+      ...(comment as Comment & { author: Person | null }),
+      attachments,
+    };
+
+    setComments((prev) => [newComment, ...prev]);
+    setBody("");
+    setFiles([]);
+    setPosting(false);
+  }
+
+  async function uploadAttachments(commentId: string): Promise<CommentAttachment[]> {
+    const uploaded: CommentAttachment[] = [];
+
+    for (const file of files) {
+      const path = `${orgId}/${commentId}/${file.name}`;
+      const { error: uploadError } = await supabase.storage
+        .from("comment-attachments")
+        .upload(path, file);
+
+      if (uploadError) {
+        console.error("Upload failed:", uploadError);
+        continue;
+      }
+
+      const { data: urlData } = supabase.storage
+        .from("comment-attachments")
+        .getPublicUrl(path);
+
+      const { data: attachment } = await supabase
+        .from("comment_attachments")
+        .insert({
+          org_id: orgId,
+          comment_id: commentId,
+          file_name: file.name,
+          file_url: urlData.publicUrl,
+          file_size: file.size,
+          mime_type: file.type || null,
+        })
+        .select("*")
+        .single();
+
+      if (attachment) uploaded.push(attachment as CommentAttachment);
+    }
+
+    return uploaded;
+  }
+
+  async function handleDelete(commentId: string) {
+    const comment = comments.find((c) => c.id === commentId);
+    if (!comment) return;
+
+    // Delete attachments from storage
+    if (comment.attachments.length > 0) {
+      const paths = comment.attachments.map((a) => `${orgId}/${commentId}/${a.file_name}`);
+      await supabase.storage.from("comment-attachments").remove(paths);
+    }
+
+    const { error } = await supabase.from("comments").delete().eq("id", commentId);
+    if (!error) {
+      setComments((prev) => prev.filter((c) => c.id !== commentId));
+    }
+  }
+
+  function removeFile(index: number) {
+    setFiles((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      handlePost();
+    }
+  }
+
+  return (
+    <div className="px-5 py-3 border-t border-gray-100">
+      <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">
+        Comments ({comments.length})
+      </span>
+
+      {/* Compose */}
+      <div className="mt-2 mb-3">
+        <div className="flex gap-2 mb-2 items-start">
+          <select
+            value={authorId}
+            onChange={(e) => setAuthorId(e.target.value)}
+            className="rounded border border-gray-300 px-2 py-1.5 text-xs focus:border-blue-500 focus:outline-none flex-shrink-0 w-[140px]"
+          >
+            <option value="">Anonymous</option>
+            {people.map((p) => (
+              <option key={p.id} value={p.id}>{p.full_name}</option>
+            ))}
+          </select>
+          <textarea
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Add a comment..."
+            rows={2}
+            className="flex-1 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
+          />
+        </div>
+
+        {/* Pending files */}
+        {files.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mb-2 ml-[148px]">
+            {files.map((f, i) => (
+              <span key={i} className="inline-flex items-center gap-1 text-xs bg-gray-100 text-gray-600 rounded px-2 py-1">
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                </svg>
+                {f.name} ({formatFileSize(f.size)})
+                <button onClick={() => removeFile(i)} className="text-gray-400 hover:text-red-500 ml-0.5">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                  </svg>
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+
+        <div className="flex items-center gap-2 ml-[148px]">
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              if (e.target.files) setFiles((prev) => [...prev, ...Array.from(e.target.files!)]);
+              e.target.value = "";
+            }}
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 border border-gray-300 rounded px-2 py-1 transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+            </svg>
+            Attach
+          </button>
+          <div className="flex-1" />
+          <span className="text-[10px] text-gray-400">{"\u2318"}+Enter to post</span>
+          <button
+            onClick={handlePost}
+            disabled={!body.trim() || posting}
+            className="px-3 py-1 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50 transition-colors"
+          >
+            {posting ? "Posting..." : "Post"}
+          </button>
+        </div>
+      </div>
+
+      {/* Comments list */}
+      {loading ? (
+        <p className="text-xs text-gray-400 py-2">Loading...</p>
+      ) : comments.length === 0 ? (
+        <p className="text-xs text-gray-400 py-2">No comments yet.</p>
+      ) : (
+        <div className="space-y-0 divide-y divide-gray-100">
+          {comments.map((c) => (
+            <div key={c.id} className="py-2.5 group/comment">
+              <div className="flex items-start gap-2">
+                {/* Avatar */}
+                {c.author ? (
+                  <span className="w-6 h-6 rounded-full bg-blue-100 text-[10px] font-medium text-blue-700 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    {initials(c.author.full_name)}
+                  </span>
+                ) : (
+                  <span className="w-6 h-6 rounded-full bg-gray-200 text-[10px] font-medium text-gray-500 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    ?
+                  </span>
+                )}
+
+                <div className="flex-1 min-w-0">
+                  {/* Header */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold text-gray-800">
+                      {c.author?.full_name || "Anonymous"}
+                    </span>
+                    <span className="text-[10px] text-gray-400">{timeAgo(c.created_at)}</span>
+                    <button
+                      onClick={() => handleDelete(c.id)}
+                      className="text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover/comment:opacity-100 ml-auto"
+                      title="Delete comment"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="3 6 5 6 21 6"/>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                      </svg>
+                    </button>
+                  </div>
+
+                  {/* Body */}
+                  <p className="text-sm text-gray-700 mt-0.5 whitespace-pre-wrap">{c.body}</p>
+
+                  {/* Attachments */}
+                  {c.attachments && c.attachments.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mt-1.5">
+                      {c.attachments.map((a) => (
+                        <a
+                          key={a.id}
+                          href={a.file_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 bg-blue-50 rounded px-2 py-1 transition-colors"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                          </svg>
+                          {a.file_name}
+                          {a.file_size ? ` (${formatFileSize(a.file_size)})` : ""}
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

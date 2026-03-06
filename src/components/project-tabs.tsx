@@ -9,6 +9,7 @@ import RaidLog from "@/components/raid-log";
 import { AgendaView } from "@/components/agenda-view";
 import OwnerPicker from "@/components/owner-picker";
 import { useUndo, UndoToast } from "@/components/undo-toast";
+import CommentThread from "@/components/comment-thread";
 
 type Tab = "actions" | "blockers" | "raid" | "agenda" | "intake";
 
@@ -246,7 +247,7 @@ export default function ProjectTabs({
         </div>
 
         <div style={{ display: active === "blockers" ? "block" : "none" }}>
-          <BlockersPanel blockers={blockers} people={peopleList} vendors={vendors} onPersonAdded={addPerson} addUndo={addUndo} onCountChange={setBlockerCount} intakeSourceMap={intakeSourceMap} onNewItemsSuggested={onNewItemsSuggested} registerAdder={(fn) => { itemAddersRef.current.addBlocker = fn; return () => { itemAddersRef.current.addBlocker = undefined; }; }} onMeetingToggle={bumpAgendaRefresh} />
+          <BlockersPanel blockers={blockers} people={peopleList} vendors={vendors} onPersonAdded={addPerson} addUndo={addUndo} onCountChange={setBlockerCount} intakeSourceMap={intakeSourceMap} onNewItemsSuggested={onNewItemsSuggested} registerAdder={(fn) => { itemAddersRef.current.addBlocker = fn; return () => { itemAddersRef.current.addBlocker = undefined; }; }} onMeetingToggle={bumpAgendaRefresh} orgId={project.org_id} />
         </div>
 
         <div style={{ display: active === "raid" ? "block" : "none" }}>
@@ -254,7 +255,7 @@ export default function ProjectTabs({
         </div>
 
         <div style={{ display: active === "actions" ? "block" : "none" }}>
-          <ActionItemsPanel actions={actions} people={peopleList} vendors={vendors} onPersonAdded={addPerson} addUndo={addUndo} onCountChange={setActionCount} intakeSourceMap={intakeSourceMap} onNewItemsSuggested={onNewItemsSuggested} registerAdder={(fn) => { itemAddersRef.current.addAction = fn; return () => { itemAddersRef.current.addAction = undefined; }; }} onMeetingToggle={bumpAgendaRefresh} />
+          <ActionItemsPanel actions={actions} people={peopleList} vendors={vendors} onPersonAdded={addPerson} addUndo={addUndo} onCountChange={setActionCount} intakeSourceMap={intakeSourceMap} onNewItemsSuggested={onNewItemsSuggested} registerAdder={(fn) => { itemAddersRef.current.addAction = fn; return () => { itemAddersRef.current.addAction = undefined; }; }} onMeetingToggle={bumpAgendaRefresh} orgId={project.org_id} />
         </div>
 
         <div style={{ display: active === "intake" ? "block" : "none" }}>
@@ -609,6 +610,7 @@ function BlockersPanel({
   onNewItemsSuggested,
   registerAdder,
   onMeetingToggle,
+  orgId,
 }: {
   blockers: BlockerRow[];
   people: Person[];
@@ -620,6 +622,7 @@ function BlockersPanel({
   onNewItemsSuggested?: (items: { title: string; suggested_type?: string; priority?: string; description?: string }[]) => void;
   registerAdder?: (fn: (item: BlockerRow) => void) => () => void;
   onMeetingToggle?: () => void;
+  orgId: string;
 }) {
   const [blockers, setBlockers] = useState<BlockerRow[]>(initialBlockers);
 
@@ -1042,6 +1045,13 @@ function BlockersPanel({
                     </div>
                   )}
 
+                  {/* Comments */}
+                  <CommentThread
+                    blockerId={b.id}
+                    orgId={orgId}
+                    people={people}
+                  />
+
                   {/* Actions bar */}
                   <div className="flex justify-end items-center gap-3 px-5 py-2 border-t border-gray-100">
                     <button
@@ -1117,6 +1127,7 @@ function ActionItemsPanel({
   onNewItemsSuggested,
   registerAdder,
   onMeetingToggle,
+  orgId,
 }: {
   actions: ActionRow[];
   people: Person[];
@@ -1128,6 +1139,7 @@ function ActionItemsPanel({
   onNewItemsSuggested?: (items: { title: string; suggested_type?: string; priority?: string; description?: string }[]) => void;
   registerAdder?: (fn: (item: ActionRow) => void) => () => void;
   onMeetingToggle?: () => void;
+  orgId: string;
 }) {
   const [actions, setActions] = useState<ActionRow[]>(initialActions);
 
@@ -1549,6 +1561,13 @@ function ActionItemsPanel({
                       </div>
                     </div>
                   )}
+
+                  {/* Comments */}
+                  <CommentThread
+                    actionItemId={a.id}
+                    orgId={orgId}
+                    people={people}
+                  />
 
                   {/* Actions bar */}
                   <div className="flex justify-end items-center gap-3 px-5 py-2 border-t border-gray-100">

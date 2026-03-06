@@ -303,6 +303,31 @@ export interface VendorAgendaRow {
   project_name: string | null;
 }
 
+export interface Comment {
+  id: string;
+  org_id: string;
+  raid_entry_id: string | null;
+  action_item_id: string | null;
+  blocker_id: string | null;
+  author_id: string | null;
+  body: string;
+  created_at: string;
+  updated_at: string;
+  author?: Person;
+  attachments?: CommentAttachment[];
+}
+
+export interface CommentAttachment {
+  id: string;
+  org_id: string;
+  comment_id: string;
+  file_name: string;
+  file_url: string;
+  file_size: number | null;
+  mime_type: string | null;
+  created_at: string;
+}
+
 export interface ProjectAgendaRow {
   rank: number;
   entity_type: string;

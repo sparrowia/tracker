@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { priorityColor, priorityLabel, statusBadge, formatAge, formatDateShort } from "@/lib/utils";
 import type { RaidEntry, RaidType, PriorityLevel, ItemStatus, Person, Vendor, Project } from "@/lib/types";
 import OwnerPicker from "@/components/owner-picker";
+import CommentThread from "@/components/comment-thread";
 
 type RaidRow = RaidEntry & { owner: Person | null; reporter: Person | null; vendor: Vendor | null };
 
@@ -756,6 +757,13 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                           </div>
                         )}
                       </div>
+
+                      {/* Comments */}
+                      <CommentThread
+                        raidEntryId={entry.id}
+                        orgId={project.org_id}
+                        people={people}
+                      />
 
                       {/* Actions bar */}
                       <div className="flex justify-end items-center gap-3 px-5 py-2 border-t border-gray-100">
