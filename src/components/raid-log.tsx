@@ -158,6 +158,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
   const [addingType, setAddingType] = useState<RaidType | null>(null);
   const [addTitle, setAddTitle] = useState("");
   const [addPriority, setAddPriority] = useState<PriorityLevel>("medium");
+  const [addOwnerId, setAddOwnerId] = useState("");
   const [visibleCols, setVisibleCols] = useState<RaidColumnKey[]>(loadRaidColumns);
   const [showColPicker, setShowColPicker] = useState(false);
   const [filterPriority, setFilterPriority] = useState<PriorityLevel | "">("");
@@ -394,7 +395,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
       status: (addingType === "risk" ? "identified" : "pending") as ItemStatus,
       project_id: project.id,
       org_id: project.org_id,
-      owner_id: null,
+      owner_id: addOwnerId || null,
       vendor_id: null,
       impact: null,
       description: null,
@@ -406,6 +407,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
       setEntries((prev) => [data as RaidRow, ...prev]);
       setAddTitle("");
       setAddPriority("medium");
+      setAddOwnerId("");
       setAddingType(null);
     }
   }
@@ -413,10 +415,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
   function renderQuadrant(label: string, raidType: RaidType, allItems: RaidRow[]) {
     const items = applyFilters(allItems);
     const statusesForType = raidType === "risk" ? riskStatusOptions : statusOptions;
-    // Collect unique owners from unfiltered items for the filter dropdown
-    const ownerOptions = Array.from(
-      new Map(allItems.filter((e) => e.owner).map((e) => [e.owner!.id, e.owner!.full_name])).entries()
-    ).sort((a, b) => a[1].localeCompare(b[1]));
+    const ownerOptions = people.map((p) => [p.id, p.full_name] as [string, string]).sort((a, b) => a[1].localeCompare(b[1]));
     const filteredCount = items.length !== allItems.length;
     return (
       <div className="rounded-lg border border-gray-300 overflow-hidden">
@@ -452,7 +451,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
               )}
             </div>
             <button
-              onClick={() => { setAddingType(addingType === raidType ? null : raidType); setAddTitle(""); setAddPriority("medium"); }}
+              onClick={() => { setAddingType(addingType === raidType ? null : raidType); setAddTitle(""); setAddPriority("medium"); setAddOwnerId(""); }}
               className="text-xs text-blue-300 hover:text-white transition-colors"
             >
               + Add {label.slice(0, -1)}
@@ -480,6 +479,14 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                   <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</option>
                 ))}
               </select>
+              <div className="w-[160px]">
+                <OwnerPicker
+                  value={addOwnerId}
+                  onChange={setAddOwnerId}
+                  people={people}
+                  onPersonAdded={onPersonAdded}
+                />
+              </div>
               <button
                 onClick={handleAdd}
                 disabled={!addTitle.trim()}
