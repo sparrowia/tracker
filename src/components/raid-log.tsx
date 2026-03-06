@@ -159,6 +159,8 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
   const [showArchived, setShowArchived] = useState(false);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
   const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set());
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<{ id: string; zone: "above" | "nest" | "below" } | null>(null);
   const [addingType, setAddingType] = useState<RaidType | null>(null);
   const [addTitle, setAddTitle] = useState("");
   const [addPriority, setAddPriority] = useState<PriorityLevel>("medium");
@@ -389,6 +391,71 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
     }
   }
 
+  function handleDragStart(id: string, e: React.DragEvent) {
+    setDraggedId(id);
+    e.dataTransfer.effectAllowed = "move";
+    // Make the drag image semi-transparent
+    if (e.currentTarget instanceof HTMLElement) {
+      e.dataTransfer.setDragImage(e.currentTarget, 0, 0);
+    }
+  }
+
+  function handleDragOver(targetId: string, e: React.DragEvent) {
+    e.preventDefault();
+    if (!draggedId || draggedId === targetId) {
+      setDropTarget(null);
+      return;
+    }
+    const rect = e.currentTarget.getBoundingClientRect();
+    const y = e.clientY - rect.top;
+    const h = rect.height;
+    const pct = y / h;
+    let zone: "above" | "nest" | "below";
+    if (pct < 0.25) zone = "above";
+    else if (pct > 0.75) zone = "below";
+    else zone = "nest";
+    setDropTarget({ id: targetId, zone });
+  }
+
+  function handleDragEnd() {
+    setDraggedId(null);
+    setDropTarget(null);
+  }
+
+  async function handleDrop(targetId: string) {
+    if (!draggedId || draggedId === targetId || !dropTarget) return;
+    const zone = dropTarget.zone;
+    const draggedEntry = entries.find((e) => e.id === draggedId);
+    const targetEntry = entries.find((e) => e.id === targetId);
+    if (!draggedEntry || !targetEntry) return;
+
+    let newParentId: string | null = null;
+
+    if (zone === "nest") {
+      // Don't allow nesting under own children
+      const isDescendant = (parentId: string, childId: string): boolean => {
+        const children = entries.filter((e) => e.parent_id === parentId);
+        return children.some((c) => c.id === childId || isDescendant(c.id, childId));
+      };
+      if (isDescendant(draggedId, targetId)) return;
+      newParentId = targetId;
+      // Auto-expand the parent so the nested item is visible
+      setExpandedParents((prev) => new Set([...prev, targetId]));
+    } else {
+      // above/below — make it a sibling of the target (same parent)
+      newParentId = targetEntry.parent_id;
+    }
+
+    // Update DB
+    const { error } = await supabase.from("raid_entries").update({ parent_id: newParentId }).eq("id", draggedId);
+    if (!error) {
+      setEntries((prev) => prev.map((e) => e.id === draggedId ? { ...e, parent_id: newParentId } : e));
+    }
+
+    setDraggedId(null);
+    setDropTarget(null);
+  }
+
   async function handleAdd() {
     if (!addTitle.trim() || !addingType) return;
     const prefix = typePrefix[addingType];
@@ -617,14 +684,28 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
               const isResolving = resolvingId === entry.id;
               const childCount = items.filter((e) => e.parent_id === entry.id).length;
 
+              const isDragging = draggedId === entry.id;
+              const isDropNest = dropTarget?.id === entry.id && dropTarget.zone === "nest";
+              const isDropAbove = dropTarget?.id === entry.id && dropTarget.zone === "above";
+              const isDropBelow = dropTarget?.id === entry.id && dropTarget.zone === "below";
+
               return (
                 <Fragment key={entry.id}>
                   {/* Collapsed row */}
                   <div
-                    className={`border-b last:border-b-0 cursor-pointer ${isResolving ? "bg-green-100 opacity-0 border-transparent" : "bg-white hover:bg-gray-50 border-gray-400"}`}
-                    style={{ transition: "all 350ms ease-out", paddingLeft: isChild ? "2rem" : "0.75rem", paddingRight: "0.75rem", ...(isResolving ? { maxHeight: 0, paddingTop: 0, paddingBottom: 0, overflow: "hidden" } : { maxHeight: 200, paddingTop: "0.5rem", paddingBottom: "0.5rem" }) }}
+                    className={`border-b last:border-b-0 cursor-pointer relative ${isResolving ? "bg-green-100 opacity-0 border-transparent" : isDragging ? "opacity-40 bg-white border-gray-400" : isDropNest ? "bg-blue-50 border-blue-300" : "bg-white hover:bg-gray-50 border-gray-400"}`}
+                    style={{ transition: isResolving ? "all 350ms ease-out" : undefined, paddingLeft: isChild ? "2rem" : "0.75rem", paddingRight: "0.75rem", ...(isResolving ? { maxHeight: 0, paddingTop: 0, paddingBottom: 0, overflow: "hidden" } : { maxHeight: 200, paddingTop: "0.5rem", paddingBottom: "0.5rem" }) }}
                     onClick={() => toggleExpand(entry.id)}
+                    draggable
+                    onDragStart={(e) => handleDragStart(entry.id, e)}
+                    onDragOver={(e) => handleDragOver(entry.id, e)}
+                    onDragEnd={handleDragEnd}
+                    onDrop={() => handleDrop(entry.id)}
+                    onDragLeave={() => { if (dropTarget?.id === entry.id) setDropTarget(null); }}
                   >
+                    {/* Drop indicator lines */}
+                    {isDropAbove && <div className="absolute top-0 left-0 right-0 h-0.5 bg-blue-500 -translate-y-px z-10" />}
+                    {isDropBelow && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500 translate-y-px z-10" />}
                     <div className="flex items-center gap-4 min-w-0">
                       {isChild && (
                         <span className="text-gray-300 flex-shrink-0 -ml-2 mr--2">↳</span>
