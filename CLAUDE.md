@@ -108,6 +108,16 @@ npm run dev    # local dev server (port 3000)
 npm run build  # production build — always run before pushing
 ```
 
+## Supabase Migrations
+
+You have full access to run migrations via the Supabase CLI:
+
+```bash
+npx supabase --workdir /Users/matthewlobel/projects/edcetera-pm db push
+```
+
+This connects to the remote database and applies any pending migrations from `supabase/migrations/`. Do NOT waste time trying psql, pg clients, REST API workarounds, or telling the user to do it manually — just run `npx supabase db push` with the `--workdir` flag.
+
 ## Deployment
 
 - Commits to `main` auto-deploy to production via Vercel
