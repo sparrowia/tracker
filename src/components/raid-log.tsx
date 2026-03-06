@@ -621,7 +621,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                 <Fragment key={entry.id}>
                   {/* Collapsed row */}
                   <div
-                    className={`border-b last:border-b-0 cursor-pointer ${isResolving ? "bg-green-100 opacity-0 border-transparent" : "bg-gray-50 hover:bg-gray-100 border-gray-200"}`}
+                    className={`border-b last:border-b-0 cursor-pointer ${isResolving ? "bg-green-100 opacity-0 border-transparent" : "bg-blue-50 hover:bg-blue-100 border-gray-200"}`}
                     style={{ transition: "all 350ms ease-out", paddingLeft: isChild ? "2rem" : "0.75rem", paddingRight: "0.75rem", ...(isResolving ? { maxHeight: 0, paddingTop: 0, paddingBottom: 0, overflow: "hidden" } : { maxHeight: 200, paddingTop: "0.5rem", paddingBottom: "0.5rem" }) }}
                     onClick={() => toggleExpand(entry.id)}
                   >
