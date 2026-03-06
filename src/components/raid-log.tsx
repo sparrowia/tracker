@@ -593,7 +593,8 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                 <Fragment key={entry.id}>
                   {/* Collapsed row */}
                   <div
-                    className={`px-3 py-2 border-b border-gray-200 last:border-b-0 cursor-pointer transition-all duration-400 ${isResolving ? "bg-green-50 opacity-0 max-h-0 py-0 overflow-hidden border-transparent" : "bg-white hover:bg-gray-50 max-h-24 opacity-100"}`}
+                    className={`px-3 border-b last:border-b-0 cursor-pointer ${isResolving ? "bg-green-100 opacity-0 border-transparent" : "bg-white hover:bg-gray-50 border-gray-200"}`}
+                    style={{ transition: "all 350ms ease-out", ...(isResolving ? { maxHeight: 0, paddingTop: 0, paddingBottom: 0, overflow: "hidden" } : { maxHeight: 200, paddingTop: "0.5rem", paddingBottom: "0.5rem" }) }}
                     onClick={() => toggleExpand(entry.id)}
                   >
                     <div className="flex items-center gap-4 min-w-0">
