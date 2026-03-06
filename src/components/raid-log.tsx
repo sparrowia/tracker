@@ -808,7 +808,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
 
                       {/* Properties grid */}
                       <div className="border-t border-gray-200">
-                        <div className="grid grid-cols-[120px_1fr_120px_1fr] items-center">
+                        <div className="grid grid-cols-[120px_1fr_120px_1fr] items-stretch">
                           {/* Row: Type / Priority */}
                           <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-200">Type</span>
                           <div className="px-3 py-2.5 border-b border-gray-200">
