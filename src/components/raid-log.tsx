@@ -430,6 +430,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
     if (!draggedEntry || !targetEntry) return;
 
     let newParentId: string | null = null;
+    let newSortOrder = targetEntry.sort_order;
 
     if (zone === "nest") {
       // Don't allow nesting under own children
@@ -439,17 +440,31 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
       };
       if (isDescendant(draggedId, targetId)) return;
       newParentId = targetId;
-      // Auto-expand the parent so the nested item is visible
+      // Place at end of children
+      const children = entries.filter((e) => e.parent_id === targetId && e.id !== draggedId);
+      newSortOrder = children.length > 0 ? Math.max(...children.map((c) => c.sort_order)) + 1000 : 1000;
       setExpandedParents((prev) => new Set([...prev, targetId]));
     } else {
-      // above/below — make it a sibling of the target (same parent)
+      // above/below — sibling of target
       newParentId = targetEntry.parent_id;
+      // Get siblings sorted
+      const siblings = entries
+        .filter((e) => e.parent_id === newParentId && e.raid_type === targetEntry.raid_type && e.id !== draggedId && !e.resolved_at)
+        .sort((a, b) => a.sort_order - b.sort_order);
+      const targetIdx = siblings.findIndex((e) => e.id === targetId);
+      if (zone === "above") {
+        const prev = targetIdx > 0 ? siblings[targetIdx - 1].sort_order : targetEntry.sort_order - 1000;
+        newSortOrder = Math.floor((prev + targetEntry.sort_order) / 2);
+      } else {
+        const next = targetIdx < siblings.length - 1 ? siblings[targetIdx + 1].sort_order : targetEntry.sort_order + 1000;
+        newSortOrder = Math.floor((targetEntry.sort_order + next) / 2);
+      }
     }
 
     // Update DB
-    const { error } = await supabase.from("raid_entries").update({ parent_id: newParentId }).eq("id", draggedId);
+    const { error } = await supabase.from("raid_entries").update({ parent_id: newParentId, sort_order: newSortOrder }).eq("id", draggedId);
     if (!error) {
-      setEntries((prev) => prev.map((e) => e.id === draggedId ? { ...e, parent_id: newParentId } : e));
+      setEntries((prev) => prev.map((e) => e.id === draggedId ? { ...e, parent_id: newParentId, sort_order: newSortOrder } : e));
     }
 
     setDraggedId(null);
@@ -466,6 +481,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
     }, 0);
     const displayId = `${prefix}${maxNum + 1}`;
 
+    const maxSort = existingOfType.reduce((max, e) => Math.max(max, e.sort_order || 0), 0);
     const newEntry = {
       title: addTitle.trim(),
       raid_type: addingType,
@@ -479,6 +495,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
       impact: null,
       description: null,
       decision_date: null,
+      sort_order: maxSort + 1000,
     };
 
     const { data, error } = await supabase.from("raid_entries").insert(newEntry).select("*, owner:people!raid_entries_owner_id_fkey(*), reporter:people!raid_entries_reporter_id_fkey(*), vendor:vendors(*)").single();
@@ -653,7 +670,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
             </div>
             {(() => {
               // Build ordered list: parents followed by their children
-              const parentItems = items.filter((e) => !e.parent_id);
+              const parentItems = items.filter((e) => !e.parent_id).sort((a, b) => a.sort_order - b.sort_order);
               const childMap = new Map<string, RaidRow[]>();
               for (const e of items) {
                 if (e.parent_id) {
@@ -661,6 +678,10 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                   siblings.push(e);
                   childMap.set(e.parent_id, siblings);
                 }
+              }
+              // Sort children within each parent
+              for (const [key, children] of childMap) {
+                childMap.set(key, children.sort((a, b) => a.sort_order - b.sort_order));
               }
               const ordered: { entry: RaidRow; isChild: boolean }[] = [];
               for (const p of parentItems) {

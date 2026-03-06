@@ -43,8 +43,7 @@ export default async function ProjectDetailPage({
       .from("raid_entries")
       .select("*, owner:people!raid_entries_owner_id_fkey(*), reporter:people!raid_entries_reporter_id_fkey(*), vendor:vendors(*)")
       .eq("project_id", p.id)
-      .order("raid_type")
-      .order("priority"),
+      .order("sort_order"),
     supabase
       .from("blocker_ages")
       .select("*, owner:people(*), vendor:vendors(*)")
