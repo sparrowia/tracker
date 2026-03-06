@@ -621,7 +621,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                 <Fragment key={entry.id}>
                   {/* Collapsed row */}
                   <div
-                    className={`border-b last:border-b-0 cursor-pointer ${isResolving ? "bg-green-100 opacity-0 border-transparent" : "bg-white hover:bg-gray-50 border-gray-400"}`}
+                    className={`border-b last:border-b-0 cursor-pointer ${isResolving ? "bg-green-100 opacity-0 border-transparent" : "bg-white hover:bg-gray-50 border-gray-900"}`}
                     style={{ transition: "all 350ms ease-out", paddingLeft: isChild ? "2rem" : "0.75rem", paddingRight: "0.75rem", ...(isResolving ? { maxHeight: 0, paddingTop: 0, paddingBottom: 0, overflow: "hidden" } : { maxHeight: 200, paddingTop: "0.5rem", paddingBottom: "0.5rem" }) }}
                     onClick={() => toggleExpand(entry.id)}
                   >
@@ -641,7 +641,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                               return next;
                             });
                           }}
-                          className="flex items-center gap-1 text-[10px] text-gray-900 hover:text-black flex-shrink-0 transition-colors w-[20px] justify-center"
+                          className="flex items-center gap-1 text-[10px] text-[#000000] hover:text-[#000000] flex-shrink-0 transition-colors w-[20px] justify-center"
                           title={expandedParents.has(entry.id) ? "Hide subtasks" : "Show subtasks"}
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="currentColor" stroke="none" className={`transition-transform ${expandedParents.has(entry.id) ? "rotate-90" : ""}`}>
@@ -675,7 +675,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                       {/* Title */}
                       <span className={`text-sm font-semibold truncate min-w-0 ${isChild ? "text-gray-700" : "text-gray-900"}`}>{entry.title}</span>
                       {childCount > 0 && (
-                        <span className="text-[10px] text-gray-400 bg-gray-200 rounded px-1.5 py-0.5 flex-shrink-0">{childCount}</span>
+                        <span className="text-[10px] text-[#000000] bg-gray-200 rounded px-1.5 py-0.5 flex-shrink-0">{childCount}</span>
                       )}
                       {/* Spacer */}
                       <div className="flex-1" />
