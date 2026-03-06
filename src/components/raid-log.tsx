@@ -621,7 +621,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                 <Fragment key={entry.id}>
                   {/* Collapsed row */}
                   <div
-                    className={`border-b last:border-b-0 cursor-pointer ${isResolving ? "bg-green-100 opacity-0 border-transparent" : "bg-blue-50 hover:bg-blue-100 border-gray-200"}`}
+                    className={`border-b last:border-b-0 cursor-pointer ${isResolving ? "bg-green-100 opacity-0 border-transparent" : "bg-white hover:bg-gray-50 border-gray-200"}`}
                     style={{ transition: "all 350ms ease-out", paddingLeft: isChild ? "2rem" : "0.75rem", paddingRight: "0.75rem", ...(isResolving ? { maxHeight: 0, paddingTop: 0, paddingBottom: 0, overflow: "hidden" } : { maxHeight: 200, paddingTop: "0.5rem", paddingBottom: "0.5rem" }) }}
                     onClick={() => toggleExpand(entry.id)}
                   >
@@ -629,17 +629,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                       {isChild && (
                         <span className="text-gray-300 flex-shrink-0 -ml-2 mr--2">↳</span>
                       )}
-                      {/* Complete button */}
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleResolve(entry.id); }}
-                        className="w-[18px] h-[18px] rounded-full border-2 border-gray-300 hover:border-green-500 hover:bg-green-50 flex items-center justify-center flex-shrink-0 transition-colors group/check"
-                        title="Resolve"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-transparent group-hover/check:text-green-500 transition-colors">
-                          <polyline points="20 6 9 17 4 12" />
-                        </svg>
-                      </button>
-                      {/* Subtask toggle (replaces expand chevron) */}
+                      {/* Subtask toggle */}
                       {childCount > 0 ? (
                         <button
                           onClick={(e) => {
@@ -661,6 +651,16 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                       ) : (
                         <span className="w-[20px] flex-shrink-0" />
                       )}
+                      {/* Complete button */}
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleResolve(entry.id); }}
+                        className="w-[18px] h-[18px] rounded-full border-2 border-gray-300 hover:border-green-500 hover:bg-green-50 flex items-center justify-center flex-shrink-0 transition-colors group/check"
+                        title="Resolve"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-transparent group-hover/check:text-green-500 transition-colors">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                      </button>
                       {/* Meeting toggle */}
                       <button
                         onClick={(e) => { e.stopPropagation(); toggleMeeting(entry.id); }}
@@ -672,8 +672,6 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                           <path d="M13.73 21a2 2 0 0 1-3.46 0" />
                         </svg>
                       </button>
-                      {/* Display ID */}
-                      <span className="text-xs font-mono text-gray-400 flex-shrink-0">{entry.display_id}</span>
                       {/* Title */}
                       <span className={`text-sm font-semibold truncate min-w-0 ${isChild ? "text-gray-700" : "text-gray-900"}`}>{entry.title}</span>
                       {childCount > 0 && (
@@ -701,8 +699,9 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                   {isExpanded && (
                     <div className="bg-white border-b border-gray-200" onClick={(e) => e.stopPropagation()}>
                       {/* Title section */}
-                      <div className="px-5 pt-4 pb-3 text-base font-semibold text-gray-900">
-                        <InlineText value={entry.title} onSave={(v) => saveField(entry.id, "title", v)} />
+                      <div className="px-5 pt-4 pb-3">
+                        <span className="text-xs font-mono text-gray-400 mr-2">{entry.display_id}</span>
+                        <span className="text-base font-semibold text-gray-900"><InlineText value={entry.title} onSave={(v) => saveField(entry.id, "title", v)} /></span>
                       </div>
 
                       {/* Properties grid */}
