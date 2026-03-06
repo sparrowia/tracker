@@ -603,9 +603,9 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                   if (children) children.forEach((c) => ordered.push({ entry: c, isChild: true }));
                 }
               }
-              // Include orphaned children (parent filtered out or in different type)
+              // Include orphaned children (parent filtered out or in different type — not just collapsed)
               for (const e of items) {
-                if (e.parent_id && !ordered.some((o) => o.entry.id === e.id)) {
+                if (e.parent_id && !ordered.some((o) => o.entry.id === e.id) && !parentItems.some((p) => p.id === e.parent_id)) {
                   ordered.push({ entry: e, isChild: true });
                 }
               }
