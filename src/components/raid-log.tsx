@@ -157,6 +157,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<RaidType>("risk");
   const [showArchived, setShowArchived] = useState(false);
+  const [resolvingId, setResolvingId] = useState<string | null>(null);
   const [addingType, setAddingType] = useState<RaidType | null>(null);
   const [addTitle, setAddTitle] = useState("");
   const [addPriority, setAddPriority] = useState<PriorityLevel>("medium");
@@ -338,14 +339,23 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
 
   async function handleResolve(id: string) {
     const entry = entries.find((e) => e.id === id);
-    if (!entry) return;
+    if (!entry || resolvingId) return;
+    setResolvingId(id);
+    if (expandedId === id) setExpandedId(null);
+
     const prevStatus = entry.status;
     const now = new Date().toISOString();
     const resolveStatus = entry.raid_type === "risk" ? "closed" : "complete";
-    const { error } = await supabase.from("raid_entries").update({ status: resolveStatus, resolved_at: now }).eq("id", id);
+
+    // Start DB update in parallel with animation
+    const dbPromise = supabase.from("raid_entries").update({ status: resolveStatus, resolved_at: now }).eq("id", id);
+    // Wait for animation
+    await new Promise((r) => setTimeout(r, 400));
+    const { error } = await dbPromise;
+
+    setResolvingId(null);
     if (!error) {
       setEntries((prev) => prev.map((e) => e.id === id ? { ...e, status: resolveStatus as ItemStatus, resolved_at: now } : e));
-      if (expandedId === id) setExpandedId(null);
       addUndo(`Resolved "${entry.title}"`, async () => {
         const { error: err } = await supabase.from("raid_entries").update({ status: prevStatus, resolved_at: null }).eq("id", id);
         if (!err) setEntries((prev) => prev.map((e) => e.id === id ? { ...e, status: prevStatus, resolved_at: null } : e));
@@ -577,12 +587,13 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
               const isExpanded = expandedId === entry.id;
               const badge = statusBadge(entry.status);
               const age = ageFromDate(entry.first_flagged_at);
+              const isResolving = resolvingId === entry.id;
 
               return (
                 <Fragment key={entry.id}>
                   {/* Collapsed row */}
                   <div
-                    className="bg-white px-3 py-2 border-b border-gray-200 last:border-b-0 cursor-pointer hover:bg-gray-50"
+                    className={`px-3 py-2 border-b border-gray-200 last:border-b-0 cursor-pointer transition-all duration-400 ${isResolving ? "bg-green-50 opacity-0 max-h-0 py-0 overflow-hidden border-transparent" : "bg-white hover:bg-gray-50 max-h-24 opacity-100"}`}
                     onClick={() => toggleExpand(entry.id)}
                   >
                     <div className="flex items-center gap-4 min-w-0">
