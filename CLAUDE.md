@@ -27,8 +27,9 @@ Matt has multiple projects across different directories and Vercel accounts. **A
 - Tailwind CSS 4
 - TypeScript
 - Tesseract.js (client-side OCR for image intake)
+- pdfjs-dist (client-side PDF text extraction)
 - DeepSeek API (extraction/synthesis via `/api/extract` route)
-- Fathom API (meeting transcript intake — planned)
+- Deterministic Asana parser (`lib/parsers/asana.ts`) — bypasses AI for Asana PDF exports
 
 ## Key Directories
 
@@ -52,11 +53,17 @@ src/
 │   └── api/extract/              # DeepSeek extraction endpoint
 ├── components/
 │   ├── agenda-view.tsx           # Asana-style list layout for vendor agendas
+│   ├── project-tabs.tsx          # Project detail tabs (blockers, actions, RAID, intake)
+│   ├── raid-log.tsx              # RAID log with configurable columns + filters
+│   ├── owner-picker.tsx          # Person selection dropdown
 │   ├── sidebar.tsx               # App navigation sidebar
 │   └── topbar.tsx                # Top bar
 └── lib/
     ├── types.ts                  # All TypeScript interfaces
     ├── utils.ts                  # Formatting helpers (priorityColor, formatAge, etc.)
+    ├── pdf.ts                    # Client-side PDF text extraction
+    ├── ai/                       # DeepSeek client, context builder, prompts
+    ├── parsers/asana.ts          # Deterministic Asana PDF export parser
     └── supabase/                 # Supabase client/server/middleware setup
 ```
 
@@ -74,6 +81,9 @@ The app uses a consistent Asana-inspired visual style across all pages:
 - **Priority badges:** Colored rounded pills via `priorityColor()` from utils.ts
 - **Cards:** `border-gray-300` with `hover:border-blue-400`
 - **Priority group headers (agenda view):** Dark bars with colored priority dots, collapsible
+- **Expanded detail panels:** Property-table layout — editable title, label/value grid rows (`grid-cols-[120px_1fr_120px_1fr]`), description/notes below. Consistent across RAID log, blockers, action items.
+- **Reporter column:** Purple initials avatar (`bg-purple-100 text-purple-700`) — distinct from blue owner avatar
+- **RAID log filters:** Priority, status, owner, age dropdowns; active filters highlight blue; header shows filtered/total count
 
 ## Key Data Models
 
@@ -85,7 +95,7 @@ Defined in `src/lib/types.ts`:
 - **ActionItem** — tasks with owner, priority, due date, age
 - **Blocker** — blocking issues with impact description
 - **AgendaItem** — vendor meeting topics with severity/context/ask
-- **RaidEntry** — risks, actions, issues, decisions
+- **RaidEntry** — risks, assumptions, issues, decisions (with owner + reporter)
 - **SupportTicket** — external support requests
 - **Intake** — raw text submissions for AI extraction
 - **VendorAgendaRow** — RPC output for ranked agenda generation

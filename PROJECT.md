@@ -18,7 +18,9 @@ Project management and knowledge management tool for tracking vendors, projects,
 - **Styling:** Tailwind CSS 4, Lucide React icons
 - **AI:** DeepSeek V3 — extraction, call notes, Q&A
 - **OCR:** Tesseract.js (client-side image intake)
+- **PDF:** pdfjs-dist (client-side PDF text extraction)
 - **Spreadsheets:** xlsx (import/export)
+- **Parsers:** Deterministic Asana PDF export parser (bypasses AI)
 
 ## Environment Variables
 
@@ -72,6 +74,13 @@ src/
 └── lib/
     ├── types.ts              # All TypeScript interfaces + enums
     ├── utils.ts              # Formatting helpers (priority, status, dates, etc.)
+    ├── pdf.ts                # Client-side PDF text extraction (pdfjs-dist)
+    ├── ai/
+    │   ├── deepseek.ts       # DeepSeek API client
+    │   ├── context.ts        # Context building for AI calls
+    │   └── prompts/          # System prompts for extraction/notes/Q&A
+    ├── parsers/
+    │   └── asana.ts          # Deterministic Asana PDF export parser
     └── supabase/
         ├── client.ts         # Browser Supabase client
         ├── server.ts         # Server Supabase client
@@ -91,7 +100,7 @@ src/
 | `projects` | Tracked projects with health status |
 | `action_items` | Tasks with owner, priority, due date, meeting toggle |
 | `blockers` | Blocking issues with impact description |
-| `raid_entries` | Risks, assumptions, issues, decisions |
+| `raid_entries` | Risks, assumptions, issues, decisions (with owner + reporter) |
 | `agenda_items` | Vendor/project meeting topics with severity/context/ask |
 | `support_tickets` | External support requests |
 | `intakes` | Raw text submissions for AI extraction |
@@ -100,7 +109,7 @@ src/
 | `term_corrections` | AI extraction glossary (wrong_term → correct_term) |
 
 ### Junction Tables
-`project_vendors`, `meeting_projects`, `meeting_attendees`, `intake_entities`
+`project_vendors`, `meeting_projects`, `meeting_attendees`, `intake_entities`, `correction_log`
 
 ### Views
 - `blocker_ages` — blockers with computed age
@@ -118,6 +127,7 @@ src/
 - **project_health:** on_track, in_progress, at_risk, blocked, paused, complete
 - **raid_type:** risk, assumption, issue, decision
 - **severity_indicator:** critical, high, new, normal
+- **intake_source:** slack, email, meeting_notes, manual, fathom_transcript, spreadsheet, asana
 
 ### Security
 All tables have row-level security policies scoped to `org_id` via the `user_org_id()` helper function.
@@ -125,11 +135,13 @@ All tables have row-level security policies scoped to `org_id` via the `user_org
 ## Key Features
 
 1. **Vendor Accountability** — track action items + blockers per vendor with age and escalation counts
-2. **Project RAID Log** — four-quadrant Risk/Assumption/Issue/Decision matrix
+2. **Project RAID Log** — four-quadrant Risk/Assumption/Issue/Decision matrix with configurable columns (priority, status, owner, reporter, vendor, age, escalations, flagged), filters (priority/status/owner/age), and property-table detail view
 3. **Meeting Agenda** — toggle items for meeting inclusion via bell icon; auto-ranked by priority/severity/age/escalation score
 4. **AI Call Notes** — paste meeting notes on any item; DeepSeek updates fields + suggests new items in a staging area
-5. **AI Intake** — paste raw text or upload images; Tesseract OCR + DeepSeek extracts structured items
-6. **Intelligent Scoring** — RPC-based agenda ranking: `priority_score + severity_score + escalation_count*10 + min(age,30)*2`
+5. **AI Intake** — paste raw text, upload images (OCR), drop PDFs, or import spreadsheets; DeepSeek extracts structured items with 90s timeout and error recovery
+6. **PDF Intake** — drag-and-drop PDF files on both standalone intake and project intake panel; client-side text extraction via pdfjs-dist with position-based spacing
+7. **Asana Parser** — deterministic parser for Asana PDF exports; bypasses AI entirely for structured text extraction (separator-based block splitting, field parsing, person matching)
+8. **Intelligent Scoring** — RPC-based agenda ranking: `priority_score + severity_score + escalation_count*10 + min(age,30)*2`
 
 ## UI Design System
 
@@ -141,6 +153,8 @@ All tables have row-level security policies scoped to `org_id` via the `user_org
 - **Responsible column:** blue initials avatar (`bg-blue-100 text-blue-700`) + full name
 - **Priority badges:** colored pills via `priorityColor()` in `lib/utils.ts`
 - **Agenda view:** Asana-style collapsible priority groups with dark bar headers
+- **Expanded detail:** Property-table layout — editable title at top, label/value grid with subtle gray label backgrounds, description/notes below, actions bar at bottom. Consistent across RAID log, blockers, and action items.
+- **Reporter column:** Purple initials avatar (`bg-purple-100 text-purple-700`) to distinguish from blue owner avatar
 
 ## Migrations
 
@@ -155,6 +169,9 @@ All in `supabase/migrations/`:
 | `20260304000001_include_in_meeting.sql` | Meeting toggle + `generate_project_agenda_from_selected` RPC |
 | `20260304000002_risk_statuses.sql` | Extended RAID status values |
 | `20260305000001_fix_selected_agenda_rpc.sql` | Fix RAID type filter + remove status filters from selected agenda |
+| `20260305000002_correction_log.sql` | Correction logging table |
+| `20260305000003_add_asana_source.sql` | Add `asana` to intake_source enum |
+| `20260305000004_raid_reporter.sql` | Add `reporter_id` to raid_entries |
 
 ## Deployment
 
@@ -174,6 +191,6 @@ All docs live in this repo: [github.com/sparrowia/tracker](https://github.com/sp
 | [`CLAUDE.md`](https://github.com/sparrowia/tracker/blob/main/CLAUDE.md) | AI assistant instructions, conventions, and guardrails |
 | [`src/lib/types.ts`](https://github.com/sparrowia/tracker/blob/main/src/lib/types.ts) | All TypeScript interfaces and enums |
 | [`src/lib/utils.ts`](https://github.com/sparrowia/tracker/blob/main/src/lib/utils.ts) | Formatting helpers (priority colors, status badges, dates) |
-| [`supabase/migrations/`](https://github.com/sparrowia/tracker/tree/main/supabase/migrations) | Full database schema history (7 migrations) |
+| [`supabase/migrations/`](https://github.com/sparrowia/tracker/tree/main/supabase/migrations) | Full database schema history (10 migrations) |
 | [`.env.local.example`](https://github.com/sparrowia/tracker/blob/main/.env.local.example) | Required environment variables |
 | [`PROMPT.md`](https://github.com/sparrowia/tracker/blob/main/PROMPT.md) | Bootstrap prompt for AI assistants |
