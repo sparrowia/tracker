@@ -6,6 +6,7 @@ import { priorityColor, priorityLabel, statusBadge, formatAge, formatDateShort }
 import type { RaidEntry, RaidType, PriorityLevel, ItemStatus, Person, Vendor, Project } from "@/lib/types";
 import OwnerPicker from "@/components/owner-picker";
 import CommentThread from "@/components/comment-thread";
+import VendorPicker from "@/components/vendor-picker";
 
 type RaidRow = RaidEntry & { owner: Person | null; reporter: Person | null; vendor: Vendor | null };
 
@@ -15,6 +16,7 @@ interface RaidLogProps {
   people: Person[];
   vendors: Vendor[];
   onPersonAdded: (person: Person) => void;
+  onVendorAdded: (vendor: Vendor) => void;
   addUndo: (label: string, undo: () => Promise<void>) => void;
   onCountChange?: (count: number) => void;
   intakeSourceMap?: Record<string, string>;
@@ -145,7 +147,7 @@ function InlineDate({ value, onSave }: { value: string | null; onSave: (v: strin
   );
 }
 
-export default function RaidLog({ initialEntries, project, people, vendors, onPersonAdded, addUndo, onCountChange, intakeSourceMap = {}, onMeetingToggle }: RaidLogProps) {
+export default function RaidLog({ initialEntries, project, people, vendors, onPersonAdded, onVendorAdded, addUndo, onCountChange, intakeSourceMap = {}, onMeetingToggle }: RaidLogProps) {
   const [entries, setEntries] = useState<RaidRow[]>(initialEntries);
 
   const activeEntries = entries.filter((e) => !e.resolved_at);
@@ -702,17 +704,13 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                             />
                           </div>
                           <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-100">Vendor</span>
-                          <div className="px-3 py-2.5 border-b border-gray-100">
-                            <select
+                          <div className="px-3 py-1.5 border-b border-gray-100">
+                            <VendorPicker
                               value={entry.vendor_id || ""}
-                              onChange={(e) => saveField(entry.id, "vendor_id", e.target.value)}
-                              className="text-sm rounded border border-transparent hover:border-gray-300 bg-transparent py-0 focus:border-blue-500 focus:outline-none cursor-pointer -ml-0.5"
-                            >
-                              <option value="">None</option>
-                              {vendors.map((v) => (
-                                <option key={v.id} value={v.id}>{v.name}</option>
-                              ))}
-                            </select>
+                              onChange={(id) => saveField(entry.id, "vendor_id", id)}
+                              vendors={vendors}
+                              onVendorAdded={onVendorAdded}
+                            />
                           </div>
 
                           {/* Row: Flagged / Escalations */}

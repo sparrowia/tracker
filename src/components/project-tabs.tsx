@@ -10,6 +10,7 @@ import { AgendaView } from "@/components/agenda-view";
 import OwnerPicker from "@/components/owner-picker";
 import { useUndo, UndoToast } from "@/components/undo-toast";
 import CommentThread from "@/components/comment-thread";
+import VendorPicker from "@/components/vendor-picker";
 
 type Tab = "actions" | "blockers" | "raid" | "agenda" | "intake";
 
@@ -90,6 +91,7 @@ export default function ProjectTabs({
   const [dragOverTab, setDragOverTab] = useState<Tab | null>(null);
   const dragStartIndex = useRef<number>(-1);
   const [peopleList, setPeopleList] = useState<Person[]>(people);
+  const [vendorsList, setVendorsList] = useState<Vendor[]>(vendors);
   const [tabCounts, setTabCounts] = useState({
     actions: actions.length,
     blockers: blockers.length,
@@ -102,6 +104,13 @@ export default function ProjectTabs({
     setPeopleList((prev) => {
       if (prev.some((p) => p.id === person.id)) return prev;
       return [...prev, person].sort((a, b) => a.full_name.localeCompare(b.full_name));
+    });
+  }, []);
+
+  const addVendor = useCallback((vendor: Vendor) => {
+    setVendorsList((prev) => {
+      if (prev.some((v) => v.id === vendor.id)) return prev;
+      return [...prev, vendor].sort((a, b) => a.name.localeCompare(b.name));
     });
   }, []);
 
@@ -247,19 +256,19 @@ export default function ProjectTabs({
         </div>
 
         <div style={{ display: active === "blockers" ? "block" : "none" }}>
-          <BlockersPanel blockers={blockers} people={peopleList} vendors={vendors} onPersonAdded={addPerson} addUndo={addUndo} onCountChange={setBlockerCount} intakeSourceMap={intakeSourceMap} onNewItemsSuggested={onNewItemsSuggested} registerAdder={(fn) => { itemAddersRef.current.addBlocker = fn; return () => { itemAddersRef.current.addBlocker = undefined; }; }} onMeetingToggle={bumpAgendaRefresh} orgId={project.org_id} />
+          <BlockersPanel blockers={blockers} people={peopleList} vendors={vendorsList} onPersonAdded={addPerson} onVendorAdded={addVendor} addUndo={addUndo} onCountChange={setBlockerCount} intakeSourceMap={intakeSourceMap} onNewItemsSuggested={onNewItemsSuggested} registerAdder={(fn) => { itemAddersRef.current.addBlocker = fn; return () => { itemAddersRef.current.addBlocker = undefined; }; }} onMeetingToggle={bumpAgendaRefresh} orgId={project.org_id} />
         </div>
 
         <div style={{ display: active === "raid" ? "block" : "none" }}>
-          <RaidLog initialEntries={raidEntries} project={project} people={peopleList} vendors={vendors} onPersonAdded={addPerson} addUndo={addUndo} onCountChange={setRaidCount} intakeSourceMap={intakeSourceMap} onMeetingToggle={bumpAgendaRefresh} />
+          <RaidLog initialEntries={raidEntries} project={project} people={peopleList} vendors={vendorsList} onPersonAdded={addPerson} onVendorAdded={addVendor} addUndo={addUndo} onCountChange={setRaidCount} intakeSourceMap={intakeSourceMap} onMeetingToggle={bumpAgendaRefresh} />
         </div>
 
         <div style={{ display: active === "actions" ? "block" : "none" }}>
-          <ActionItemsPanel actions={actions} people={peopleList} vendors={vendors} onPersonAdded={addPerson} addUndo={addUndo} onCountChange={setActionCount} intakeSourceMap={intakeSourceMap} onNewItemsSuggested={onNewItemsSuggested} registerAdder={(fn) => { itemAddersRef.current.addAction = fn; return () => { itemAddersRef.current.addAction = undefined; }; }} onMeetingToggle={bumpAgendaRefresh} orgId={project.org_id} />
+          <ActionItemsPanel actions={actions} people={peopleList} vendors={vendorsList} onPersonAdded={addPerson} onVendorAdded={addVendor} addUndo={addUndo} onCountChange={setActionCount} intakeSourceMap={intakeSourceMap} onNewItemsSuggested={onNewItemsSuggested} registerAdder={(fn) => { itemAddersRef.current.addAction = fn; return () => { itemAddersRef.current.addAction = undefined; }; }} onMeetingToggle={bumpAgendaRefresh} orgId={project.org_id} />
         </div>
 
         <div style={{ display: active === "intake" ? "block" : "none" }}>
-          <IntakePanel project={project} initialIntakes={intakes} vendors={vendors} onCountChange={setIntakeCount} />
+          <IntakePanel project={project} initialIntakes={intakes} vendors={vendorsList} onCountChange={setIntakeCount} />
         </div>
       </div>
       <UndoToast stack={undoStack} onUndo={performUndo} onDismiss={dismissUndo} />
@@ -604,6 +613,7 @@ function BlockersPanel({
   people,
   vendors,
   onPersonAdded,
+  onVendorAdded,
   addUndo,
   onCountChange,
   intakeSourceMap = {},
@@ -616,6 +626,7 @@ function BlockersPanel({
   people: Person[];
   vendors: Vendor[];
   onPersonAdded: (person: Person) => void;
+  onVendorAdded: (vendor: Vendor) => void;
   addUndo: (label: string, undo: () => Promise<void>) => void;
   onCountChange?: (count: number) => void;
   intakeSourceMap?: Record<string, string>;
@@ -961,17 +972,13 @@ function BlockersPanel({
                         />
                       </div>
                       <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-100">Vendor</span>
-                      <div className="px-3 py-2.5 border-b border-gray-100">
-                        <select
+                      <div className="px-3 py-1.5 border-b border-gray-100">
+                        <VendorPicker
                           value={b.vendor_id || ""}
-                          onChange={(e) => saveField(b.id, "vendor_id", e.target.value)}
-                          className="text-sm rounded border border-transparent hover:border-gray-300 bg-transparent py-0 focus:border-blue-500 focus:outline-none cursor-pointer -ml-0.5"
-                        >
-                          <option value="">None</option>
-                          {vendors.map((v) => (
-                            <option key={v.id} value={v.id}>{v.name}</option>
-                          ))}
-                        </select>
+                          onChange={(id) => saveField(b.id, "vendor_id", id)}
+                          vendors={vendors}
+                          onVendorAdded={onVendorAdded}
+                        />
                       </div>
 
                       {/* Row: Due Date / Flagged */}
@@ -1121,6 +1128,7 @@ function ActionItemsPanel({
   people,
   vendors,
   onPersonAdded,
+  onVendorAdded,
   addUndo,
   onCountChange,
   intakeSourceMap = {},
@@ -1133,6 +1141,7 @@ function ActionItemsPanel({
   people: Person[];
   vendors: Vendor[];
   onPersonAdded: (person: Person) => void;
+  onVendorAdded: (vendor: Vendor) => void;
   addUndo: (label: string, undo: () => Promise<void>) => void;
   onCountChange?: (count: number) => void;
   intakeSourceMap?: Record<string, string>;
@@ -1478,17 +1487,13 @@ function ActionItemsPanel({
                         />
                       </div>
                       <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-100">Vendor</span>
-                      <div className="px-3 py-2.5 border-b border-gray-100">
-                        <select
+                      <div className="px-3 py-1.5 border-b border-gray-100">
+                        <VendorPicker
                           value={a.vendor_id || ""}
-                          onChange={(e) => saveField(a.id, "vendor_id", e.target.value)}
-                          className="text-sm rounded border border-transparent hover:border-gray-300 bg-transparent py-0 focus:border-blue-500 focus:outline-none cursor-pointer -ml-0.5"
-                        >
-                          <option value="">None</option>
-                          {vendors.map((v) => (
-                            <option key={v.id} value={v.id}>{v.name}</option>
-                          ))}
-                        </select>
+                          onChange={(id) => saveField(a.id, "vendor_id", id)}
+                          vendors={vendors}
+                          onVendorAdded={onVendorAdded}
+                        />
                       </div>
 
                       {/* Row: Due Date / Flagged */}
