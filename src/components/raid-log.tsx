@@ -158,6 +158,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
   const [activeTab, setActiveTab] = useState<RaidType>("risk");
   const [showArchived, setShowArchived] = useState(false);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
+  const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set());
   const [addingType, setAddingType] = useState<RaidType | null>(null);
   const [addTitle, setAddTitle] = useState("");
   const [addPriority, setAddPriority] = useState<PriorityLevel>("medium");
@@ -597,8 +598,10 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
               const ordered: { entry: RaidRow; isChild: boolean }[] = [];
               for (const p of parentItems) {
                 ordered.push({ entry: p, isChild: false });
-                const children = childMap.get(p.id);
-                if (children) children.forEach((c) => ordered.push({ entry: c, isChild: true }));
+                if (expandedParents.has(p.id)) {
+                  const children = childMap.get(p.id);
+                  if (children) children.forEach((c) => ordered.push({ entry: c, isChild: true }));
+                }
               }
               // Include orphaned children (parent filtered out or in different type)
               for (const e of items) {
@@ -656,7 +659,24 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                       {/* Title */}
                       <span className={`text-sm font-semibold truncate min-w-0 ${isChild ? "text-gray-700" : "text-gray-900"}`}>{entry.title}</span>
                       {childCount > 0 && (
-                        <span className="text-[10px] text-gray-400 bg-gray-100 rounded px-1.5 py-0.5 flex-shrink-0">{childCount} sub</span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setExpandedParents((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(entry.id)) next.delete(entry.id);
+                              else next.add(entry.id);
+                              return next;
+                            });
+                          }}
+                          className="flex items-center gap-1 text-[10px] text-gray-400 hover:text-gray-600 flex-shrink-0 transition-colors"
+                          title={expandedParents.has(entry.id) ? "Hide subtasks" : "Show subtasks"}
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="currentColor" stroke="none" className={`transition-transform ${expandedParents.has(entry.id) ? "rotate-90" : ""}`}>
+                            <polygon points="6,4 20,12 6,20" />
+                          </svg>
+                          <span>{childCount}</span>
+                        </button>
                       )}
                       {/* Spacer */}
                       <div className="flex-1" />
