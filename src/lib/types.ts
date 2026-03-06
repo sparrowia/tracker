@@ -154,6 +154,7 @@ export interface RaidEntry {
   vendor_id: string | null;
   decision_date: string | null;
   include_in_meeting: boolean;
+  parent_id: string | null;
   first_flagged_at: string;
   escalation_count: number;
   resolved_at: string | null;

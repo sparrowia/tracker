@@ -583,21 +583,49 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                 ))}
               </div>
             </div>
-            {items.map((entry) => {
+            {(() => {
+              // Build ordered list: parents followed by their children
+              const parentItems = items.filter((e) => !e.parent_id);
+              const childMap = new Map<string, RaidRow[]>();
+              for (const e of items) {
+                if (e.parent_id) {
+                  const siblings = childMap.get(e.parent_id) || [];
+                  siblings.push(e);
+                  childMap.set(e.parent_id, siblings);
+                }
+              }
+              const ordered: { entry: RaidRow; isChild: boolean }[] = [];
+              for (const p of parentItems) {
+                ordered.push({ entry: p, isChild: false });
+                const children = childMap.get(p.id);
+                if (children) children.forEach((c) => ordered.push({ entry: c, isChild: true }));
+              }
+              // Include orphaned children (parent filtered out or in different type)
+              for (const e of items) {
+                if (e.parent_id && !ordered.some((o) => o.entry.id === e.id)) {
+                  ordered.push({ entry: e, isChild: true });
+                }
+              }
+              return ordered;
+            })().map(({ entry, isChild }) => {
               const isExpanded = expandedId === entry.id;
               const badge = statusBadge(entry.status);
               const age = ageFromDate(entry.first_flagged_at);
               const isResolving = resolvingId === entry.id;
+              const childCount = items.filter((e) => e.parent_id === entry.id).length;
 
               return (
                 <Fragment key={entry.id}>
                   {/* Collapsed row */}
                   <div
-                    className={`px-3 border-b last:border-b-0 cursor-pointer ${isResolving ? "bg-green-100 opacity-0 border-transparent" : "bg-white hover:bg-gray-50 border-gray-200"}`}
-                    style={{ transition: "all 350ms ease-out", ...(isResolving ? { maxHeight: 0, paddingTop: 0, paddingBottom: 0, overflow: "hidden" } : { maxHeight: 200, paddingTop: "0.5rem", paddingBottom: "0.5rem" }) }}
+                    className={`border-b last:border-b-0 cursor-pointer ${isResolving ? "bg-green-100 opacity-0 border-transparent" : "bg-white hover:bg-gray-50 border-gray-200"}`}
+                    style={{ transition: "all 350ms ease-out", paddingLeft: isChild ? "2rem" : "0.75rem", paddingRight: "0.75rem", ...(isResolving ? { maxHeight: 0, paddingTop: 0, paddingBottom: 0, overflow: "hidden" } : { maxHeight: 200, paddingTop: "0.5rem", paddingBottom: "0.5rem" }) }}
                     onClick={() => toggleExpand(entry.id)}
                   >
                     <div className="flex items-center gap-4 min-w-0">
+                      {isChild && (
+                        <span className="text-gray-300 flex-shrink-0 -ml-2 mr--2">↳</span>
+                      )}
                       {/* Complete button */}
                       <button
                         onClick={(e) => { e.stopPropagation(); handleResolve(entry.id); }}
@@ -626,7 +654,10 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                       {/* Display ID */}
                       <span className="text-xs font-mono text-gray-400 flex-shrink-0">{entry.display_id}</span>
                       {/* Title */}
-                      <span className="text-sm font-semibold text-gray-900 truncate min-w-0">{entry.title}</span>
+                      <span className={`text-sm font-semibold truncate min-w-0 ${isChild ? "text-gray-700" : "text-gray-900"}`}>{entry.title}</span>
+                      {childCount > 0 && (
+                        <span className="text-[10px] text-gray-400 bg-gray-100 rounded px-1.5 py-0.5 flex-shrink-0">{childCount} sub</span>
+                      )}
                       {/* Spacer */}
                       <div className="flex-1" />
                       {/* Metadata — dynamic columns */}
@@ -733,6 +764,21 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                           <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-100">Escalations</span>
                           <div className="px-3 py-2.5 border-b border-gray-100">
                             <span className="text-sm text-gray-700">{entry.escalation_count > 0 ? `${entry.escalation_count}x` : "None"}</span>
+                          </div>
+
+                          {/* Row: Parent */}
+                          <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-100">Parent</span>
+                          <div className="px-3 py-2.5 border-b border-gray-100 col-span-3">
+                            <select
+                              value={entry.parent_id || ""}
+                              onChange={(e) => saveField(entry.id, "parent_id", e.target.value)}
+                              className="text-sm rounded border border-transparent hover:border-gray-300 bg-transparent py-0 focus:border-blue-500 focus:outline-none cursor-pointer -ml-0.5"
+                            >
+                              <option value="">None</option>
+                              {entries.filter((e) => e.id !== entry.id && e.raid_type === entry.raid_type && !e.parent_id && !e.resolved_at).map((e) => (
+                                <option key={e.id} value={e.id}>{e.display_id} — {e.title}</option>
+                              ))}
+                            </select>
                           </div>
 
                           {/* Conditional: Decision Date / Resolved */}
