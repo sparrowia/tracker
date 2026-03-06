@@ -62,7 +62,9 @@ src/
 ├── components/
 │   ├── agenda-view.tsx       # Asana-style agenda with priority groups
 │   ├── project-tabs.tsx      # Tab nav + staging area for AI suggestions
-│   ├── raid-log.tsx          # RAID quadrants (Risk/Assumption/Issue/Decision)
+│   ├── raid-log.tsx          # RAID quadrants with archived view + resolve animation
+│   ├── comment-thread.tsx    # Reusable comment thread with file attachments
+│   ├── vendor-picker.tsx     # Vendor selection dropdown with inline creation
 │   ├── project-header.tsx    # Project name + health badge
 │   ├── editable-project-name.tsx
 │   ├── add-project-button.tsx
@@ -104,6 +106,8 @@ src/
 | `agenda_items` | Vendor/project meeting topics with severity/context/ask |
 | `support_tickets` | External support requests |
 | `intakes` | Raw text submissions for AI extraction |
+| `comments` | Threaded comments on RAID entries, action items, blockers (polymorphic) |
+| `comment_attachments` | File attachments on comments (Supabase Storage) |
 | `meetings` | Meeting records |
 | `activity_log` | Audit trail |
 | `term_corrections` | AI extraction glossary (wrong_term → correct_term) |
@@ -142,6 +146,9 @@ All tables have row-level security policies scoped to `org_id` via the `user_org
 6. **PDF Intake** — drag-and-drop PDF files on both standalone intake and project intake panel; client-side text extraction via pdfjs-dist with position-based spacing
 7. **Asana Parser** — deterministic parser for Asana PDF exports; bypasses AI entirely for structured text extraction (separator-based block splitting, field parsing, person matching)
 8. **Intelligent Scoring** — RPC-based agenda ranking: `priority_score + severity_score + escalation_count*10 + min(age,30)*2`
+9. **Comments & Attachments** — threaded comments on RAID entries, action items, and blockers with file attachment support (Supabase Storage). Author auto-detected from logged-in user. Newest-first display with Cmd+Enter posting.
+10. **RAID Archived View** — "Archived" link below RAID type tabs shows all resolved items sorted by resolution date. Type label replaces ID, reopen button on each row. Resolve animation: green flash + collapse (350ms ease-out).
+11. **Vendor Picker** — all org vendors shown in RAID/Actions/Blockers detail panels with inline "+ Add Vendor" creation (like OwnerPicker for people)
 
 ## UI Design System
 
@@ -155,6 +162,8 @@ All tables have row-level security policies scoped to `org_id` via the `user_org
 - **Agenda view:** Asana-style collapsible priority groups with dark bar headers
 - **Expanded detail:** Property-table layout — editable title at top, label/value grid with subtle gray label backgrounds, description/notes below, actions bar at bottom. Consistent across RAID log, blockers, and action items.
 - **Reporter column:** Purple initials avatar (`bg-purple-100 text-purple-700`) to distinguish from blue owner avatar
+- **Comments section:** Below description in expanded detail panels. Author avatar + name + relative time, delete on hover, file attachment chips.
+- **Resolve animation:** Green flash (`bg-green-100`) + fade out + collapse via inline `transition: all 350ms ease-out`
 
 ## Migrations
 
@@ -172,6 +181,7 @@ All in `supabase/migrations/`:
 | `20260305000002_correction_log.sql` | Correction logging table |
 | `20260305000003_add_asana_source.sql` | Add `asana` to intake_source enum |
 | `20260305000004_raid_reporter.sql` | Add `reporter_id` to raid_entries |
+| `20260306000001_comments.sql` | Comments + comment_attachments tables, RLS, Supabase Storage bucket |
 
 ## Deployment
 
@@ -191,6 +201,6 @@ All docs live in this repo: [github.com/sparrowia/tracker](https://github.com/sp
 | [`CLAUDE.md`](https://github.com/sparrowia/tracker/blob/main/CLAUDE.md) | AI assistant instructions, conventions, and guardrails |
 | [`src/lib/types.ts`](https://github.com/sparrowia/tracker/blob/main/src/lib/types.ts) | All TypeScript interfaces and enums |
 | [`src/lib/utils.ts`](https://github.com/sparrowia/tracker/blob/main/src/lib/utils.ts) | Formatting helpers (priority colors, status badges, dates) |
-| [`supabase/migrations/`](https://github.com/sparrowia/tracker/tree/main/supabase/migrations) | Full database schema history (10 migrations) |
+| [`supabase/migrations/`](https://github.com/sparrowia/tracker/tree/main/supabase/migrations) | Full database schema history (11 migrations) |
 | [`.env.local.example`](https://github.com/sparrowia/tracker/blob/main/.env.local.example) | Required environment variables |
 | [`PROMPT.md`](https://github.com/sparrowia/tracker/blob/main/PROMPT.md) | Bootstrap prompt for AI assistants |

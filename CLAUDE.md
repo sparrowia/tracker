@@ -54,8 +54,10 @@ src/
 ├── components/
 │   ├── agenda-view.tsx           # Asana-style list layout for vendor agendas
 │   ├── project-tabs.tsx          # Project detail tabs (blockers, actions, RAID, intake)
-│   ├── raid-log.tsx              # RAID log with configurable columns + filters
-│   ├── owner-picker.tsx          # Person selection dropdown
+│   ├── raid-log.tsx              # RAID log with configurable columns, filters, archived view
+│   ├── comment-thread.tsx        # Threaded comments with file attachments
+│   ├── owner-picker.tsx          # Person selection dropdown with inline creation
+│   ├── vendor-picker.tsx         # Vendor selection dropdown with inline creation
 │   ├── sidebar.tsx               # App navigation sidebar
 │   └── topbar.tsx                # Top bar
 └── lib/
@@ -84,6 +86,10 @@ The app uses a consistent Asana-inspired visual style across all pages:
 - **Expanded detail panels:** Property-table layout — editable title, label/value grid rows (`grid-cols-[120px_1fr_120px_1fr]`), description/notes below. Consistent across RAID log, blockers, action items.
 - **Reporter column:** Purple initials avatar (`bg-purple-100 text-purple-700`) — distinct from blue owner avatar
 - **RAID log filters:** Priority, status, owner, age dropdowns; active filters highlight blue; header shows filtered/total count
+- **RAID archived view:** "Archived (N)" text link below type tabs; flat list sorted by resolved_at desc; type label, priority, owner, resolved date columns; reopen button
+- **Resolve animation:** Inline `transition: all 350ms ease-out` — green flash + fade + collapse
+- **Comments:** Below description in expanded detail panels; auto-author from logged-in user; Cmd+Enter posting; file attachments via Supabase Storage bucket `comment-attachments`
+- **VendorPicker:** Inline "+ Add Vendor" creation, same pattern as OwnerPicker
 
 ## Key Data Models
 
@@ -96,6 +102,8 @@ Defined in `src/lib/types.ts`:
 - **Blocker** — blocking issues with impact description
 - **AgendaItem** — vendor meeting topics with severity/context/ask
 - **RaidEntry** — risks, assumptions, issues, decisions (with owner + reporter)
+- **Comment** — threaded comments on RAID entries, action items, blockers (polymorphic parent)
+- **CommentAttachment** — file attachments on comments (Supabase Storage)
 - **SupportTicket** — external support requests
 - **Intake** — raw text submissions for AI extraction
 - **VendorAgendaRow** — RPC output for ranked agenda generation
