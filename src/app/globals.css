@@ -3,3 +3,11 @@
 body {
   font-family: system-ui, -apple-system, sans-serif;
 }
+
+/* Put calendar icon on the left for date inputs */
+input[type="date"] {
+  direction: rtl;
+}
+input[type="date"]::-webkit-datetime-edit {
+  direction: ltr;
+}
