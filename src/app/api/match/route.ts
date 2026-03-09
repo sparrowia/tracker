@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { callDeepSeek } from "@/lib/ai/deepseek";
 import { MATCH_SYSTEM_PROMPT } from "@/lib/ai/prompts/match";
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 export async function POST(request: Request) {
   try {

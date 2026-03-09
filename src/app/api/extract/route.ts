@@ -4,7 +4,7 @@ import { callDeepSeek } from "@/lib/ai/deepseek";
 import { fetchOrgContext, buildContextPrompt, buildTermCorrectionsPrompt } from "@/lib/ai/context";
 import { EXTRACT_SYSTEM_PROMPT, SOURCE_HINTS, FEW_SHOT_EXAMPLE } from "@/lib/ai/prompts/extract";
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 export async function POST(request: Request) {
   try {

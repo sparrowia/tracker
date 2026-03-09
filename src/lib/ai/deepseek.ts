@@ -54,7 +54,7 @@ export async function callDeepSeek<T = unknown>(
   }
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 55_000); // 55s to stay within Vercel's 60s limit
+  const timeout = setTimeout(() => controller.abort(), 120_000); // 2 min timeout for DeepSeek API
 
   let response: Response;
   try {
