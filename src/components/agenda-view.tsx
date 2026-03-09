@@ -295,7 +295,7 @@ export function AgendaView({
       : item.entity_type === "action_item" ? "action_items"
       : "raid_entries";
     setItems((prev) => prev.filter((i) => i.entity_id !== item.entity_id));
-    supabase.from(table).update({ include_in_meeting: false }).eq("id", item.entity_id);
+    supabase.from(table).update({ include_in_meeting: false }).eq("id", item.entity_id).then(() => {});
   }
 
   function saveField(item: ProjectAgendaRow, field: string, value: string) {
@@ -311,7 +311,7 @@ export function AgendaView({
         dbUpdates.resolved_at = null;
       }
     }
-    supabase.from(table).update(dbUpdates).eq("id", item.entity_id);
+    supabase.from(table).update(dbUpdates).eq("id", item.entity_id).then(() => {});
     setItems((prev) => prev.map((i) => {
       if (i.entity_id !== item.entity_id) return i;
       if (field === "title") return { ...i, title: value };
@@ -419,7 +419,7 @@ export function AgendaView({
       setNotesText("");
       setSavingNotes(false);
 
-      supabase.from(table).update(dbUpdates).eq("id", item.entity_id);
+      supabase.from(table).update(dbUpdates).eq("id", item.entity_id).then(() => {});
 
       if (new_items?.length > 0 && onNewItemsSuggested) {
         onNewItemsSuggested(new_items);

@@ -241,7 +241,7 @@ export function VendorAgendaView({
       : item.entity_type === "action_item" ? "action_items"
       : "raid_entries";
     setItems((prev) => prev.filter((i) => i.entity_id !== item.entity_id));
-    supabase.from(table).update({ include_in_meeting: false }).eq("id", item.entity_id);
+    supabase.from(table).update({ include_in_meeting: false }).eq("id", item.entity_id).then(() => {});
   }
 
   function saveField(item: VendorAgendaRow, field: string, value: string) {
@@ -256,7 +256,7 @@ export function VendorAgendaView({
         dbUpdates.resolved_at = null;
       }
     }
-    supabase.from(table).update(dbUpdates).eq("id", item.entity_id);
+    supabase.from(table).update(dbUpdates).eq("id", item.entity_id).then(() => {});
     setItems((prev) => prev.map((i) => {
       if (i.entity_id !== item.entity_id) return i;
       if (field === "title") return { ...i, title: value };
@@ -360,7 +360,7 @@ export function VendorAgendaView({
       setNotesText("");
       setSavingNotes(false);
 
-      supabase.from(table).update(dbUpdates).eq("id", item.entity_id);
+      supabase.from(table).update(dbUpdates).eq("id", item.entity_id).then(() => {});
     } catch {
       setSavingNotes(false);
     }
