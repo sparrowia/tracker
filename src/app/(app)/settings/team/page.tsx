@@ -170,6 +170,25 @@ export default function TeamPage() {
     loadData();
   }
 
+  async function handleDeleteUser(userId: string) {
+    if (!confirm("Permanently delete this user? This cannot be undone.")) return;
+    setActionLoading(userId);
+    const res = await fetch("/api/users/delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: userId }),
+    });
+    const data = await res.json();
+    setActionLoading(null);
+
+    if (!res.ok) {
+      showError(data.error || "Failed to delete");
+      return;
+    }
+    showSuccess("User deleted");
+    loadData();
+  }
+
   async function handleReactivate(userId: string) {
     setActionLoading(userId);
     const res = await fetch("/api/users/reactivate", {
@@ -389,13 +408,22 @@ export default function TeamPage() {
                     </span>
                   </div>
                   {myRole === "super_admin" && (
-                    <button
-                      onClick={() => handleReactivate(m.id)}
-                      disabled={actionLoading === m.id}
-                      className="text-xs text-blue-600 hover:text-blue-800 disabled:opacity-50"
-                    >
-                      {actionLoading === m.id ? "..." : "Reactivate"}
-                    </button>
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => handleReactivate(m.id)}
+                        disabled={actionLoading === m.id}
+                        className="text-xs text-blue-600 hover:text-blue-800 disabled:opacity-50"
+                      >
+                        {actionLoading === m.id ? "..." : "Reactivate"}
+                      </button>
+                      <button
+                        onClick={() => handleDeleteUser(m.id)}
+                        disabled={actionLoading === m.id}
+                        className="text-xs text-red-600 hover:text-red-800 disabled:opacity-50"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   )}
                 </div>
               ))}
