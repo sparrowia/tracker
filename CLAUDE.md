@@ -52,8 +52,9 @@ src/
 │   ├── (auth)/login/             # Auth page
 │   └── api/extract/              # DeepSeek extraction endpoint
 ├── components/
-│   ├── agenda-view.tsx           # Asana-style list layout for vendor agendas
-│   ├── project-tabs.tsx          # Project detail tabs (blockers, actions, RAID, intake)
+│   ├── agenda-view.tsx           # Project meeting agenda — RAID-style layout with resolve, undo, detail panels
+│   ├── vendor-agenda-view.tsx    # Vendor meeting agenda — same layout as agenda-view for vendor detail pages
+│   ├── project-tabs.tsx          # Project detail tabs (actions, blockers, RAID, agenda, intake) with cross-tab state sync
 │   ├── raid-log.tsx              # RAID log with columns, filters, archived view, subtasks, drag-and-drop
 │   ├── comment-thread.tsx        # Threaded comments with file attachments
 │   ├── owner-picker.tsx          # Person selection dropdown with inline creation
@@ -94,6 +95,9 @@ The app uses a consistent Asana-inspired visual style across all pages:
 - **Resolve animation:** Inline `transition: all 350ms ease-out` — green flash + fade + collapse
 - **Comments:** Below description in expanded detail panels; auto-author from logged-in user; Cmd+Enter posting; file attachments via Supabase Storage bucket `comment-attachments`
 - **VendorPicker:** Inline "+ Add Vendor" creation, same pattern as OwnerPicker
+- **Meeting Agenda:** Same RAID-style layout — complete circles with resolve animation, disclosure triangles for subtask groups, bell toggles, collapsible priority groups, editable detail panels (title, owner via OwnerPicker, vendor via VendorPicker, priority, context, ask). Call Notes textarea with AI "Process Notes" button.
+- **Cross-tab state sync:** Resolving an item from Meeting Agenda updates the source tab (Action Items / Blockers) via `registerResolver` callback pattern on `itemAddersRef`. Undo restores both the agenda and source tab state. Same ref pattern used for `registerAdder` when creating items from RAID log conversions or AI suggestions.
+- **Undo system:** `useUndo` hook in project-tabs provides a toast stack (up to 5). Panels receive `addUndo` prop. Undo callbacks restore DB state and re-add items to local state.
 
 ## Key Data Models
 
