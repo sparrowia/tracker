@@ -4,9 +4,10 @@ import { useState, useEffect, Fragment } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { priorityColor, priorityDot, formatAge } from "@/lib/utils";
-import type { Vendor, VendorAgendaRow, PriorityLevel } from "@/lib/types";
+import type { Vendor, VendorAgendaRow, PriorityLevel, Person } from "@/lib/types";
 import { useRole } from "@/components/role-context";
 import { canCreate, canDelete } from "@/lib/permissions";
+import OwnerPicker from "@/components/owner-picker";
 
 interface ParentGroupInfo {
   childToParent: Map<string, string>;
@@ -131,8 +132,12 @@ function InlineText({ value, onSave, placeholder, multiline }: { value: string; 
 
 export function VendorAgendaView({
   vendor,
+  people,
+  onPersonAdded,
 }: {
   vendor: Vendor;
+  people: Person[];
+  onPersonAdded?: (person: Person) => void;
 }) {
   const [items, setItems] = useState<VendorAgendaRow[]>([]);
   const [groupInfo, setGroupInfo] = useState<ParentGroupInfo>({ childToParent: new Map(), parentTitles: new Map() });
@@ -248,6 +253,10 @@ export function VendorAgendaView({
       if (field === "priority") return { ...i, priority: value as PriorityLevel };
       if (field === "context" || field === "notes" || field === "impact_description") return { ...i, context: value };
       if (field === "ask") return { ...i, ask: value };
+      if (field === "owner_id") {
+        const person = people.find((p) => p.id === value);
+        return { ...i, owner_id: value || null, owner_name: person?.full_name || null };
+      }
       return i;
     }));
   }
@@ -476,6 +485,14 @@ export function VendorAgendaView({
         {/* Expanded detail panel */}
         {isExpanded && (
           <div className="bg-white border-b border-gray-200" onClick={(e) => e.stopPropagation()}>
+            {/* Editable title */}
+            <div className="px-5 pt-3 pb-1">
+              <InlineText
+                value={item.title}
+                onSave={(v) => saveField(item, "title", v)}
+                placeholder="Untitled"
+              />
+            </div>
             <div className="border-t border-gray-200">
               <div className="grid grid-cols-[120px_1fr_120px_1fr] items-stretch">
                 {/* Row: Type / Priority */}
@@ -498,8 +515,13 @@ export function VendorAgendaView({
 
                 {/* Row: Owner / Project */}
                 <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-200">Owner</span>
-                <div className="px-3 py-2.5 border-b border-gray-200">
-                  <span className="text-sm text-gray-700">{item.owner_name || <span className="text-gray-400">Unassigned</span>}</span>
+                <div className="px-3 py-1.5 border-b border-gray-200">
+                  <OwnerPicker
+                    value={item.owner_id || ""}
+                    onChange={(id) => saveField(item, "owner_id", id)}
+                    people={people}
+                    onPersonAdded={onPersonAdded || (() => {})}
+                  />
                 </div>
                 <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-200">Project</span>
                 <div className="px-3 py-2.5 border-b border-gray-200">

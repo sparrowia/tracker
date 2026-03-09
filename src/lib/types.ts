@@ -320,6 +320,8 @@ export interface VendorAgendaRow {
   score: number;
   owner_name: string | null;
   project_name: string | null;
+  owner_id: string | null;
+  vendor_id: string | null;
 }
 
 export interface Comment {
@@ -361,4 +363,6 @@ export interface ProjectAgendaRow {
   score: number;
   owner_name: string | null;
   vendor_name: string | null;
+  owner_id: string | null;
+  vendor_id: string | null;
 }

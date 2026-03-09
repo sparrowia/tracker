@@ -23,7 +23,7 @@ export default async function VendorDetailPage({
 
   const v = vendor as Vendor;
 
-  const [{ data: accountability }, { data: contacts }, { data: projects }] =
+  const [{ data: accountability }, { data: contacts }, { data: projects }, { data: allPeople }] =
     await Promise.all([
       supabase
         .from("vendor_accountability")
@@ -38,10 +38,16 @@ export default async function VendorDetailPage({
         .from("project_vendors")
         .select("project:projects(*)")
         .eq("vendor_id", v.id),
+      supabase
+        .from("people")
+        .select("*")
+        .eq("org_id", v.org_id)
+        .order("full_name"),
     ]);
 
   const items = (accountability || []) as VendorAccountabilityRow[];
   const people = (contacts || []) as Person[];
+  const peopleList = (allPeople || []) as Person[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const vendorProjects = ((projects || []).map((p: any) => p.project).filter(Boolean)) as Project[];
 
@@ -116,7 +122,7 @@ export default async function VendorDetailPage({
 
       {/* Meeting Agenda */}
       <section>
-        <VendorAgendaView vendor={v} />
+        <VendorAgendaView vendor={v} people={peopleList} />
       </section>
 
       {/* Accountability */}

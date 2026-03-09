@@ -255,7 +255,7 @@ export default function ProjectTabs({
       {/* Tab content — use display:none so panels stay mounted and state persists */}
       <div className="mt-6">
         <div style={{ display: active === "agenda" ? "block" : "none" }}>
-          <AgendaView project={project} initialItems={agendaRows} onCountChange={setAgendaCount} onNewItemsSuggested={onNewItemsSuggested} refreshTrigger={agendaRefreshKey} />
+          <AgendaView project={project} initialItems={agendaRows} people={peopleList} vendors={vendorsList} onCountChange={setAgendaCount} onNewItemsSuggested={onNewItemsSuggested} onPersonAdded={addPerson} onVendorAdded={addVendor} refreshTrigger={agendaRefreshKey} />
         </div>
 
         <div style={{ display: active === "blockers" ? "block" : "none" }}>

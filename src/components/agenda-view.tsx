@@ -4,9 +4,11 @@ import { useState, useEffect, Fragment } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { priorityColor, priorityDot, formatAge } from "@/lib/utils";
-import type { Project, ProjectAgendaRow, PriorityLevel } from "@/lib/types";
+import type { Project, ProjectAgendaRow, PriorityLevel, Person, Vendor } from "@/lib/types";
 import { useRole } from "@/components/role-context";
 import { canCreate, canDelete } from "@/lib/permissions";
+import OwnerPicker from "@/components/owner-picker";
+import VendorPicker from "@/components/vendor-picker";
 
 const priorityOptions: PriorityLevel[] = ["critical", "high", "medium", "low"];
 
@@ -155,14 +157,22 @@ function InlineText({ value, onSave, placeholder, multiline }: { value: string; 
 export function AgendaView({
   project,
   initialItems,
+  people,
+  vendors,
   onCountChange,
   onNewItemsSuggested,
+  onPersonAdded,
+  onVendorAdded,
   refreshTrigger,
 }: {
   project: Project;
   initialItems: ProjectAgendaRow[];
+  people: Person[];
+  vendors: Vendor[];
   onCountChange?: (count: number) => void;
   onNewItemsSuggested?: (items: { title: string; suggested_type?: string; priority?: string; description?: string }[]) => void;
+  onPersonAdded?: (person: Person) => void;
+  onVendorAdded?: (vendor: Vendor) => void;
   refreshTrigger?: number;
 }) {
   const [items, setItems] = useState(initialItems);
@@ -283,6 +293,14 @@ export function AgendaView({
       if (field === "priority") return { ...i, priority: value as PriorityLevel };
       if (field === "context" || field === "notes" || field === "impact_description") return { ...i, context: value };
       if (field === "ask") return { ...i, ask: value };
+      if (field === "owner_id") {
+        const person = people.find((p) => p.id === value);
+        return { ...i, owner_id: value || null, owner_name: person?.full_name || null };
+      }
+      if (field === "vendor_id") {
+        const vendor = vendors.find((v) => v.id === value);
+        return { ...i, vendor_id: value || null, vendor_name: vendor?.name || null };
+      }
       return i;
     }));
   }
@@ -540,6 +558,14 @@ export function AgendaView({
         {/* Expanded detail panel */}
         {isExpanded && (
           <div className="bg-white border-b border-gray-200" onClick={(e) => e.stopPropagation()}>
+            {/* Editable title */}
+            <div className="px-5 pt-3 pb-1">
+              <InlineText
+                value={item.title}
+                onSave={(v) => saveField(item, "title", v)}
+                placeholder="Untitled"
+              />
+            </div>
             {/* Properties grid */}
             <div className="border-t border-gray-200">
               <div className="grid grid-cols-[120px_1fr_120px_1fr] items-stretch">
@@ -563,12 +589,22 @@ export function AgendaView({
 
                 {/* Row: Owner / Vendor */}
                 <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-200">Owner</span>
-                <div className="px-3 py-2.5 border-b border-gray-200">
-                  <span className="text-sm text-gray-700">{item.owner_name || <span className="text-gray-400">Unassigned</span>}</span>
+                <div className="px-3 py-1.5 border-b border-gray-200">
+                  <OwnerPicker
+                    value={item.owner_id || ""}
+                    onChange={(id) => saveField(item, "owner_id", id)}
+                    people={people}
+                    onPersonAdded={onPersonAdded || (() => {})}
+                  />
                 </div>
                 <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-200">Vendor</span>
-                <div className="px-3 py-2.5 border-b border-gray-200">
-                  <span className="text-sm text-gray-700">{item.vendor_name || <span className="text-gray-400">—</span>}</span>
+                <div className="px-3 py-1.5 border-b border-gray-200">
+                  <VendorPicker
+                    value={item.vendor_id || ""}
+                    onChange={(id) => saveField(item, "vendor_id", id)}
+                    vendors={vendors}
+                    onVendorAdded={onVendorAdded || (() => {})}
+                  />
                 </div>
 
                 {/* Row: Age / Score */}
