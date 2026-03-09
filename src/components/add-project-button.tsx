@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { healthColor, healthLabel } from "@/lib/utils";
 import type { ProjectHealth, Initiative } from "@/lib/types";
+import { useRole } from "@/components/role-context";
 
 const HEALTH_OPTIONS: ProjectHealth[] = ["on_track", "in_progress", "at_risk", "blocked", "paused", "complete"];
 
@@ -28,6 +29,7 @@ export default function AddProjectButton({ initiativeId, onSaved }: { initiative
   });
   const supabase = createClient();
   const router = useRouter();
+  const { profileId } = useRole();
 
   useEffect(() => {
     if (!initiativeId && open) {
@@ -58,6 +60,7 @@ export default function AddProjectButton({ initiativeId, onSaved }: { initiative
       start_date: form.start_date || null,
       target_completion: form.target_completion || null,
       initiative_id: form.initiative_id || null,
+      created_by: profileId,
     });
     setSaving(false);
     if (!error) {

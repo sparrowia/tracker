@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { priorityColor, priorityLabel } from "@/lib/utils";
 import type { Vendor, Project, PriorityLevel } from "@/lib/types";
+import { useRole } from "@/components/role-context";
 
 type ItemType = "action_items" | "decisions" | "issues" | "risks" | "blockers" | "status_updates";
 
@@ -139,6 +140,7 @@ function normalizeStatus(val: string): string | null {
 export default function IntakeSetupPage() {
   const router = useRouter();
   const supabase = createClient();
+  const { profileId } = useRole();
 
   const [sessionData, setSessionData] = useState<SessionData | null>(null);
   const [activeSheetIdx, setActiveSheetIdx] = useState(0);
@@ -311,7 +313,7 @@ export default function IntakeSetupPage() {
       if (sessionData.vendorId === "new" && sessionData.newVendorName?.trim()) {
         const { data: newVendor, error: vendorErr } = await supabase
           .from("vendors")
-          .insert({ name: sessionData.newVendorName.trim(), org_id: orgId })
+          .insert({ name: sessionData.newVendorName.trim(), org_id: orgId, created_by: profileId })
           .select()
           .single();
         if (vendorErr) throw vendorErr;
@@ -326,7 +328,7 @@ export default function IntakeSetupPage() {
         const slug = sessionData.newProjectName.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-");
         const { data: newProject, error: projectErr } = await supabase
           .from("projects")
-          .insert({ name: sessionData.newProjectName.trim(), slug, org_id: orgId })
+          .insert({ name: sessionData.newProjectName.trim(), slug, org_id: orgId, created_by: profileId })
           .select()
           .single();
         if (projectErr) throw projectErr;

@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Person } from "@/lib/types";
+import { useRole } from "@/components/role-context";
 
 const ADD_SENTINEL = "__add_new__";
 
@@ -14,6 +15,7 @@ interface OwnerPickerProps {
 }
 
 export default function OwnerPicker({ value, onChange, people, onPersonAdded }: OwnerPickerProps) {
+  const { profileId } = useRole();
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
@@ -43,7 +45,7 @@ export default function OwnerPicker({ value, onChange, people, onPersonAdded }: 
 
     const { data: newPerson } = await supabase
       .from("people")
-      .insert({ full_name: trimmed, org_id: orgId, is_internal: false })
+      .insert({ full_name: trimmed, org_id: orgId, is_internal: false, created_by: profileId })
       .select("*")
       .single();
 

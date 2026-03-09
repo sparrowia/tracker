@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useRouter, useParams } from "next/navigation";
 import { priorityColor, priorityLabel, statusBadge } from "@/lib/utils";
 import type { Intake, PriorityLevel, ItemStatus, Vendor, Project, Person } from "@/lib/types";
+import { useRole } from "@/components/role-context";
 
 interface MatchCandidate {
   table: "action_items" | "blockers" | "raid_entries";
@@ -176,6 +177,7 @@ function renderHighlightedText(text: string, quote: string) {
 }
 
 export default function IntakeReviewPage() {
+  const { profileId } = useRole();
   const params = useParams();
   const intakeId = params.id as string;
   const [intake, setIntake] = useState<Intake | null>(null);
@@ -396,7 +398,7 @@ export default function IntakeReviewPage() {
         if (orgId) {
           const { data: newPerson } = await supabase
             .from("people")
-            .insert({ full_name: name.trim(), org_id: orgId, is_internal: false })
+            .insert({ full_name: name.trim(), org_id: orgId, is_internal: false, created_by: profileId })
             .select("*")
             .single();
           if (newPerson) {
@@ -528,7 +530,7 @@ export default function IntakeReviewPage() {
         if (!match) {
           const { data: newPerson, error: personErr } = await supabase
             .from("people")
-            .insert({ full_name: name, org_id: orgId, is_internal: false })
+            .insert({ full_name: name, org_id: orgId, is_internal: false, created_by: profileId })
             .select("id, full_name")
             .single();
           if (personErr) throw new Error(`Failed to create person "${name}": ${personErr.message}`);
@@ -588,6 +590,7 @@ export default function IntakeReviewPage() {
             due_date: item.due_date || null,
             first_flagged_at: today,
             notes: item.notes || item.details || item.rationale || item.impact_description || null,
+            created_by: profileId,
           }))
         );
 
@@ -611,6 +614,7 @@ export default function IntakeReviewPage() {
               decision_date: item.decision_date || null,
               first_flagged_at: item.decision_date || today,
               priority: "medium" as const,
+              created_by: profileId,
             }))
           );
         }
@@ -645,6 +649,7 @@ export default function IntakeReviewPage() {
                 project_id: item._project_id || null,
                 vendor_id: item._vendor_id || null,
                 first_flagged_at: item.date_reported || today,
+                created_by: profileId,
               };
             })
           );
@@ -669,6 +674,7 @@ export default function IntakeReviewPage() {
               priority: item.priority || "medium",
               project_id: item._project_id || null,
               first_flagged_at: today,
+              created_by: profileId,
             }))
           );
         }
@@ -684,6 +690,7 @@ export default function IntakeReviewPage() {
             project_id: item._project_id || null,
             priority: item.priority || "high",
             first_flagged_at: today,
+            created_by: profileId,
           }))
         );
       } catch (batchErr) {

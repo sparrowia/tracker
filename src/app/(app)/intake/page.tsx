@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import type { Vendor, Project, IntakeSource } from "@/lib/types";
+import { useRole } from "@/components/role-context";
 
 interface PastedImage {
   id: string;
@@ -26,6 +27,7 @@ const sourceOptions: { value: IntakeSource; label: string }[] = [
 ];
 
 export default function IntakePage() {
+  const { profileId } = useRole();
   const [rawText, setRawText] = useState("");
   const [pastedImages, setPastedImages] = useState<PastedImage[]>([]);
   const [source, setSource] = useState<IntakeSource>("manual");
@@ -342,7 +344,7 @@ export default function IntakePage() {
         setProgressStep("Creating new vendor...");
         const { data: newVendor, error: vendorErr } = await supabase
           .from("vendors")
-          .insert({ name: newVendorName.trim(), org_id: profile?.org_id })
+          .insert({ name: newVendorName.trim(), org_id: profile?.org_id, created_by: profileId })
           .select()
           .single();
         if (vendorErr) throw vendorErr;
@@ -361,6 +363,7 @@ export default function IntakePage() {
             name: newProjectName.trim(),
             slug,
             org_id: profile?.org_id,
+            created_by: profileId,
           })
           .select()
           .single();

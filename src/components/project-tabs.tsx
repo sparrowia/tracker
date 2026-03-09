@@ -11,6 +11,8 @@ import OwnerPicker from "@/components/owner-picker";
 import { useUndo, UndoToast } from "@/components/undo-toast";
 import CommentThread from "@/components/comment-thread";
 import VendorPicker from "@/components/vendor-picker";
+import { useRole } from "@/components/role-context";
+import { canCreate, canDelete, canEditItem } from "@/lib/permissions";
 
 type Tab = "actions" | "blockers" | "raid" | "agenda" | "intake";
 
@@ -84,6 +86,7 @@ export default function ProjectTabs({
   const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = createClient();
+  const { role, profileId, userPersonId } = useRole();
   const [tabOrder, setTabOrder] = useState<Tab[]>(loadTabOrder);
   const urlTab = searchParams.get("tab") as Tab | null;
   const [active, setActive] = useState<Tab>(urlTab && DEFAULT_ORDER.includes(urlTab) ? urlTab : tabOrder[0]);
@@ -433,6 +436,7 @@ function StagingArea({
     addRaid?: (item: RaidEntry & { owner: Person | null; vendor: Vendor | null }) => void;
   }>;
 }) {
+  const { profileId } = useRole();
   const [accepting, setAccepting] = useState<Set<string>>(new Set());
 
   function updateSuggestion(id: string, field: keyof SuggestedItem, value: string) {
@@ -460,6 +464,7 @@ function StagingArea({
       first_flagged_at: now,
       escalation_count: 0,
       include_in_meeting: false,
+      created_by: profileId,
       ...(item.owner_id ? { owner_id: item.owner_id } : {}),
     };
 
@@ -635,6 +640,7 @@ function BlockersPanel({
   onMeetingToggle?: () => void;
   orgId: string;
 }) {
+  const { role, profileId, userPersonId } = useRole();
   const [blockers, setBlockers] = useState<BlockerRow[]>(initialBlockers);
 
   useEffect(() => {
@@ -1069,16 +1075,18 @@ function BlockersPanel({
                       Call Notes
                     </button>
                     <div className="flex-1" />
-                    <button
-                      onClick={() => handleDelete(b.id)}
-                      className="text-gray-400 hover:text-red-600 transition-colors"
-                      title="Delete"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="3 6 5 6 21 6"/>
-                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                      </svg>
-                    </button>
+                    {canDelete(role) && (
+                      <button
+                        onClick={() => handleDelete(b.id)}
+                        className="text-gray-400 hover:text-red-600 transition-colors"
+                        title="Delete"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="3 6 5 6 21 6"/>
+                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                        </svg>
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
@@ -1150,6 +1158,7 @@ function ActionItemsPanel({
   onMeetingToggle?: () => void;
   orgId: string;
 }) {
+  const { role, profileId, userPersonId } = useRole();
   const [actions, setActions] = useState<ActionRow[]>(initialActions);
 
   useEffect(() => {
@@ -1584,16 +1593,18 @@ function ActionItemsPanel({
                       Call Notes
                     </button>
                     <div className="flex-1" />
-                    <button
-                      onClick={() => handleDelete(a.id)}
-                      className="text-gray-400 hover:text-red-600 transition-colors"
-                      title="Delete"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="3 6 5 6 21 6"/>
-                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                      </svg>
-                    </button>
+                    {canDelete(role) && (
+                      <button
+                        onClick={() => handleDelete(a.id)}
+                        className="text-gray-400 hover:text-red-600 transition-colors"
+                        title="Delete"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="3 6 5 6 21 6"/>
+                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                        </svg>
+                      </button>
+                    )}
                   </div>
                 </div>
               )}

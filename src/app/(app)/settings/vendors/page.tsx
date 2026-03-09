@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Vendor } from "@/lib/types";
+import { useRole } from "@/components/role-context";
 
 interface VendorWithCounts extends Vendor {
   actionCount: number;
@@ -21,6 +22,7 @@ export default function VendorsPage() {
   const [editForm, setEditForm] = useState({ name: "", slug: "", website: "", notes: "" });
   const supabase = createClient();
   const router = useRouter();
+  const { profileId } = useRole();
 
   useEffect(() => {
     async function load() {
@@ -91,6 +93,7 @@ export default function VendorsPage() {
         slug,
         website: editForm.website.trim() || null,
         notes: editForm.notes.trim() || null,
+        created_by: profileId,
       })
       .select()
       .single();

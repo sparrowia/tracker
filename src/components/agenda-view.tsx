@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { priorityColor, priorityDot, formatAge } from "@/lib/utils";
 import type { Project, ProjectAgendaRow, PriorityLevel } from "@/lib/types";
+import { useRole } from "@/components/role-context";
+import { canCreate, canDelete } from "@/lib/permissions";
 
 const priorityOptions: PriorityLevel[] = ["critical", "high", "medium", "low"];
 
@@ -103,6 +105,7 @@ export function AgendaView({
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const router = useRouter();
   const supabase = createClient();
+  const { role, profileId } = useRole();
 
   function toggleGroup(priority: PriorityLevel) {
     setCollapsedGroups((prev) => {
@@ -206,6 +209,7 @@ export function AgendaView({
       severity: "new",
       priority: "medium",
       org_id: project.org_id,
+      created_by: profileId,
     });
     setNewTitle("");
     setNewContext("");
@@ -440,12 +444,14 @@ export function AgendaView({
               Reset
             </button>
           )}
-          <button
-            onClick={() => setShowAddForm(!showAddForm)}
-            className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-          >
-            Add Item
-          </button>
+          {canCreate(role) && (
+            <button
+              onClick={() => setShowAddForm(!showAddForm)}
+              className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+            >
+              Add Item
+            </button>
+          )}
           <button
             onClick={handleGenerate}
             disabled={generating}
@@ -607,7 +613,7 @@ export function AgendaView({
                           <button onClick={() => handleEscalate(item)} className="p-1 text-gray-400 hover:text-red-600 rounded hover:bg-red-50" title="Escalate"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5" /><polyline points="5 12 12 5 19 12" /></svg></button>
                           <button onClick={() => handleDeescalate(item)} className="p-1 text-gray-400 hover:text-blue-600 rounded hover:bg-blue-50" title="De-escalate"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><polyline points="19 12 12 19 5 12" /></svg></button>
                           <button onClick={() => handleResolve(item)} className="p-1 text-gray-400 hover:text-green-600 rounded hover:bg-green-50" title="Resolve"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg></button>
-                          <button onClick={() => handleDelete(item)} className="p-1 text-gray-400 hover:text-red-600 rounded hover:bg-red-50" title="Delete"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg></button>
+                          {canDelete(role) && <button onClick={() => handleDelete(item)} className="p-1 text-gray-400 hover:text-red-600 rounded hover:bg-red-50" title="Delete"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg></button>}
                         </div>
                       </div>
                       {isExpanded && (item.context || item.ask) && (

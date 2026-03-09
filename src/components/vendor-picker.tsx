@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Vendor } from "@/lib/types";
+import { useRole } from "@/components/role-context";
 
 const ADD_SENTINEL = "__add_new__";
 
@@ -14,6 +15,7 @@ interface VendorPickerProps {
 }
 
 export default function VendorPicker({ value, onChange, vendors, onVendorAdded }: VendorPickerProps) {
+  const { profileId } = useRole();
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
@@ -45,7 +47,7 @@ export default function VendorPicker({ value, onChange, vendors, onVendorAdded }
 
     const { data: newVendor } = await supabase
       .from("vendors")
-      .insert({ name: trimmed, slug, org_id: orgId })
+      .insert({ name: trimmed, slug, org_id: orgId, created_by: profileId })
       .select("*")
       .single();
 
