@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { priorityColor, priorityLabel, statusBadge, formatAge, formatDateShort } from "@/lib/utils";
 import type { Vendor, Person, VendorAccountabilityRow, Project } from "@/lib/types";
+import { VendorAgendaView } from "@/components/vendor-agenda-view";
 
 export default async function VendorDetailPage({
   params,
@@ -112,6 +113,11 @@ export default async function VendorDetailPage({
           </div>
         </section>
       )}
+
+      {/* Meeting Agenda */}
+      <section>
+        <VendorAgendaView vendor={v} />
+      </section>
 
       {/* Accountability */}
       <section>
