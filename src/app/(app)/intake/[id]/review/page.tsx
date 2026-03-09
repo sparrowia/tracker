@@ -566,6 +566,9 @@ export default function IntakeReviewPage() {
 
       try {
         const today = new Date().toISOString().split("T")[0];
+        console.log("[Confirm] Inserting items:", Object.fromEntries(
+          Object.entries(byEffectiveType).map(([k, v]) => [k, v.length])
+        ));
 
         // Create action items
         await batchInsert("action_items",
@@ -875,6 +878,7 @@ export default function IntakeReviewPage() {
 
       router.push("/dashboard");
     } catch (err) {
+      console.error("[Confirm] Error:", err);
       setError(err instanceof Error ? err.message : "Failed to confirm");
       setConfirming(false);
     }
@@ -1406,6 +1410,11 @@ export default function IntakeReviewPage() {
                 {confirming ? "Saving..." : `Confirm ${totalAccepted} Items`}
               </button>
             </div>
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded text-sm mt-3">
+                {error}
+              </div>
+            )}
           </div>
         </div>
       )}
