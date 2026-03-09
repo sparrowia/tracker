@@ -53,14 +53,28 @@ export async function callDeepSeek<T = unknown>(
     body.max_tokens = opts.maxTokens;
   }
 
-  const response = await fetch("https://api.deepseek.com/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify(body),
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 55_000); // 55s to stay within Vercel's 60s limit
+
+  let response: Response;
+  try {
+    response = await fetch("https://api.deepseek.com/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    clearTimeout(timeout);
+    if (err instanceof Error && err.name === "AbortError") {
+      return { ok: false, error: "AI request timed out. Please try again.", status: 504 };
+    }
+    return { ok: false, error: `Network error: ${err instanceof Error ? err.message : "Unknown"}`, status: 502 };
+  }
+  clearTimeout(timeout);
 
   if (!response.ok) {
     const errBody = await response.text();

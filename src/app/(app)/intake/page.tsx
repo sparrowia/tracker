@@ -409,8 +409,20 @@ export default function IntakePage() {
       clearTimeout(timeout);
 
       if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.error || "Extraction failed");
+        let errorMsg = "Extraction failed";
+        try {
+          const err = await response.json();
+          errorMsg = err.error || errorMsg;
+        } catch {
+          // Response wasn't JSON (e.g. Vercel error page)
+          const text = await response.text().catch(() => "");
+          if (response.status === 504 || text.includes("FUNCTION_INVOCATION_TIMEOUT")) {
+            errorMsg = "Extraction timed out. Please try again with shorter text.";
+          } else {
+            errorMsg = `Server error (${response.status}). Please try again.`;
+          }
+        }
+        throw new Error(errorMsg);
       }
 
       setProgressStep("Extraction complete! Loading review...");
