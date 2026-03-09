@@ -68,11 +68,15 @@ export default function TeamPage() {
         supabase.from("vendors").select("id, name").order("name"),
       ]);
 
-    const active = (profileData || []).filter((p) => !p.deactivated_at) as TeamMember[];
-    const inactive = (profileData || []).filter((p) => p.deactivated_at) as TeamMember[];
+    const invites = (inviteData || []) as Invitation[];
+    // Emails with pending (unaccepted) invitations — these users exist in auth but haven't accepted yet
+    const pendingEmails = new Set(invites.map((i) => i.email.toLowerCase()));
+    const allProfiles = (profileData || []) as TeamMember[];
+    const active = allProfiles.filter((p) => !p.deactivated_at && !pendingEmails.has(p.email.toLowerCase()));
+    const inactive = allProfiles.filter((p) => p.deactivated_at);
     setMembers(active);
     setDeactivated(inactive);
-    setInvitations((inviteData || []) as Invitation[]);
+    setInvitations(invites);
     setVendors((vendorData || []) as Vendor[]);
     setLoading(false);
   }
