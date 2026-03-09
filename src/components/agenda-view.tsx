@@ -62,65 +62,74 @@ function sortItems(items: ProjectAgendaRow[], field: SortField, direction: SortD
   return sorted;
 }
 
-function groupByPriority(items: ProjectAgendaRow[]) {
-  const groups: Record<PriorityLevel, ProjectAgendaRow[]> = {
-    critical: [],
-    high: [],
-    medium: [],
-    low: [],
-  };
-  items.forEach((item) => {
-    groups[item.priority]?.push(item);
-  });
-  return groups;
+// Parent info for subtask grouping in agendas
+interface ParentGroupInfo {
+  childToParent: Map<string, string>;
+  parentTitles: Map<string, string>;
 }
 
-type AnnotatedItem<T> =
-  | { kind: "item"; item: T; indented: boolean }
-  | { kind: "parent-header"; title: string; childCount: number };
+type AgendaUnit<T> =
+  | { kind: "standalone"; item: T }
+  | { kind: "group"; parent: T | null; parentTitle: string; children: T[] };
 
-function annotateWithParentGroups<T extends { entity_id: string }>(
+// Build agenda units: standalone items and parent+children groups.
+// A group is created when 2+ children of the same parent are in the list.
+// If the parent itself is in the list, it becomes the group's parent row.
+function buildAgendaUnits<T extends { entity_id: string }>(
   items: T[],
-  parentMap: Map<string, string>,
-  parentTitles: Map<string, string>
-): AnnotatedItem<T>[] {
-  // Count how many agenda items share each parent
-  const parentChildCount = new Map<string, number>();
+  info: ParentGroupInfo
+): AgendaUnit<T>[] {
+  if (info.childToParent.size === 0) return items.map((i) => ({ kind: "standalone", item: i }));
+
+  const itemMap = new Map<string, T>();
+  for (const item of items) itemMap.set(item.entity_id, item);
+
+  // Collect children per parent
+  const parentChildIds = new Map<string, string[]>();
   for (const item of items) {
-    const pid = parentMap.get(item.entity_id);
-    if (pid) parentChildCount.set(pid, (parentChildCount.get(pid) || 0) + 1);
-  }
-
-  // Parents with 2+ children get grouped
-  const groupedParents = new Set<string>();
-  for (const [pid, count] of parentChildCount) {
-    if (count >= 2) groupedParents.add(pid);
-  }
-
-  const result: AnnotatedItem<T>[] = [];
-  const emittedHeaders = new Set<string>();
-  const used = new Set<string>();
-
-  for (const item of items) {
-    if (used.has(item.entity_id)) continue;
-    const pid = parentMap.get(item.entity_id);
-    if (pid && groupedParents.has(pid) && !emittedHeaders.has(pid)) {
-      // Emit parent header + all siblings in order
-      emittedHeaders.add(pid);
-      const siblings = items.filter((i) => parentMap.get(i.entity_id) === pid);
-      result.push({
-        kind: "parent-header",
-        title: parentTitles.get(pid) || "Parent Task",
-        childCount: siblings.length,
-      });
-      for (const s of siblings) {
-        used.add(s.entity_id);
-        result.push({ kind: "item", item: s, indented: true });
-      }
-    } else if (!used.has(item.entity_id)) {
-      used.add(item.entity_id);
-      result.push({ kind: "item", item, indented: false });
+    const pid = info.childToParent.get(item.entity_id);
+    if (pid) {
+      if (!parentChildIds.has(pid)) parentChildIds.set(pid, []);
+      parentChildIds.get(pid)!.push(item.entity_id);
     }
+  }
+
+  // Only group when 2+ children present
+  const groupedPids = new Set<string>();
+  for (const [pid, cids] of parentChildIds) {
+    if (cids.length >= 2) groupedPids.add(pid);
+  }
+
+  // Track which entity_ids should be skipped (grouped children + parent if in list)
+  const skip = new Set<string>();
+  for (const pid of groupedPids) {
+    parentChildIds.get(pid)!.forEach((id) => skip.add(id));
+    if (itemMap.has(pid)) skip.add(pid);
+  }
+
+  const result: AgendaUnit<T>[] = [];
+  const emitted = new Set<string>();
+
+  for (const item of items) {
+    if (skip.has(item.entity_id)) {
+      const pid = info.childToParent.get(item.entity_id);
+      const groupPid = pid && groupedPids.has(pid) ? pid
+        : groupedPids.has(item.entity_id) ? item.entity_id : null;
+      if (groupPid && !emitted.has(groupPid)) {
+        emitted.add(groupPid);
+        const children = (parentChildIds.get(groupPid) || [])
+          .map((id) => itemMap.get(id)!)
+          .filter(Boolean);
+        result.push({
+          kind: "group",
+          parent: itemMap.get(groupPid) || null,
+          parentTitle: info.parentTitles.get(groupPid) || "Parent Task",
+          children,
+        });
+      }
+      continue;
+    }
+    result.push({ kind: "standalone", item });
   }
   return result;
 }
@@ -139,8 +148,7 @@ export function AgendaView({
   refreshTrigger?: number;
 }) {
   const [items, setItems] = useState(initialItems);
-  const [parentMap, setParentMap] = useState<Map<string, string>>(new Map());
-  const [parentTitles, setParentTitles] = useState<Map<string, string>>(new Map());
+  const [groupInfo, setGroupInfo] = useState<ParentGroupInfo>({ childToParent: new Map(), parentTitles: new Map() });
 
   useEffect(() => { onCountChange?.(items.length); }, [items.length, onCountChange]);
 
@@ -149,30 +157,35 @@ export function AgendaView({
     const raidIds = items
       .filter((i) => i.entity_type.startsWith("raid_"))
       .map((i) => i.entity_id);
-    if (raidIds.length === 0) { setParentMap(new Map()); setParentTitles(new Map()); return; }
+    if (raidIds.length === 0) { setGroupInfo({ childToParent: new Map(), parentTitles: new Map() }); return; }
 
     let cancelled = false;
     supabase
       .from("raid_entries")
       .select("id, parent_id")
       .in("id", raidIds)
-      .not("parent_id", "is", null)
-      .then(async ({ data: children }) => {
-        if (cancelled || !children?.length) { if (!cancelled) { setParentMap(new Map()); setParentTitles(new Map()); } return; }
-        const pMap = new Map<string, string>();
-        const parentIds = new Set<string>();
-        for (const c of children) {
-          pMap.set(c.id, c.parent_id);
-          parentIds.add(c.parent_id);
+      .then(async ({ data: entries }) => {
+        if (cancelled || !entries?.length) { if (!cancelled) setGroupInfo({ childToParent: new Map(), parentTitles: new Map() }); return; }
+        const childToParent = new Map<string, string>();
+        const pIds = new Set<string>();
+        for (const e of entries) {
+          if (e.parent_id) {
+            childToParent.set(e.id, e.parent_id);
+            pIds.add(e.parent_id);
+          }
         }
-        // Fetch parent titles
-        const { data: parents } = await supabase
-          .from("raid_entries")
-          .select("id, title")
-          .in("id", Array.from(parentIds));
-        const tMap = new Map<string, string>();
-        if (parents) parents.forEach((p) => tMap.set(p.id, p.title));
-        if (!cancelled) { setParentMap(pMap); setParentTitles(tMap); }
+        // Get parent titles — from items already in the list, or fetch from DB
+        const titleMap = new Map<string, string>();
+        const raidIdSet = new Set(raidIds);
+        for (const item of items) {
+          if (pIds.has(item.entity_id)) titleMap.set(item.entity_id, item.title);
+        }
+        const missingPids = Array.from(pIds).filter((pid) => !raidIdSet.has(pid));
+        if (missingPids.length > 0) {
+          const { data: parents } = await supabase.from("raid_entries").select("id, title").in("id", missingPids);
+          if (parents) parents.forEach((p) => titleMap.set(p.id, p.title));
+        }
+        if (!cancelled) setGroupInfo({ childToParent, parentTitles: titleMap });
       });
     return () => { cancelled = true; };
   }, [items]);
@@ -491,8 +504,144 @@ export function AgendaView({
     }
   }
 
-  const groups = groupByPriority(items);
+  // Build agenda units (standalone items + parent/children groups)
+  const agendaUnits = buildAgendaUnits(items, groupInfo);
+
+  // For priority grouping: use highest-priority child (or parent priority) as the group's priority
+  function unitPriority(unit: AgendaUnit<ProjectAgendaRow>): PriorityLevel {
+    if (unit.kind === "standalone") return unit.item.priority;
+    const all = unit.parent ? [unit.parent, ...unit.children] : unit.children;
+    let best = 3;
+    for (const item of all) best = Math.min(best, priorityRankMap[item.priority] ?? 2);
+    return (["critical", "high", "medium", "low"] as PriorityLevel[])[best];
+  }
+
+  function groupUnitsByPriority() {
+    const g: Record<PriorityLevel, AgendaUnit<ProjectAgendaRow>[]> = { critical: [], high: [], medium: [], low: [] };
+    agendaUnits.forEach((u) => g[unitPriority(u)]?.push(u));
+    return g;
+  }
+
+  const unitGroups = groupUnitsByPriority();
   const sortedItems = sortField ? sortItems(items, sortField, sortDirection) : null;
+
+  function renderRow(item: ProjectAgendaRow, isChild: boolean, childCount?: number) {
+    const itemKey = `${item.entity_type}-${item.entity_id}`;
+    const isEditing = editingId === itemKey;
+    const isExpanded = expandedId === itemKey;
+
+    return (
+      <div key={itemKey} className="border-b border-gray-200 last:border-b-0">
+        {isEditing ? (
+          <div className="px-3 py-3 bg-blue-50/30">
+            <div className="flex gap-4">
+              <div className="flex-1 space-y-2 min-w-0">
+                <input type="text" value={editFields.title} onChange={(e) => setEditFields({ ...editFields, title: e.target.value })} className="w-full text-sm font-medium text-gray-900 rounded border border-gray-300 px-2 py-1.5 focus:border-blue-500 focus:outline-none" />
+                <textarea value={editFields.context} onChange={(e) => setEditFields({ ...editFields, context: e.target.value })} placeholder="Context" rows={2} className="w-full text-sm text-gray-900 rounded border border-gray-300 px-2 py-1.5 focus:border-blue-500 focus:outline-none resize-y" />
+                <textarea value={editFields.ask} onChange={(e) => setEditFields({ ...editFields, ask: e.target.value })} placeholder="Ask" rows={2} className="w-full text-sm text-gray-900 rounded border border-gray-300 px-2 py-1.5 focus:border-blue-500 focus:outline-none resize-y" />
+                <select value={editFields.priority} onChange={(e) => setEditFields({ ...editFields, priority: e.target.value as PriorityLevel })} className="text-sm text-gray-900 rounded border border-gray-300 px-2 py-1.5 focus:border-blue-500 focus:outline-none">
+                  {priorityOptions.map((p) => (<option key={p} value={p}>{priorityLabels[p]}</option>))}
+                </select>
+              </div>
+              <div className="w-72 flex-shrink-0 space-y-1.5">
+                <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Call Notes</label>
+                <textarea value={notesText} onChange={(e) => setNotesText(e.target.value)} placeholder="Take notes during the call..." rows={6} className="w-full text-sm text-gray-900 rounded border border-gray-300 px-2 py-1.5 focus:border-blue-500 focus:outline-none resize-y" />
+              </div>
+            </div>
+            <div className="flex items-center gap-3 mt-3">
+              <button onClick={() => setEditingId(null)} className="px-3 py-1 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded hover:bg-gray-50">Cancel</button>
+              <div className="flex-1" />
+              <button onClick={() => handleResolve(item)} className="px-3 py-1.5 text-xs font-medium text-green-700 bg-white border border-green-300 rounded hover:bg-green-50">Resolve</button>
+              <button onClick={() => handleSaveEdit(item)} disabled={savingNotes} className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5">
+                {savingNotes && <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>}
+                {savingNotes ? "Updating..." : "Save"}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div onClick={() => toggleExpand(itemKey)} className="grid grid-cols-[1.5rem_2.5rem_1fr_5.5rem_5rem_9rem_4rem_4.5rem_6.5rem] gap-0 px-3 py-2.5 items-center hover:bg-gray-50/80 cursor-pointer transition-colors group">
+              {/* Bell toggle or child arrow */}
+              {isChild ? (
+                <span className="text-gray-400 text-xs">↳</span>
+              ) : item.entity_type !== "agenda_item" ? (
+                <button onClick={(e) => { e.stopPropagation(); handleRemoveFromMeeting(item); }} className="p-0.5 rounded transition-colors text-blue-600 hover:text-gray-400" title="Remove from meeting">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>
+                </button>
+              ) : <span />}
+              <span className="text-xs font-mono text-gray-400">#{item.rank}</span>
+              <div className="min-w-0 pr-3">
+                <span className="text-sm font-semibold text-gray-900 truncate block">
+                  {item.title}
+                  {childCount !== undefined && childCount > 0 && (
+                    <span className="ml-2 inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-medium bg-gray-200 text-gray-600 rounded">{childCount}</span>
+                  )}
+                </span>
+                {(item.context || item.ask) && (
+                  <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`inline-block ml-1 text-gray-300 transition-transform ${isExpanded ? "rotate-180" : ""}`}><polyline points="6 9 12 15 18 9" /></svg>
+                )}
+              </div>
+              <div><span className={`inline-flex px-1.5 py-0.5 text-xs rounded ${priorityColor(item.priority)}`}>{priorityLabels[item.priority]}</span></div>
+              <span className="text-xs text-gray-500">{typeLabels[item.entity_type] || item.entity_type}</span>
+              <div className="flex items-center gap-1.5 min-w-0">
+                {item.owner_name ? (
+                  <>
+                    <span className="w-5 h-5 rounded-full bg-blue-100 text-[10px] font-medium text-blue-700 flex items-center justify-center flex-shrink-0">{item.owner_name.split(" ").map(n => n[0]).join("").slice(0, 2)}</span>
+                    <span className="text-xs text-gray-700 truncate">{item.owner_name}</span>
+                  </>
+                ) : (<span className="text-xs text-gray-400 italic">Unassigned</span>)}
+              </div>
+              <span className="text-xs text-gray-500">{formatAge(item.age_days)}</span>
+              <span className="text-xs text-gray-400">{Math.round(item.score)}</span>
+              <div className="flex justify-end items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+                <button onClick={() => startEdit(item)} className="p-1 text-gray-400 hover:text-blue-600 rounded hover:bg-blue-50" title="Edit"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg></button>
+                <button onClick={() => handleEscalate(item)} className="p-1 text-gray-400 hover:text-red-600 rounded hover:bg-red-50" title="Escalate"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5" /><polyline points="5 12 12 5 19 12" /></svg></button>
+                <button onClick={() => handleDeescalate(item)} className="p-1 text-gray-400 hover:text-blue-600 rounded hover:bg-blue-50" title="De-escalate"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><polyline points="19 12 12 19 5 12" /></svg></button>
+                <button onClick={() => handleResolve(item)} className="p-1 text-gray-400 hover:text-green-600 rounded hover:bg-green-50" title="Resolve"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg></button>
+                {canDelete(role) && <button onClick={() => handleDelete(item)} className="p-1 text-gray-400 hover:text-red-600 rounded hover:bg-red-50" title="Delete"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg></button>}
+              </div>
+            </div>
+            {isExpanded && (item.context || item.ask) && (
+              <div className="px-3 pb-3 pl-12 space-y-1 bg-gray-50/50">
+                {item.context && <p className="text-sm text-gray-600">{item.context}</p>}
+                {item.ask && <p className="text-sm text-blue-700"><span className="font-medium">Ask:</span> {item.ask}</p>}
+                {item.vendor_name && <p className="text-xs text-gray-400">Vendor: {item.vendor_name}</p>}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    );
+  }
+
+  function renderUnit(unit: AgendaUnit<ProjectAgendaRow>) {
+    if (unit.kind === "standalone") {
+      return renderRow(unit.item, false);
+    }
+    // Group: parent row + indented children
+    return (
+      <div key={`group-${unit.parentTitle}`}>
+        {unit.parent ? (
+          renderRow(unit.parent, false, unit.children.length)
+        ) : (
+          // Synthetic parent header (parent not in agenda)
+          <div className="border-b border-gray-200 px-3 py-2.5">
+            <div className="grid grid-cols-[1.5rem_2.5rem_1fr] gap-0 items-center">
+              <span />
+              <span />
+              <span className="text-sm font-semibold text-gray-900">
+                {unit.parentTitle}
+                <span className="ml-2 inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-medium bg-gray-200 text-gray-600 rounded">{unit.children.length}</span>
+              </span>
+            </div>
+          </div>
+        )}
+        <div className="pl-6">
+          {unit.children.map((child) => renderRow(child, true))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -626,355 +775,30 @@ export function AgendaView({
 
           {/* Rows — flat sorted or grouped by priority */}
           {sortedItems ? (
-            /* Flat sorted list */
-            annotateWithParentGroups(sortedItems, parentMap, parentTitles).map((entry, idx) => {
-              if (entry.kind === "parent-header") {
-                return (
-                  <div key={`ph-${entry.title}-${idx}`} className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 border-b border-gray-200">
-                    <span className="text-xs font-semibold text-gray-600">{entry.title}</span>
-                    <span className="text-xs text-gray-400">{entry.childCount}</span>
-                  </div>
-                );
-              }
-              const item = entry.item;
-              const itemKey = `${item.entity_type}-${item.entity_id}`;
-              const isEditing = editingId === itemKey;
-              const isExpanded = expandedId === itemKey;
-              return (
-                <div key={itemKey} className={`border-b border-gray-200 last:border-b-0${entry.indented ? " pl-4" : ""}`}>
-                  {isEditing ? (
-                    <div className="px-3 py-3 bg-blue-50/30">
-                      <div className="flex gap-4">
-                        <div className="flex-1 space-y-2 min-w-0">
-                          <input type="text" value={editFields.title} onChange={(e) => setEditFields({ ...editFields, title: e.target.value })} className="w-full text-sm font-medium text-gray-900 rounded border border-gray-300 px-2 py-1.5 focus:border-blue-500 focus:outline-none" />
-                          <textarea value={editFields.context} onChange={(e) => setEditFields({ ...editFields, context: e.target.value })} placeholder="Context" rows={2} className="w-full text-sm text-gray-900 rounded border border-gray-300 px-2 py-1.5 focus:border-blue-500 focus:outline-none resize-y" />
-                          <textarea value={editFields.ask} onChange={(e) => setEditFields({ ...editFields, ask: e.target.value })} placeholder="Ask" rows={2} className="w-full text-sm text-gray-900 rounded border border-gray-300 px-2 py-1.5 focus:border-blue-500 focus:outline-none resize-y" />
-                          <select value={editFields.priority} onChange={(e) => setEditFields({ ...editFields, priority: e.target.value as PriorityLevel })} className="text-sm text-gray-900 rounded border border-gray-300 px-2 py-1.5 focus:border-blue-500 focus:outline-none">
-                            {priorityOptions.map((p) => (<option key={p} value={p}>{priorityLabels[p]}</option>))}
-                          </select>
-                        </div>
-                        <div className="w-72 flex-shrink-0 space-y-1.5">
-                          <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Call Notes</label>
-                          <textarea value={notesText} onChange={(e) => setNotesText(e.target.value)} placeholder="Take notes during the call..." rows={6} className="w-full text-sm text-gray-900 rounded border border-gray-300 px-2 py-1.5 focus:border-blue-500 focus:outline-none resize-y" />
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3 mt-3">
-                        <button onClick={() => setEditingId(null)} className="px-3 py-1 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded hover:bg-gray-50">Cancel</button>
-                        <div className="flex-1" />
-                        <button onClick={() => handleResolve(item)} className="px-3 py-1.5 text-xs font-medium text-green-700 bg-white border border-green-300 rounded hover:bg-green-50">Resolve</button>
-                        <button onClick={() => handleSaveEdit(item)} disabled={savingNotes} className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5">
-                          {savingNotes && <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>}
-                          {savingNotes ? "Updating..." : "Save"}
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      <div onClick={() => toggleExpand(itemKey)} className="grid grid-cols-[1.5rem_2.5rem_1fr_5.5rem_5rem_9rem_4rem_4.5rem_6.5rem] gap-0 px-3 py-2.5 items-center hover:bg-gray-50/80 cursor-pointer transition-colors group">
-                        {/* Bell toggle */}
-                        {item.entity_type !== "agenda_item" ? (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleRemoveFromMeeting(item); }}
-                            className="p-0.5 rounded transition-colors text-blue-600 hover:text-gray-400"
-                            title="Remove from meeting"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-                              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-                            </svg>
-                          </button>
-                        ) : <span />}
-                        <span className="text-xs font-mono text-gray-400">#{item.rank}</span>
-                        <div className="min-w-0 pr-3">
-                          <span className="text-sm font-semibold text-gray-900 truncate block">{item.title}</span>
-                          {(item.context || item.ask) && (
-                            <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`inline-block ml-1 text-gray-300 transition-transform ${isExpanded ? "rotate-180" : ""}`}><polyline points="6 9 12 15 18 9" /></svg>
-                          )}
-                        </div>
-                        <div><span className={`inline-flex px-1.5 py-0.5 text-xs rounded ${priorityColor(item.priority)}`}>{priorityLabels[item.priority]}</span></div>
-                        <span className="text-xs text-gray-500">{typeLabels[item.entity_type] || item.entity_type}</span>
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          {item.owner_name ? (
-                            <>
-                              <span className="w-5 h-5 rounded-full bg-blue-100 text-[10px] font-medium text-blue-700 flex items-center justify-center flex-shrink-0">{item.owner_name.split(" ").map(n => n[0]).join("").slice(0, 2)}</span>
-                              <span className="text-xs text-gray-700 truncate">{item.owner_name}</span>
-                            </>
-                          ) : (<span className="text-xs text-gray-400 italic">Unassigned</span>)}
-                        </div>
-                        <span className="text-xs text-gray-500">{formatAge(item.age_days)}</span>
-                        <span className="text-xs text-gray-400">{Math.round(item.score)}</span>
-                        <div className="flex justify-end items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
-                          <button onClick={() => startEdit(item)} className="p-1 text-gray-400 hover:text-blue-600 rounded hover:bg-blue-50" title="Edit"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg></button>
-                          <button onClick={() => handleEscalate(item)} className="p-1 text-gray-400 hover:text-red-600 rounded hover:bg-red-50" title="Escalate"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5" /><polyline points="5 12 12 5 19 12" /></svg></button>
-                          <button onClick={() => handleDeescalate(item)} className="p-1 text-gray-400 hover:text-blue-600 rounded hover:bg-blue-50" title="De-escalate"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><polyline points="19 12 12 19 5 12" /></svg></button>
-                          <button onClick={() => handleResolve(item)} className="p-1 text-gray-400 hover:text-green-600 rounded hover:bg-green-50" title="Resolve"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg></button>
-                          {canDelete(role) && <button onClick={() => handleDelete(item)} className="p-1 text-gray-400 hover:text-red-600 rounded hover:bg-red-50" title="Delete"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg></button>}
-                        </div>
-                      </div>
-                      {isExpanded && (item.context || item.ask) && (
-                        <div className="px-3 pb-3 pl-12 space-y-1 bg-gray-50/50">
-                          {item.context && <p className="text-sm text-gray-600">{item.context}</p>}
-                          {item.ask && <p className="text-sm text-blue-700"><span className="font-medium">Ask:</span> {item.ask}</p>}
-                          {item.vendor_name && <p className="text-xs text-gray-400">Vendor: {item.vendor_name}</p>}
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              );
-            })
+            /* Flat sorted list — apply subtask grouping on sorted items */
+            buildAgendaUnits(sortedItems, groupInfo).map((unit) => renderUnit(unit))
           ) : (
             /* Default: grouped by priority */
             priorityOptions.map((priority) => {
-            const groupItems = groups[priority];
-            if (groupItems.length === 0) return null;
+            const units = unitGroups[priority];
+            if (units.length === 0) return null;
             const isCollapsed = collapsedGroups.has(priority);
+            const itemCount = units.reduce((n, u) => n + (u.kind === "group" ? u.children.length + (u.parent ? 1 : 0) : 1), 0);
 
             return (
               <div key={priority}>
-                {/* Section header */}
                 <button
                   onClick={() => toggleGroup(priority)}
                   className="w-full flex items-center gap-2 px-3 py-2.5 bg-gray-800 border-b border-gray-900 hover:bg-gray-700 transition-colors text-left"
                 >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="12"
-                    height="12"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className={`text-gray-400 transition-transform ${isCollapsed ? "" : "rotate-90"}`}
-                  >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`text-gray-400 transition-transform ${isCollapsed ? "" : "rotate-90"}`}>
                     <polyline points="9 18 15 12 9 6" />
                   </svg>
                   <span className={`w-2 h-2 rounded-full ${priorityDot(priority)}`} />
-                  <span className="text-xs font-semibold text-white uppercase tracking-wide">
-                    {priorityLabels[priority]}
-                  </span>
-                  <span className="text-xs text-gray-400">{groupItems.length}</span>
+                  <span className="text-xs font-semibold text-white uppercase tracking-wide">{priorityLabels[priority]}</span>
+                  <span className="text-xs text-gray-400">{itemCount}</span>
                 </button>
-
-                {/* Section rows */}
-                {!isCollapsed && annotateWithParentGroups(groupItems, parentMap, parentTitles).map((entry, idx) => {
-                  if (entry.kind === "parent-header") {
-                    return (
-                      <div key={`ph-${entry.title}-${idx}`} className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 border-b border-gray-200">
-                        <span className="text-xs font-semibold text-gray-600">{entry.title}</span>
-                        <span className="text-xs text-gray-400">{entry.childCount}</span>
-                      </div>
-                    );
-                  }
-                  const item = entry.item;
-                  const itemKey = `${item.entity_type}-${item.entity_id}`;
-                  const isEditing = editingId === itemKey;
-                  const isExpanded = expandedId === itemKey;
-
-                  return (
-                    <div key={itemKey} className={`border-b border-gray-200 last:border-b-0${entry.indented ? " pl-4" : ""}`}>
-                      {isEditing ? (
-                        <div className="px-3 py-3 bg-blue-50/30">
-                          <div className="flex gap-4">
-                            <div className="flex-1 space-y-2 min-w-0">
-                              <input
-                                type="text"
-                                value={editFields.title}
-                                onChange={(e) => setEditFields({ ...editFields, title: e.target.value })}
-                                className="w-full text-sm font-medium text-gray-900 rounded border border-gray-300 px-2 py-1.5 focus:border-blue-500 focus:outline-none"
-                              />
-                              <textarea
-                                value={editFields.context}
-                                onChange={(e) => setEditFields({ ...editFields, context: e.target.value })}
-                                placeholder="Context"
-                                rows={2}
-                                className="w-full text-sm text-gray-900 rounded border border-gray-300 px-2 py-1.5 focus:border-blue-500 focus:outline-none resize-y"
-                              />
-                              <textarea
-                                value={editFields.ask}
-                                onChange={(e) => setEditFields({ ...editFields, ask: e.target.value })}
-                                placeholder="Ask"
-                                rows={2}
-                                className="w-full text-sm text-gray-900 rounded border border-gray-300 px-2 py-1.5 focus:border-blue-500 focus:outline-none resize-y"
-                              />
-                              <select
-                                value={editFields.priority}
-                                onChange={(e) => setEditFields({ ...editFields, priority: e.target.value as PriorityLevel })}
-                                className="text-sm text-gray-900 rounded border border-gray-300 px-2 py-1.5 focus:border-blue-500 focus:outline-none"
-                              >
-                                {priorityOptions.map((p) => (
-                                  <option key={p} value={p}>{priorityLabels[p]}</option>
-                                ))}
-                              </select>
-                            </div>
-                            <div className="w-72 flex-shrink-0 space-y-1.5">
-                              <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Call Notes</label>
-                              <textarea
-                                value={notesText}
-                                onChange={(e) => setNotesText(e.target.value)}
-                                placeholder="Take notes during the call..."
-                                rows={6}
-                                className="w-full text-sm text-gray-900 rounded border border-gray-300 px-2 py-1.5 focus:border-blue-500 focus:outline-none resize-y"
-                              />
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-3 mt-3">
-                            <button
-                              onClick={() => setEditingId(null)}
-                              className="px-3 py-1 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded hover:bg-gray-50"
-                            >
-                              Cancel
-                            </button>
-                            <div className="flex-1" />
-                            <button
-                              onClick={() => handleResolve(item)}
-                              className="px-3 py-1.5 text-xs font-medium text-green-700 bg-white border border-green-300 rounded hover:bg-green-50"
-                            >
-                              Resolve
-                            </button>
-                            <button
-                              onClick={() => handleSaveEdit(item)}
-                              disabled={savingNotes}
-                              className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5"
-                            >
-                              {savingNotes && (
-                                <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
-                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-                                </svg>
-                              )}
-                              {savingNotes ? "Updating..." : "Save"}
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <>
-                          {/* Main row */}
-                          <div
-                            onClick={() => toggleExpand(itemKey)}
-                            className="grid grid-cols-[1.5rem_2.5rem_1fr_5.5rem_5rem_9rem_4rem_4.5rem_6.5rem] gap-0 px-3 py-2.5 items-center hover:bg-gray-50/80 cursor-pointer transition-colors group"
-                          >
-                            {/* Bell toggle — remove from meeting */}
-                            {item.entity_type !== "agenda_item" ? (
-                              <button
-                                onClick={(e) => { e.stopPropagation(); handleRemoveFromMeeting(item); }}
-                                className="p-0.5 rounded transition-colors text-blue-600 hover:text-gray-400"
-                                title="Remove from meeting"
-                              >
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                  <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-                                  <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-                                </svg>
-                              </button>
-                            ) : <span />}
-
-                            {/* Rank */}
-                            <span className="text-xs font-mono text-gray-400">#{item.rank}</span>
-
-                            {/* Name */}
-                            <div className="min-w-0 pr-3">
-                              <span className="text-sm font-semibold text-gray-900 truncate block">{item.title}</span>
-                              {(item.context || item.ask) && (
-                                <svg
-                                  xmlns="http://www.w3.org/2000/svg"
-                                  width="10"
-                                  height="10"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth="2"
-                                  className={`inline-block ml-1 text-gray-300 transition-transform ${isExpanded ? "rotate-180" : ""}`}
-                                >
-                                  <polyline points="6 9 12 15 18 9" />
-                                </svg>
-                              )}
-                            </div>
-
-                            {/* Priority */}
-                            <div>
-                              <span className={`inline-flex px-1.5 py-0.5 text-xs rounded ${priorityColor(item.priority)}`}>
-                                {priorityLabels[item.priority]}
-                              </span>
-                            </div>
-
-                            {/* Type */}
-                            <span className="text-xs text-gray-500">
-                              {typeLabels[item.entity_type] || item.entity_type}
-                            </span>
-
-                            {/* Responsible */}
-                            <div className="flex items-center gap-1.5 min-w-0">
-                              {item.owner_name ? (
-                                <>
-                                  <span className="w-5 h-5 rounded-full bg-blue-100 text-[10px] font-medium text-blue-700 flex items-center justify-center flex-shrink-0">
-                                    {item.owner_name.split(" ").map(n => n[0]).join("").slice(0, 2)}
-                                  </span>
-                                  <span className="text-xs text-gray-700 truncate">{item.owner_name}</span>
-                                </>
-                              ) : (
-                                <span className="text-xs text-gray-400 italic">Unassigned</span>
-                              )}
-                            </div>
-
-                            {/* Age */}
-                            <span className="text-xs text-gray-500">{formatAge(item.age_days)}</span>
-
-                            {/* Score */}
-                            <span className="text-xs text-gray-400">{Math.round(item.score)}</span>
-
-                            {/* Actions */}
-                            <div className="flex justify-end items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
-                              <button onClick={() => startEdit(item)} className="p-1 text-gray-400 hover:text-blue-600 rounded hover:bg-blue-50" title="Edit">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                                </svg>
-                              </button>
-                              <button onClick={() => handleEscalate(item)} className="p-1 text-gray-400 hover:text-red-600 rounded hover:bg-red-50" title="Escalate">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                  <line x1="12" y1="19" x2="12" y2="5" /><polyline points="5 12 12 5 19 12" />
-                                </svg>
-                              </button>
-                              <button onClick={() => handleDeescalate(item)} className="p-1 text-gray-400 hover:text-blue-600 rounded hover:bg-blue-50" title="De-escalate">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                  <line x1="12" y1="5" x2="12" y2="19" /><polyline points="19 12 12 19 5 12" />
-                                </svg>
-                              </button>
-                              <button onClick={() => handleResolve(item)} className="p-1 text-gray-400 hover:text-green-600 rounded hover:bg-green-50" title="Resolve">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                  <polyline points="20 6 9 17 4 12" />
-                                </svg>
-                              </button>
-                              <button onClick={() => handleDelete(item)} className="p-1 text-gray-400 hover:text-red-600 rounded hover:bg-red-50" title="Delete">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                  <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                                </svg>
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Expanded detail */}
-                          {isExpanded && (item.context || item.ask) && (
-                            <div className="px-3 pb-3 pl-12 space-y-1 bg-gray-50/50">
-                              {item.context && (
-                                <p className="text-sm text-gray-600">{item.context}</p>
-                              )}
-                              {item.ask && (
-                                <p className="text-sm text-blue-700">
-                                  <span className="font-medium">Ask:</span> {item.ask}
-                                </p>
-                              )}
-                              {item.vendor_name && (
-                                <p className="text-xs text-gray-400">Vendor: {item.vendor_name}</p>
-                              )}
-                            </div>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  );
-                })}
+                {!isCollapsed && units.map((unit) => renderUnit(unit))}
               </div>
             );
           })

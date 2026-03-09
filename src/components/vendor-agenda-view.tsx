@@ -8,39 +8,45 @@ import type { Vendor, VendorAgendaRow, PriorityLevel } from "@/lib/types";
 import { useRole } from "@/components/role-context";
 import { canCreate, canDelete } from "@/lib/permissions";
 
-type AnnotatedItem<T> =
-  | { kind: "item"; item: T; indented: boolean }
-  | { kind: "parent-header"; title: string; childCount: number };
+interface ParentGroupInfo {
+  childToParent: Map<string, string>;
+  parentTitles: Map<string, string>;
+}
 
-function annotateWithParentGroups<T extends { entity_id: string }>(
+type AgendaUnit<T> =
+  | { kind: "standalone"; item: T }
+  | { kind: "group"; parent: T | null; parentTitle: string; children: T[] };
+
+function buildAgendaUnits<T extends { entity_id: string }>(
   items: T[],
-  parentMap: Map<string, string>,
-  parentTitles: Map<string, string>
-): AnnotatedItem<T>[] {
-  const parentChildCount = new Map<string, number>();
+  info: ParentGroupInfo
+): AgendaUnit<T>[] {
+  if (info.childToParent.size === 0) return items.map((i) => ({ kind: "standalone" as const, item: i }));
+  const itemMap = new Map<string, T>();
+  for (const item of items) itemMap.set(item.entity_id, item);
+  const parentChildIds = new Map<string, string[]>();
   for (const item of items) {
-    const pid = parentMap.get(item.entity_id);
-    if (pid) parentChildCount.set(pid, (parentChildCount.get(pid) || 0) + 1);
+    const pid = info.childToParent.get(item.entity_id);
+    if (pid) { if (!parentChildIds.has(pid)) parentChildIds.set(pid, []); parentChildIds.get(pid)!.push(item.entity_id); }
   }
-  const groupedParents = new Set<string>();
-  for (const [pid, count] of parentChildCount) {
-    if (count >= 2) groupedParents.add(pid);
-  }
-  const result: AnnotatedItem<T>[] = [];
-  const emittedHeaders = new Set<string>();
-  const used = new Set<string>();
+  const groupedPids = new Set<string>();
+  for (const [pid, cids] of parentChildIds) { if (cids.length >= 2) groupedPids.add(pid); }
+  const skip = new Set<string>();
+  for (const pid of groupedPids) { parentChildIds.get(pid)!.forEach((id) => skip.add(id)); if (itemMap.has(pid)) skip.add(pid); }
+  const result: AgendaUnit<T>[] = [];
+  const emitted = new Set<string>();
   for (const item of items) {
-    if (used.has(item.entity_id)) continue;
-    const pid = parentMap.get(item.entity_id);
-    if (pid && groupedParents.has(pid) && !emittedHeaders.has(pid)) {
-      emittedHeaders.add(pid);
-      const siblings = items.filter((i) => parentMap.get(i.entity_id) === pid);
-      result.push({ kind: "parent-header", title: parentTitles.get(pid) || "Parent Task", childCount: siblings.length });
-      for (const s of siblings) { used.add(s.entity_id); result.push({ kind: "item", item: s, indented: true }); }
-    } else if (!used.has(item.entity_id)) {
-      used.add(item.entity_id);
-      result.push({ kind: "item", item, indented: false });
+    if (skip.has(item.entity_id)) {
+      const pid = info.childToParent.get(item.entity_id);
+      const groupPid = pid && groupedPids.has(pid) ? pid : groupedPids.has(item.entity_id) ? item.entity_id : null;
+      if (groupPid && !emitted.has(groupPid)) {
+        emitted.add(groupPid);
+        const children = (parentChildIds.get(groupPid) || []).map((id) => itemMap.get(id)!).filter(Boolean);
+        result.push({ kind: "group", parent: itemMap.get(groupPid) || null, parentTitle: info.parentTitles.get(groupPid) || "Parent Task", children });
+      }
+      continue;
     }
+    result.push({ kind: "standalone", item });
   }
   return result;
 }
@@ -105,27 +111,13 @@ function sortItems(items: VendorAgendaRow[], field: SortField, direction: SortDi
   return sorted;
 }
 
-function groupByPriority(items: VendorAgendaRow[]) {
-  const groups: Record<PriorityLevel, VendorAgendaRow[]> = {
-    critical: [],
-    high: [],
-    medium: [],
-    low: [],
-  };
-  items.forEach((item) => {
-    groups[item.priority]?.push(item);
-  });
-  return groups;
-}
-
 export function VendorAgendaView({
   vendor,
 }: {
   vendor: Vendor;
 }) {
   const [items, setItems] = useState<VendorAgendaRow[]>([]);
-  const [parentMap, setParentMap] = useState<Map<string, string>>(new Map());
-  const [parentTitles, setParentTitles] = useState<Map<string, string>>(new Map());
+  const [groupInfo, setGroupInfo] = useState<ParentGroupInfo>({ childToParent: new Map(), parentTitles: new Map() });
   const [showAddForm, setShowAddForm] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newContext, setNewContext] = useState("");
@@ -158,18 +150,23 @@ export function VendorAgendaView({
   // Fetch parent_id info for RAID items to enable subtask grouping
   useEffect(() => {
     const raidIds = items.filter((i) => i.entity_type.startsWith("raid_")).map((i) => i.entity_id);
-    if (raidIds.length === 0) { setParentMap(new Map()); setParentTitles(new Map()); return; }
+    if (raidIds.length === 0) { setGroupInfo({ childToParent: new Map(), parentTitles: new Map() }); return; }
     let cancelled = false;
-    supabase.from("raid_entries").select("id, parent_id").in("id", raidIds).not("parent_id", "is", null)
-      .then(async ({ data: children }) => {
-        if (cancelled || !children?.length) { if (!cancelled) { setParentMap(new Map()); setParentTitles(new Map()); } return; }
-        const pMap = new Map<string, string>();
-        const parentIds = new Set<string>();
-        for (const c of children) { pMap.set(c.id, c.parent_id); parentIds.add(c.parent_id); }
-        const { data: parents } = await supabase.from("raid_entries").select("id, title").in("id", Array.from(parentIds));
-        const tMap = new Map<string, string>();
-        if (parents) parents.forEach((p) => tMap.set(p.id, p.title));
-        if (!cancelled) { setParentMap(pMap); setParentTitles(tMap); }
+    supabase.from("raid_entries").select("id, parent_id").in("id", raidIds)
+      .then(async ({ data: entries }) => {
+        if (cancelled || !entries?.length) { if (!cancelled) setGroupInfo({ childToParent: new Map(), parentTitles: new Map() }); return; }
+        const childToParent = new Map<string, string>();
+        const pIds = new Set<string>();
+        for (const e of entries) { if (e.parent_id) { childToParent.set(e.id, e.parent_id); pIds.add(e.parent_id); } }
+        const titleMap = new Map<string, string>();
+        const raidIdSet = new Set(raidIds);
+        for (const item of items) { if (pIds.has(item.entity_id)) titleMap.set(item.entity_id, item.title); }
+        const missingPids = Array.from(pIds).filter((pid) => !raidIdSet.has(pid));
+        if (missingPids.length > 0) {
+          const { data: parents } = await supabase.from("raid_entries").select("id, title").in("id", missingPids);
+          if (parents) parents.forEach((p) => titleMap.set(p.id, p.title));
+        }
+        if (!cancelled) setGroupInfo({ childToParent, parentTitles: titleMap });
       });
     return () => { cancelled = true; };
   }, [items]);
@@ -415,7 +412,6 @@ export function VendorAgendaView({
     }
   }
 
-  const groups = groupByPriority(items);
   const sortedItems = sortField ? sortItems(items, sortField, sortDirection) : null;
 
   function renderEditForm(item: VendorAgendaRow) {
@@ -448,7 +444,7 @@ export function VendorAgendaView({
     );
   }
 
-  function renderRow(item: VendorAgendaRow) {
+  function renderRow(item: VendorAgendaRow, isChild = false, childCount?: number) {
     const itemKey = `${item.entity_type}-${item.entity_id}`;
     const isEditing = editingId === itemKey;
     const isExpanded = expandedId === itemKey;
@@ -458,9 +454,18 @@ export function VendorAgendaView({
         {isEditing ? renderEditForm(item) : (
           <>
             <div onClick={() => toggleExpand(itemKey)} className="grid grid-cols-[2.5rem_1fr_5.5rem_5rem_7rem_7rem_4rem_4.5rem_6.5rem] gap-0 px-3 py-2.5 items-center hover:bg-gray-50/80 cursor-pointer transition-colors group">
-              <span className="text-xs font-mono text-gray-400">#{item.rank}</span>
+              {isChild ? (
+                <span className="text-gray-400 text-xs">↳</span>
+              ) : (
+                <span className="text-xs font-mono text-gray-400">#{item.rank}</span>
+              )}
               <div className="min-w-0 pr-3">
-                <span className="text-sm font-semibold text-gray-900 truncate block">{item.title}</span>
+                <span className="text-sm font-semibold text-gray-900 truncate block">
+                  {item.title}
+                  {childCount !== undefined && childCount > 0 && (
+                    <span className="ml-2 inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-medium bg-gray-200 text-gray-600 rounded">{childCount}</span>
+                  )}
+                </span>
                 {(item.context || item.ask) && (
                   <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`inline-block ml-1 text-gray-300 transition-transform ${isExpanded ? "rotate-180" : ""}`}><polyline points="6 9 12 15 18 9" /></svg>
                 )}
@@ -508,6 +513,49 @@ export function VendorAgendaView({
       </div>
     );
   }
+
+  function renderUnit(unit: AgendaUnit<VendorAgendaRow>) {
+    if (unit.kind === "standalone") return renderRow(unit.item);
+    return (
+      <div key={`group-${unit.parentTitle}`}>
+        {unit.parent ? (
+          renderRow(unit.parent, false, unit.children.length)
+        ) : (
+          <div className="border-b border-gray-200 px-3 py-2.5">
+            <div className="grid grid-cols-[2.5rem_1fr] gap-0 items-center">
+              <span />
+              <span className="text-sm font-semibold text-gray-900">
+                {unit.parentTitle}
+                <span className="ml-2 inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-medium bg-gray-200 text-gray-600 rounded">{unit.children.length}</span>
+              </span>
+            </div>
+          </div>
+        )}
+        <div className="pl-6">
+          {unit.children.map((child) => renderRow(child, true))}
+        </div>
+      </div>
+    );
+  }
+
+  // Build agenda units for subtask grouping
+  const agendaUnits = buildAgendaUnits(items, groupInfo);
+
+  function unitPriority(unit: AgendaUnit<VendorAgendaRow>): PriorityLevel {
+    if (unit.kind === "standalone") return unit.item.priority;
+    const all = unit.parent ? [unit.parent, ...unit.children] : unit.children;
+    let best = 3;
+    for (const item of all) best = Math.min(best, priorityRankMap[item.priority] ?? 2);
+    return (["critical", "high", "medium", "low"] as PriorityLevel[])[best];
+  }
+
+  function groupUnitsByPriority() {
+    const g: Record<PriorityLevel, AgendaUnit<VendorAgendaRow>[]> = { critical: [], high: [], medium: [], low: [] };
+    agendaUnits.forEach((u) => g[unitPriority(u)]?.push(u));
+    return g;
+  }
+
+  const unitGroupsByPri = groupUnitsByPriority();
 
   return (
     <div className="space-y-4">
@@ -623,22 +671,13 @@ export function VendorAgendaView({
 
           {/* Rows */}
           {sortedItems ? (
-            annotateWithParentGroups(sortedItems, parentMap, parentTitles).map((entry, idx) => {
-              if (entry.kind === "parent-header") {
-                return (
-                  <div key={`ph-${entry.title}-${idx}`} className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 border-b border-gray-200">
-                    <span className="text-xs font-semibold text-gray-600">{entry.title}</span>
-                    <span className="text-xs text-gray-400">{entry.childCount}</span>
-                  </div>
-                );
-              }
-              return <div key={`${entry.item.entity_type}-${entry.item.entity_id}`} className={entry.indented ? "pl-4" : ""}>{renderRow(entry.item)}</div>;
-            })
+            buildAgendaUnits(sortedItems, groupInfo).map((unit) => renderUnit(unit))
           ) : (
             priorityOptions.map((priority) => {
-              const groupItems = groups[priority];
-              if (groupItems.length === 0) return null;
+              const units = unitGroupsByPri[priority];
+              if (units.length === 0) return null;
               const isCollapsed = collapsedGroups.has(priority);
+              const itemCount = units.reduce((n, u) => n + (u.kind === "group" ? u.children.length + (u.parent ? 1 : 0) : 1), 0);
 
               return (
                 <div key={priority}>
@@ -651,19 +690,9 @@ export function VendorAgendaView({
                     </svg>
                     <span className={`w-2 h-2 rounded-full ${priorityDot(priority)}`} />
                     <span className="text-xs font-semibold text-white uppercase tracking-wide">{priorityLabels[priority]}</span>
-                    <span className="text-xs text-gray-400">{groupItems.length}</span>
+                    <span className="text-xs text-gray-400">{itemCount}</span>
                   </button>
-                  {!isCollapsed && annotateWithParentGroups(groupItems, parentMap, parentTitles).map((entry, idx) => {
-                    if (entry.kind === "parent-header") {
-                      return (
-                        <div key={`ph-${entry.title}-${idx}`} className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 border-b border-gray-200">
-                          <span className="text-xs font-semibold text-gray-600">{entry.title}</span>
-                          <span className="text-xs text-gray-400">{entry.childCount}</span>
-                        </div>
-                      );
-                    }
-                    return <div key={`${entry.item.entity_type}-${entry.item.entity_id}`} className={entry.indented ? "pl-4" : ""}>{renderRow(entry.item)}</div>;
-                  })}
+                  {!isCollapsed && units.map((unit) => renderUnit(unit))}
                 </div>
               );
             })
