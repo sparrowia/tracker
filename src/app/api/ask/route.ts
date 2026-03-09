@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { callDeepSeek } from "@/lib/ai/deepseek";
 import { ASK_SYSTEM_PROMPT } from "@/lib/ai/prompts/ask";
 
+export const maxDuration = 60;
+
 type DataCategory = "actions" | "blockers" | "raid" | "tickets" | "projects" | "vendors" | "people" | "resolved";
 
 /** Determine which data categories are relevant based on question keywords */

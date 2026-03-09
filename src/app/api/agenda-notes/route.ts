@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { callDeepSeek } from "@/lib/ai/deepseek";
 import { CALL_NOTES_SYSTEM_PROMPT } from "@/lib/ai/prompts/call-notes";
 
+export const maxDuration = 60;
+
 export async function POST(request: Request) {
   try {
     const supabase = await createClient();
