@@ -315,6 +315,8 @@ export interface VendorAgendaRow {
   context: string | null;
   ask: string | null;
   priority: PriorityLevel;
+  status: ItemStatus;
+  due_date: string | null;
   age_days: number;
   escalation_count: number;
   score: number;
@@ -358,6 +360,8 @@ export interface ProjectAgendaRow {
   context: string | null;
   ask: string | null;
   priority: PriorityLevel;
+  status: ItemStatus;
+  due_date: string | null;
   age_days: number;
   escalation_count: number;
   score: number;

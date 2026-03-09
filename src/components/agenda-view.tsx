@@ -3,8 +3,8 @@
 import { useState, useEffect, Fragment } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
-import { priorityColor, priorityDot, formatAge } from "@/lib/utils";
-import type { Project, ProjectAgendaRow, PriorityLevel, Person, Vendor } from "@/lib/types";
+import { priorityColor, priorityDot, formatAge, statusBadge, formatDateShort } from "@/lib/utils";
+import type { Project, ProjectAgendaRow, PriorityLevel, ItemStatus, Person, Vendor } from "@/lib/types";
 import { useRole } from "@/components/role-context";
 import { canCreate, canDelete } from "@/lib/permissions";
 import OwnerPicker from "@/components/owner-picker";
@@ -31,6 +31,9 @@ const typeLabels: Record<string, string> = {
 };
 
 const priorityRankMap: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+
+const statusOptions: ItemStatus[] = ["pending", "in_progress", "complete", "needs_verification", "paused", "at_risk", "blocked"];
+const riskStatusOptions: ItemStatus[] = ["identified", "assessing", "mitigated", "closed"];
 
 // Parent info for subtask grouping in agendas
 interface ParentGroupInfo {
@@ -298,11 +301,21 @@ export function AgendaView({
       : item.entity_type === "blocker" ? "blockers"
       : item.entity_type === "action_item" ? "action_items"
       : "raid_entries";
-    supabase.from(table).update({ [field]: value || null }).eq("id", item.entity_id);
+    const dbUpdates: Record<string, unknown> = { [field]: value || null };
+    // Clear resolved_at when changing status away from resolved
+    if (field === "status") {
+      const resolvedStatuses = ["complete", "closed", "mitigated"];
+      if (!resolvedStatuses.includes(value)) {
+        dbUpdates.resolved_at = null;
+      }
+    }
+    supabase.from(table).update(dbUpdates).eq("id", item.entity_id);
     setItems((prev) => prev.map((i) => {
       if (i.entity_id !== item.entity_id) return i;
       if (field === "title") return { ...i, title: value };
       if (field === "priority") return { ...i, priority: value as PriorityLevel };
+      if (field === "status") return { ...i, status: value as ItemStatus };
+      if (field === "due_date") return { ...i, due_date: value || null };
       if (field === "context" || field === "notes" || field === "impact_description") return { ...i, context: value };
       if (field === "ask") return { ...i, ask: value };
       if (field === "owner_id") {
@@ -616,6 +629,30 @@ export function AgendaView({
                     onChange={(id) => saveField(item, "vendor_id", id)}
                     vendors={vendors}
                     onVendorAdded={onVendorAdded || (() => {})}
+                  />
+                </div>
+
+                {/* Row: Status / Due Date */}
+                <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-200">Status</span>
+                <div className="px-3 py-2.5 border-b border-gray-200">
+                  <select
+                    value={item.status}
+                    onChange={(e) => saveField(item, "status", e.target.value)}
+                    className="text-sm rounded border border-transparent hover:border-gray-300 bg-transparent py-0 focus:border-blue-500 focus:outline-none cursor-pointer -ml-0.5"
+                  >
+                    {(item.entity_type === "raid_risk" ? riskStatusOptions : statusOptions).map((s) => {
+                      const badge = statusBadge(s);
+                      return <option key={s} value={s}>{badge.label}</option>;
+                    })}
+                  </select>
+                </div>
+                <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-200">Due Date</span>
+                <div className="px-3 py-2 border-b border-gray-200">
+                  <input
+                    type="date"
+                    value={item.due_date || ""}
+                    onChange={(e) => saveField(item, item.entity_type.startsWith("raid_") ? "decision_date" : "due_date", e.target.value)}
+                    className="text-sm rounded border border-transparent hover:border-gray-300 bg-transparent py-0 focus:border-blue-500 focus:outline-none cursor-pointer -ml-0.5"
                   />
                 </div>
 
