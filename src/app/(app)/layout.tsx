@@ -39,6 +39,7 @@ export default async function AppLayout({
       value={{
         role,
         profileId: user.id,
+        orgId: profile?.org_id || "",
         vendorId: profile?.vendor_id || null,
         userPersonId: personRecord?.id || null,
       }}

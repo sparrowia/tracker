@@ -4,6 +4,7 @@ import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { healthLabel } from "@/lib/utils";
 import type { ProjectHealth } from "@/lib/types";
+import { useRole } from "@/components/role-context";
 
 const HEALTH_OPTIONS: ProjectHealth[] = ["on_track", "in_progress", "at_risk", "blocked", "paused", "complete"];
 
@@ -12,6 +13,7 @@ function generateSlug(name: string) {
 }
 
 export default function AddInitiativeButton({ onSaved }: { onSaved?: () => void } = {}) {
+  const { orgId } = useRole();
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
@@ -31,11 +33,10 @@ export default function AddInitiativeButton({ onSaved }: { onSaved?: () => void 
   async function save() {
     if (!form.name.trim() || saving) return;
     setSaving(true);
-    const { data: profile } = await supabase.from("profiles").select("org_id").single();
-    if (!profile?.org_id) { setSaving(false); return; }
+    if (!orgId) { setSaving(false); return; }
     const slug = form.slug.trim() || generateSlug(form.name);
     const { error } = await supabase.from("initiatives").insert({
-      org_id: profile.org_id,
+      org_id: orgId,
       name: form.name.trim(),
       slug,
       description: form.description.trim() || null,

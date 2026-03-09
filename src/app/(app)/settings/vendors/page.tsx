@@ -22,7 +22,7 @@ export default function VendorsPage() {
   const [editForm, setEditForm] = useState({ name: "", slug: "", website: "", notes: "" });
   const supabase = createClient();
   const router = useRouter();
-  const { profileId } = useRole();
+  const { profileId, orgId } = useRole();
 
   useEffect(() => {
     async function load() {
@@ -82,13 +82,12 @@ export default function VendorsPage() {
 
   async function saveCreate() {
     if (!editForm.name.trim()) return;
-    const { data: profile } = await supabase.from("profiles").select("org_id").single();
-    if (!profile?.org_id) return;
+    if (!orgId) return;
     const slug = editForm.slug.trim() || generateSlug(editForm.name);
     const { data, error } = await supabase
       .from("vendors")
       .insert({
-        org_id: profile.org_id,
+        org_id: orgId,
         name: editForm.name.trim(),
         slug,
         website: editForm.website.trim() || null,

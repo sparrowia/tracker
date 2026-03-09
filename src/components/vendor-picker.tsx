@@ -15,7 +15,7 @@ interface VendorPickerProps {
 }
 
 export default function VendorPicker({ value, onChange, vendors, onVendorAdded }: VendorPickerProps) {
-  const { profileId } = useRole();
+  const { profileId, orgId } = useRole();
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
@@ -38,10 +38,8 @@ export default function VendorPicker({ value, onChange, vendors, onVendorAdded }
     if (!trimmed) return;
     setSaving(true);
 
-    const supabase = createClient();
-    const { data: profile } = await supabase.from("profiles").select("org_id").single();
-    const orgId = profile?.org_id;
     if (!orgId) { setSaving(false); return; }
+    const supabase = createClient();
 
     const slug = trimmed.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 

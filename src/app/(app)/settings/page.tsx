@@ -3,8 +3,10 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { TermCorrection } from "@/lib/types";
+import { useRole } from "@/components/role-context";
 
 export default function SettingsPage() {
+  const { orgId } = useRole();
   const [corrections, setCorrections] = useState<TermCorrection[]>([]);
   const [wrongTerm, setWrongTerm] = useState("");
   const [correctTerm, setCorrectTerm] = useState("");
@@ -35,16 +37,15 @@ export default function SettingsPage() {
     setError(null);
     if (!wrongTerm.trim() || !correctTerm.trim()) return;
 
-    const { data: profile, error: profileErr } = await supabase.from("profiles").select("org_id").single();
-    if (profileErr || !profile?.org_id) {
-      setError(`Could not load profile: ${profileErr?.message || "no org_id"}`);
+    if (!orgId) {
+      setError("Could not load profile: no org_id");
       return;
     }
 
     const { data, error: insertErr } = await supabase
       .from("term_corrections")
       .insert({
-        org_id: profile.org_id,
+        org_id: orgId,
         wrong_term: wrongTerm.trim(),
         correct_term: correctTerm.trim(),
         notes: notes.trim() || null,

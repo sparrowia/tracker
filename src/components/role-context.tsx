@@ -6,6 +6,7 @@ import type { UserRole } from "@/lib/types";
 interface RoleContextValue {
   role: UserRole;
   profileId: string;
+  orgId: string;
   vendorId: string | null;
   userPersonId: string | null;
 }
@@ -13,6 +14,7 @@ interface RoleContextValue {
 const RoleContext = createContext<RoleContextValue>({
   role: "user",
   profileId: "",
+  orgId: "",
   vendorId: null,
   userPersonId: null,
 });

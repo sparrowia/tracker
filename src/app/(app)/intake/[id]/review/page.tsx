@@ -177,7 +177,7 @@ function renderHighlightedText(text: string, quote: string) {
 }
 
 export default function IntakeReviewPage() {
-  const { profileId } = useRole();
+  const { profileId, orgId } = useRole();
   const params = useParams();
   const intakeId = params.id as string;
   const [intake, setIntake] = useState<Intake | null>(null);
@@ -393,8 +393,6 @@ export default function IntakeReviewPage() {
       const name = (item as unknown as Record<string, unknown>)[pf.field] as string | null;
       if (name && name.trim() && !people.some((p) => p.full_name === name.trim())) {
         // Create the person in Supabase
-        const { data: profile } = await supabase.from("profiles").select("org_id").single();
-        const orgId = profile?.org_id;
         if (orgId) {
           const { data: newPerson } = await supabase
             .from("people")
@@ -447,18 +445,15 @@ export default function IntakeReviewPage() {
     setDismissedMatches((prev) => new Set([...prev, `${category}-${index}-${existingId}`]));
     // Log match dismissal for feedback loop (fire-and-forget)
     const item = extracted[category]?.[index];
-    if (item && intake) {
-      supabase.from("profiles").select("org_id").single().then(({ data: profile }) => {
-        if (!profile?.org_id) return;
-        supabase.from("correction_log").insert({
-          org_id: profile.org_id,
-          intake_id: intake.id,
-          extracted_category: category,
-          extracted_title: item.title || item.subject || "",
-          extracted_priority: item.priority || null,
-          correction_type: "match_dismissed",
-          corrected_value: existingId,
-        });
+    if (item && intake && orgId) {
+      supabase.from("correction_log").insert({
+        org_id: orgId,
+        intake_id: intake.id,
+        extracted_category: category,
+        extracted_title: item.title || item.subject || "",
+        extracted_priority: item.priority || null,
+        correction_type: "match_dismissed",
+        corrected_value: existingId,
       });
     }
   }
@@ -469,12 +464,6 @@ export default function IntakeReviewPage() {
     setError(null);
 
     try {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("org_id")
-        .single();
-
-      const orgId = profile?.org_id;
       if (!orgId) throw new Error("No org found");
 
       // Get people for fuzzy matching owner names
