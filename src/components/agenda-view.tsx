@@ -758,7 +758,7 @@ export function AgendaView({
     const parentId = unit.parent?.entity_id || unit.parentTitle;
     const isParentExpanded = expandedParents.has(parentId);
     return (
-      <div key={`group-${parentId}`}>
+      <div key={`group-${parentId}`} className="border-b border-gray-400">
         {unit.parent ? (
           renderRow(unit.parent, false, unit.children.length)
         ) : (
