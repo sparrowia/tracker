@@ -160,6 +160,17 @@ export default function ProjectTabs({
     // RAID entries are managed by RaidLog's own state — router.refresh() handles it
   }, []);
 
+  const handleAgendaItemRestored = useCallback(async (entityType: string, entityId: string) => {
+    if (entityType === "action_item") {
+      const { data } = await supabase.from("action_items").select("*, owner:people!action_items_owner_id_fkey(*), vendor:vendors(*)").eq("id", entityId).single();
+      if (data) itemAddersRef.current.addAction?.(data as ActionRow);
+    } else if (entityType === "blocker") {
+      const { data } = await supabase.from("blockers").select("*, owner:people!blockers_owner_id_fkey(*), vendor:vendors(*)").eq("id", entityId).single();
+      if (data) itemAddersRef.current.addBlocker?.(data as BlockerRow);
+    }
+    router.refresh();
+  }, [supabase, router]);
+
   const setBlockerCount = useCallback((n: number) => setTabCounts((p) => ({ ...p, blockers: n })), []);
   const setActionCount = useCallback((n: number) => setTabCounts((p) => ({ ...p, actions: n })), []);
   const setRaidCount = useCallback((n: number) => setTabCounts((p) => ({ ...p, raid: n })), []);
@@ -266,7 +277,7 @@ export default function ProjectTabs({
       {/* Tab content — use display:none so panels stay mounted and state persists */}
       <div className="mt-6">
         <div style={{ display: active === "agenda" ? "block" : "none" }}>
-          <AgendaView project={project} initialItems={agendaRows} people={peopleList} vendors={vendorsList} onCountChange={setAgendaCount} onNewItemsSuggested={onNewItemsSuggested} onPersonAdded={addPerson} onVendorAdded={addVendor} onItemResolved={handleAgendaItemResolved} refreshTrigger={agendaRefreshKey} />
+          <AgendaView project={project} initialItems={agendaRows} people={peopleList} vendors={vendorsList} onCountChange={setAgendaCount} onNewItemsSuggested={onNewItemsSuggested} onPersonAdded={addPerson} onVendorAdded={addVendor} onItemResolved={handleAgendaItemResolved} onItemRestored={handleAgendaItemRestored} addUndo={addUndo} refreshTrigger={agendaRefreshKey} />
         </div>
 
         <div style={{ display: active === "blockers" ? "block" : "none" }}>

@@ -164,6 +164,8 @@ export function AgendaView({
   onPersonAdded,
   onVendorAdded,
   onItemResolved,
+  onItemRestored,
+  addUndo,
   refreshTrigger,
 }: {
   project: Project;
@@ -175,6 +177,8 @@ export function AgendaView({
   onPersonAdded?: (person: Person) => void;
   onVendorAdded?: (vendor: Vendor) => void;
   onItemResolved?: (entityType: string, entityId: string) => void;
+  onItemRestored?: (entityType: string, entityId: string) => void;
+  addUndo?: (label: string, undo: () => Promise<void>) => void;
   refreshTrigger?: number;
 }) {
   const [items, setItems] = useState(initialItems);
@@ -252,26 +256,31 @@ export function AgendaView({
     if (expandedId === item.entity_id) setExpandedId(null);
 
     const now = new Date().toISOString();
-    const doUpdate = () => {
-      if (item.entity_type === "agenda_item") {
-        return supabase.from("agenda_items").update({ status: "complete", resolved_at: now }).eq("id", item.entity_id);
-      } else if (item.entity_type === "blocker") {
-        return supabase.from("blockers").update({ status: "complete", resolved_at: now }).eq("id", item.entity_id);
-      } else if (item.entity_type === "action_item") {
-        return supabase.from("action_items").update({ status: "complete", resolved_at: now }).eq("id", item.entity_id);
-      } else {
-        return supabase.from("raid_entries").update({ status: "closed", resolved_at: now }).eq("id", item.entity_id);
-      }
-    };
+    const table = item.entity_type === "agenda_item" ? "agenda_items"
+      : item.entity_type === "blocker" ? "blockers"
+      : item.entity_type === "action_item" ? "action_items"
+      : "raid_entries";
+    const resolvedStatus = item.entity_type.startsWith("raid_") ? "closed" : "complete";
+
+    // Fetch current status before resolving so undo can restore it
+    const { data: current } = await supabase.from(table).select("status").eq("id", item.entity_id).single();
+    const prevStatus = current?.status || "pending";
 
     // Start DB update in parallel with animation
-    const dbPromise = doUpdate();
+    const dbPromise = supabase.from(table).update({ status: resolvedStatus, resolved_at: now }).eq("id", item.entity_id);
     await new Promise((r) => setTimeout(r, 400));
     await dbPromise;
 
     setResolvingId(null);
     setItems((prev) => prev.filter((i) => i.entity_id !== item.entity_id));
     onItemResolved?.(item.entity_type, item.entity_id);
+
+    addUndo?.(`Resolved "${item.title}"`, async () => {
+      await supabase.from(table).update({ status: prevStatus, resolved_at: null }).eq("id", item.entity_id);
+      setItems((prev) => [...prev, item]);
+      onItemRestored?.(item.entity_type, item.entity_id);
+    });
+
     router.refresh();
   }
 
