@@ -247,9 +247,11 @@ export function VendorAgendaView({
     if (item.entity_type === "agenda_item") {
       await supabase.from("agenda_items").update({ status: "complete", resolved_at: now }).eq("id", item.entity_id);
     } else if (item.entity_type === "blocker") {
-      await supabase.from("blockers").update({ status: "complete", resolved_at: now }).eq("id", item.entity_id);
+      await supabase.from("blockers").update({ status: "complete", resolved_at: now, include_in_meeting: false }).eq("id", item.entity_id);
     } else if (item.entity_type === "action_item") {
-      await supabase.from("action_items").update({ status: "complete", resolved_at: now }).eq("id", item.entity_id);
+      await supabase.from("action_items").update({ status: "complete", resolved_at: now, include_in_meeting: false }).eq("id", item.entity_id);
+    } else if (item.entity_type.startsWith("raid_")) {
+      await supabase.from("raid_entries").update({ status: "closed", resolved_at: now, include_in_meeting: false }).eq("id", item.entity_id);
     }
     setItems(items.filter((i) => i.entity_id !== item.entity_id));
     router.refresh();
