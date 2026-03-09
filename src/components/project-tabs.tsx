@@ -131,6 +131,7 @@ export default function ProjectTabs({
     resolveAction?: (id: string) => void;
     updateBlocker?: (id: string, field: string, value: string, person?: Person | null, vendor?: Vendor | null) => void;
     updateAction?: (id: string, field: string, value: string, person?: Person | null, vendor?: Vendor | null) => void;
+    updateRaid?: (id: string, field: string, value: string, person?: Person | null, vendor?: Vendor | null) => void;
   }>({});
 
   const onNewItemsSuggested = useCallback((items: { title: string; suggested_type?: string; priority?: string; description?: string }[]) => {
@@ -163,16 +164,15 @@ export default function ProjectTabs({
   }, []);
 
   const handleAgendaFieldChanged = useCallback((entityType: string, entityId: string, field: string, value: string) => {
+    const person = field === "owner_id" ? peopleList.find((p) => p.id === value) || null : null;
+    const vendor = field === "vendor_id" ? vendorsList.find((v) => v.id === value) || null : null;
     if (entityType === "action_item") {
-      const person = field === "owner_id" ? peopleList.find((p) => p.id === value) || null : null;
-      const vendor = field === "vendor_id" ? vendorsList.find((v) => v.id === value) || null : null;
       itemAddersRef.current.updateAction?.(entityId, field, value, person, vendor);
     } else if (entityType === "blocker") {
-      const person = field === "owner_id" ? peopleList.find((p) => p.id === value) || null : null;
-      const vendor = field === "vendor_id" ? vendorsList.find((v) => v.id === value) || null : null;
       itemAddersRef.current.updateBlocker?.(entityId, field, value, person, vendor);
+    } else if (entityType.startsWith("raid_")) {
+      itemAddersRef.current.updateRaid?.(entityId, field, value, person, vendor);
     }
-    // RAID entries managed by RaidLog — router.refresh() handles it
   }, [peopleList, vendorsList]);
 
   const handleAgendaItemRestored = useCallback(async (entityType: string, entityId: string) => {
@@ -313,6 +313,7 @@ export default function ProjectTabs({
                 itemAddersRef.current.addBlocker(data as BlockerRow);
               }
             }}
+            registerUpdater={(fn) => { itemAddersRef.current.updateRaid = fn; return () => { itemAddersRef.current.updateRaid = undefined; }; }}
           />
         </div>
 

@@ -25,6 +25,7 @@ interface RaidLogProps {
   onMeetingToggle?: () => void;
   onConvertedToAction?: (actionId: string) => void;
   onConvertedToBlocker?: (blockerId: string) => void;
+  registerUpdater?: (fn: (id: string, field: string, value: string, person?: Person | null, vendor?: Vendor | null) => void) => () => void;
 }
 
 const raidTypes: RaidType[] = ["risk", "assumption", "issue", "decision"];
@@ -151,7 +152,7 @@ function InlineDate({ value, onSave }: { value: string | null; onSave: (v: strin
   );
 }
 
-export default function RaidLog({ initialEntries, project, people, vendors, onPersonAdded, onVendorAdded, addUndo, onCountChange, intakeSourceMap = {}, onMeetingToggle, onConvertedToAction, onConvertedToBlocker }: RaidLogProps) {
+export default function RaidLog({ initialEntries, project, people, vendors, onPersonAdded, onVendorAdded, addUndo, onCountChange, intakeSourceMap = {}, onMeetingToggle, onConvertedToAction, onConvertedToBlocker, registerUpdater }: RaidLogProps) {
   const { role, profileId, userPersonId } = useRole();
   const [entries, setEntries] = useState<RaidRow[]>(initialEntries);
 
@@ -159,6 +160,20 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
   const archivedEntries = entries.filter((e) => e.resolved_at).sort((a, b) => new Date(b.resolved_at!).getTime() - new Date(a.resolved_at!).getTime());
 
   useEffect(() => { onCountChange?.(activeEntries.length); }, [activeEntries.length, onCountChange]);
+
+  useEffect(() => {
+    if (!registerUpdater) return;
+    return registerUpdater((id: string, field: string, value: string, person?: Person | null, vendor?: Vendor | null) => {
+      setEntries((prev) => prev.map((e) => {
+        if (e.id !== id) return e;
+        if (field === "owner_id") return { ...e, owner_id: value || null, owner: person || null } as RaidRow;
+        if (field === "vendor_id") return { ...e, vendor_id: value || null, vendor: vendor || null } as RaidRow;
+        if (field === "status") return { ...e, status: value as ItemStatus, ...(["complete", "closed", "mitigated"].includes(value) ? {} : { resolved_at: null }) } as RaidRow;
+        if (field === "decision_date") return { ...e, decision_date: value || null } as RaidRow;
+        return { ...e, [field]: value || null } as RaidRow;
+      }));
+    });
+  }, [registerUpdater]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<RaidType>("risk");
   const [showArchived, setShowArchived] = useState(false);
