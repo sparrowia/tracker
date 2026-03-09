@@ -601,7 +601,26 @@ export function AgendaView({
                 {/* Row: Type / Priority */}
                 <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-200">Type</span>
                 <div className="px-3 py-2.5 border-b border-gray-200">
-                  <span className="text-sm text-gray-700">{typeLabels[item.entity_type] || item.entity_type}</span>
+                  {item.entity_type.startsWith("raid_") ? (
+                    <select
+                      value={item.entity_type.replace("raid_", "")}
+                      onChange={(e) => {
+                        const newRaidType = e.target.value;
+                        const newEntityType = `raid_${newRaidType}`;
+                        supabase.from("raid_entries").update({ raid_type: newRaidType }).eq("id", item.entity_id).then(() => {});
+                        setItems((prev) => prev.map((i) => i.entity_id === item.entity_id ? { ...i, entity_type: newEntityType } : i));
+                        onItemFieldChanged?.(item.entity_type, item.entity_id, "raid_type", newRaidType);
+                      }}
+                      className="text-sm rounded border border-transparent hover:border-gray-300 bg-transparent py-0 focus:border-blue-500 focus:outline-none cursor-pointer -ml-0.5"
+                    >
+                      <option value="risk">Risk</option>
+                      <option value="issue">Issue</option>
+                      <option value="assumption">Assumption</option>
+                      <option value="decision">Decision</option>
+                    </select>
+                  ) : (
+                    <span className="text-sm text-gray-700">{typeLabels[item.entity_type] || item.entity_type}</span>
+                  )}
                 </div>
                 <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-200">Priority</span>
                 <div className="px-3 py-2.5 border-b border-gray-200">

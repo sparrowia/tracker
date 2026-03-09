@@ -3,6 +3,7 @@
 import { useState, useEffect, Fragment } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { priorityColor, priorityDot, formatAge, statusBadge, formatDateShort } from "@/lib/utils";
 import type { Vendor, VendorAgendaRow, PriorityLevel, ItemStatus, Person } from "@/lib/types";
 import { useRole } from "@/components/role-context";
@@ -486,7 +487,15 @@ export function VendorAgendaView({
               ) : (<span className="text-xs text-gray-400 italic">Unassigned</span>)}
             </div>
             {/* Project */}
-            <span className="text-xs text-gray-500 w-[100px] flex-shrink-0 truncate">{item.project_name || "—"}</span>
+            <span className="text-xs w-[100px] flex-shrink-0 truncate">
+              {item.project_slug ? (
+                <Link href={`/projects/${item.project_slug}`} className="text-blue-600 hover:underline" onClick={(e) => e.stopPropagation()}>
+                  {item.project_name}
+                </Link>
+              ) : (
+                <span className="text-gray-500">{item.project_name || "—"}</span>
+              )}
+            </span>
             {/* Age */}
             <span className="text-xs text-gray-500 w-12 flex-shrink-0">{formatAge(item.age_days)}</span>
             {/* Score */}
@@ -510,7 +519,25 @@ export function VendorAgendaView({
                 {/* Row: Type / Priority */}
                 <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-200">Type</span>
                 <div className="px-3 py-2.5 border-b border-gray-200">
-                  <span className="text-sm text-gray-700">{typeLabels[item.entity_type] || item.entity_type}</span>
+                  {item.entity_type.startsWith("raid_") ? (
+                    <select
+                      value={item.entity_type.replace("raid_", "")}
+                      onChange={(e) => {
+                        const newRaidType = e.target.value;
+                        const newEntityType = `raid_${newRaidType}`;
+                        supabase.from("raid_entries").update({ raid_type: newRaidType }).eq("id", item.entity_id).then(() => {});
+                        setItems((prev) => prev.map((i) => i.entity_id === item.entity_id ? { ...i, entity_type: newEntityType } : i));
+                      }}
+                      className="text-sm rounded border border-transparent hover:border-gray-300 bg-transparent py-0 focus:border-blue-500 focus:outline-none cursor-pointer -ml-0.5"
+                    >
+                      <option value="risk">Risk</option>
+                      <option value="issue">Issue</option>
+                      <option value="assumption">Assumption</option>
+                      <option value="decision">Decision</option>
+                    </select>
+                  ) : (
+                    <span className="text-sm text-gray-700">{typeLabels[item.entity_type] || item.entity_type}</span>
+                  )}
                 </div>
                 <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-200">Priority</span>
                 <div className="px-3 py-2.5 border-b border-gray-200">
@@ -537,7 +564,13 @@ export function VendorAgendaView({
                 </div>
                 <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-200">Project</span>
                 <div className="px-3 py-2.5 border-b border-gray-200">
-                  <span className="text-sm text-gray-700">{item.project_name || <span className="text-gray-400">—</span>}</span>
+                  {item.project_slug ? (
+                    <Link href={`/projects/${item.project_slug}`} className="text-sm text-blue-600 hover:underline">
+                      {item.project_name}
+                    </Link>
+                  ) : (
+                    <span className="text-sm text-gray-400">—</span>
+                  )}
                 </div>
 
                 {/* Row: Status / Due Date */}

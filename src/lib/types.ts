@@ -322,6 +322,7 @@ export interface VendorAgendaRow {
   score: number;
   owner_name: string | null;
   project_name: string | null;
+  project_slug: string | null;
   owner_id: string | null;
   vendor_id: string | null;
 }
