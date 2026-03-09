@@ -7,6 +7,8 @@ import type { RaidEntry, RaidType, PriorityLevel, ItemStatus, Person, Vendor, Pr
 import OwnerPicker from "@/components/owner-picker";
 import CommentThread from "@/components/comment-thread";
 import VendorPicker from "@/components/vendor-picker";
+import { useRole } from "@/components/role-context";
+import { canCreate, canDelete, canEditItem } from "@/lib/permissions";
 
 type RaidRow = RaidEntry & { owner: Person | null; reporter: Person | null; vendor: Vendor | null };
 
@@ -148,6 +150,7 @@ function InlineDate({ value, onSave }: { value: string | null; onSave: (v: strin
 }
 
 export default function RaidLog({ initialEntries, project, people, vendors, onPersonAdded, onVendorAdded, addUndo, onCountChange, intakeSourceMap = {}, onMeetingToggle }: RaidLogProps) {
+  const { role, profileId, userPersonId } = useRole();
   const [entries, setEntries] = useState<RaidRow[]>(initialEntries);
 
   const activeEntries = entries.filter((e) => !e.resolved_at);
@@ -496,6 +499,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
       description: null,
       decision_date: null,
       sort_order: maxSort + 1000,
+      created_by: profileId,
     };
 
     const { data, error } = await supabase.from("raid_entries").insert(newEntry).select("*, owner:people!raid_entries_owner_id_fkey(*), reporter:people!raid_entries_reporter_id_fkey(*), vendor:vendors(*)").single();
@@ -548,12 +552,14 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                 </div>
               )}
             </div>
-            <button
-              onClick={() => { setAddingType(addingType === raidType ? null : raidType); setAddTitle(""); setAddPriority("medium"); }}
-              className="text-xs text-blue-300 hover:text-white transition-colors"
-            >
-              + Add {label.slice(0, -1)}
-            </button>
+            {canCreate(role) && (
+              <button
+                onClick={() => { setAddingType(addingType === raidType ? null : raidType); setAddTitle(""); setAddPriority("medium"); }}
+                className="text-xs text-blue-300 hover:text-white transition-colors"
+              >
+                + Add {label.slice(0, -1)}
+              </button>
+            )}
           </div>
         </div>
         {addingType === raidType && (
@@ -945,16 +951,18 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
 
                       {/* Actions bar */}
                       <div className="flex justify-end items-center gap-3 px-5 py-2 border-t border-gray-200">
-                        <button
-                          onClick={() => handleDelete(entry.id)}
-                          className="text-gray-400 hover:text-red-600 transition-colors"
-                          title="Delete"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="3 6 5 6 21 6"/>
-                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                          </svg>
-                        </button>
+                        {canDelete(role) && (
+                          <button
+                            onClick={() => handleDelete(entry.id)}
+                            className="text-gray-400 hover:text-red-600 transition-colors"
+                            title="Delete"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="3 6 5 6 21 6"/>
+                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                            </svg>
+                          </button>
+                        )}
                       </div>
                     </div>
                   )}

@@ -2,6 +2,8 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/sidebar";
 import { Topbar } from "@/components/topbar";
+import { RoleProvider } from "@/components/role-context";
+import type { UserRole } from "@/lib/types";
 
 export default async function AppLayout({
   children,
@@ -23,13 +25,31 @@ export default async function AppLayout({
     .eq("id", user.id)
     .single();
 
+  // Get the person record linked to this profile (for owner matching)
+  const { data: personRecord } = await supabase
+    .from("people")
+    .select("id")
+    .eq("profile_id", user.id)
+    .maybeSingle();
+
+  const role = (profile?.role || "user") as UserRole;
+
   return (
-    <div className="flex h-screen bg-gray-50">
-      <Sidebar />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <Topbar profile={profile} />
-        <main className="flex-1 overflow-y-auto p-6">{children}</main>
+    <RoleProvider
+      value={{
+        role,
+        profileId: user.id,
+        vendorId: profile?.vendor_id || null,
+        userPersonId: personRecord?.id || null,
+      }}
+    >
+      <div className="flex h-screen bg-gray-50">
+        <Sidebar role={role} />
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <Topbar profile={profile} />
+          <main className="flex-1 overflow-y-auto p-6">{children}</main>
+        </div>
       </div>
-    </div>
+    </RoleProvider>
   );
 }

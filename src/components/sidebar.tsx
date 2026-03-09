@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
+import type { UserRole } from "@/lib/types";
 
 interface SidebarProject {
   id: string;
@@ -33,13 +34,19 @@ interface SidebarInitiative {
   projects: SidebarProject[];
 }
 
-const settingsItems = [
-  { name: "People", href: "/settings/people", icon: Users },
-  { name: "Vendors", href: "/settings/vendors", icon: Building2 },
-  { name: "Term Corrections", href: "/settings", icon: BookType },
-];
+function getSettingsItems(role: UserRole) {
+  const items = [
+    { name: "People", href: "/settings/people", icon: Users },
+    { name: "Vendors", href: "/settings/vendors", icon: Building2 },
+    { name: "Term Corrections", href: "/settings", icon: BookType },
+  ];
+  if (role === "super_admin" || role === "admin") {
+    items.push({ name: "Team", href: "/settings/team", icon: Users });
+  }
+  return items;
+}
 
-export function Sidebar() {
+export function Sidebar({ role = "user" as UserRole }: { role?: UserRole }) {
   const pathname = usePathname();
   const isOnSettings = pathname.startsWith("/settings");
   const isOnInitiatives = pathname.startsWith("/initiatives") || pathname.startsWith("/projects");
@@ -138,19 +145,21 @@ export function Sidebar() {
           Dashboard
         </Link>
 
-        {/* Ask */}
-        <Link
-          href="/ask"
-          className={cn(
-            "flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors",
-            pathname === "/ask"
-              ? "bg-blue-50 text-blue-700"
-              : "text-gray-700 hover:bg-gray-100"
-          )}
-        >
-          <MessageSquare className="h-4 w-4 flex-shrink-0" />
-          Ask
-        </Link>
+        {/* Ask — hidden from vendors */}
+        {role !== "vendor" && (
+          <Link
+            href="/ask"
+            className={cn(
+              "flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors",
+              pathname === "/ask"
+                ? "bg-blue-50 text-blue-700"
+                : "text-gray-700 hover:bg-gray-100"
+            )}
+          >
+            <MessageSquare className="h-4 w-4 flex-shrink-0" />
+            Ask
+          </Link>
+        )}
 
         {/* Initiatives group */}
         <div>
@@ -224,62 +233,66 @@ export function Sidebar() {
           )}
         </div>
 
-        {/* Intake */}
-        <Link
-          href="/intake"
-          className={cn(
-            "flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors",
-            pathname === "/intake" || pathname.startsWith("/intake/")
-              ? "bg-blue-50 text-blue-700"
-              : "text-gray-700 hover:bg-gray-100"
-          )}
-        >
-          <Inbox className="h-4 w-4 flex-shrink-0" />
-          Intake
-        </Link>
-
-        {/* Settings group */}
-        <div className="pt-2">
-          <button
-            onClick={() => setSettingsOpen((prev) => !prev)}
+        {/* Intake — hidden from vendors */}
+        {role !== "vendor" && (
+          <Link
+            href="/intake"
             className={cn(
-              "w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors",
-              isOnSettings
+              "flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors",
+              pathname === "/intake" || pathname.startsWith("/intake/")
                 ? "bg-blue-50 text-blue-700"
                 : "text-gray-700 hover:bg-gray-100"
             )}
           >
-            <Settings className="h-4 w-4 flex-shrink-0" />
-            <span className="flex-1 text-left">Settings</span>
-            <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", settingsOpen ? "rotate-180" : "")} />
-          </button>
+            <Inbox className="h-4 w-4 flex-shrink-0" />
+            Intake
+          </Link>
+        )}
 
-          {settingsOpen && (
-            <div className="mt-1 ml-4 space-y-0.5">
-              {settingsItems.map((item) => {
-                const isActive =
-                  item.href === "/settings"
-                    ? pathname === "/settings"
-                    : pathname === item.href || pathname.startsWith(item.href + "/");
-                return (
-                  <Link
-                    key={item.name}
-                    href={item.href}
-                    className={cn(
-                      "flex items-center gap-3 px-3 py-1.5 text-sm rounded-md transition-colors",
-                      isActive
-                        ? "text-blue-700 font-medium"
-                        : "text-gray-600 hover:bg-gray-100"
-                    )}
-                  >
-                    <item.icon className="h-3.5 w-3.5 flex-shrink-0" />
-                    {item.name}
-                  </Link>
-                );
-              })}
-            </div>
-          )}
-        </div>
+        {/* Settings group — hidden from vendors */}
+        {role !== "vendor" && (
+          <div className="pt-2">
+            <button
+              onClick={() => setSettingsOpen((prev) => !prev)}
+              className={cn(
+                "w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors",
+                isOnSettings
+                  ? "bg-blue-50 text-blue-700"
+                  : "text-gray-700 hover:bg-gray-100"
+              )}
+            >
+              <Settings className="h-4 w-4 flex-shrink-0" />
+              <span className="flex-1 text-left">Settings</span>
+              <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", settingsOpen ? "rotate-180" : "")} />
+            </button>
+
+            {settingsOpen && (
+              <div className="mt-1 ml-4 space-y-0.5">
+                {getSettingsItems(role).map((item) => {
+                  const isActive =
+                    item.href === "/settings"
+                      ? pathname === "/settings"
+                      : pathname === item.href || pathname.startsWith(item.href + "/");
+                  return (
+                    <Link
+                      key={item.name}
+                      href={item.href}
+                      className={cn(
+                        "flex items-center gap-3 px-3 py-1.5 text-sm rounded-md transition-colors",
+                        isActive
+                          ? "text-blue-700 font-medium"
+                          : "text-gray-600 hover:bg-gray-100"
+                      )}
+                    >
+                      <item.icon className="h-3.5 w-3.5 flex-shrink-0" />
+                      {item.name}
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </nav>
     </div>
   );

@@ -25,6 +25,8 @@ export type RaidType = "risk" | "assumption" | "issue" | "decision";
 
 export type SeverityIndicator = "critical" | "high" | "new" | "normal";
 
+export type UserRole = "super_admin" | "admin" | "user" | "vendor";
+
 export type IntakeSource =
   | "slack"
   | "email"
@@ -45,10 +47,25 @@ export interface Profile {
   org_id: string;
   full_name: string;
   email: string;
-  role: string;
+  role: UserRole;
   avatar_url: string | null;
+  deactivated_at: string | null;
+  vendor_id: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface Invitation {
+  id: string;
+  org_id: string;
+  email: string;
+  role: UserRole;
+  vendor_id: string | null;
+  invited_by: string;
+  token: string;
+  expires_at: string;
+  accepted_at: string | null;
+  created_at: string;
 }
 
 export interface Vendor {

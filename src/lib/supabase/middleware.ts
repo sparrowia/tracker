@@ -52,5 +52,26 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  // Check if user is deactivated
+  if (
+    user &&
+    !request.nextUrl.pathname.startsWith("/login") &&
+    !request.nextUrl.pathname.startsWith("/auth")
+  ) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("deactivated_at")
+      .eq("id", user.id)
+      .single();
+
+    if (profile?.deactivated_at) {
+      await supabase.auth.signOut();
+      const url = request.nextUrl.clone();
+      url.pathname = "/login";
+      url.searchParams.set("error", "account_deactivated");
+      return NextResponse.redirect(url);
+    }
+  }
+
   return supabaseResponse;
 }
