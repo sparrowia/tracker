@@ -323,6 +323,55 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
     });
   }
 
+  async function convertToActionItem(id: string) {
+    const entry = entries.find((e) => e.id === id);
+    if (!entry) return;
+    const { data, error } = await supabase.from("action_items").insert({
+      org_id: project.org_id,
+      title: entry.title,
+      description: entry.description || null,
+      notes: entry.impact || null,
+      owner_id: entry.owner_id || null,
+      vendor_id: entry.vendor_id || null,
+      project_id: entry.project_id || null,
+      priority: entry.priority,
+      status: entry.status === "identified" || entry.status === "assessing" ? "pending" : entry.status,
+      first_flagged_at: entry.first_flagged_at,
+      escalation_count: entry.escalation_count,
+      created_by: profileId,
+    }).select("id").single();
+    if (error) { console.error("Convert failed:", error); return; }
+    // Move comments to the new action item
+    await supabase.from("comments").update({ action_item_id: data.id, raid_entry_id: null }).eq("raid_entry_id", id);
+    await supabase.from("raid_entries").delete().eq("id", id);
+    setEntries((prev) => prev.filter((e) => e.id !== id));
+    setExpandedId(null);
+  }
+
+  async function convertToBlocker(id: string) {
+    const entry = entries.find((e) => e.id === id);
+    if (!entry) return;
+    const { data, error } = await supabase.from("blockers").insert({
+      org_id: project.org_id,
+      title: entry.title,
+      description: entry.description || null,
+      impact_description: entry.impact || null,
+      owner_id: entry.owner_id || null,
+      vendor_id: entry.vendor_id || null,
+      project_id: entry.project_id || null,
+      priority: entry.priority,
+      status: entry.status === "identified" || entry.status === "assessing" ? "pending" : entry.status,
+      first_flagged_at: entry.first_flagged_at,
+      escalation_count: entry.escalation_count,
+      created_by: profileId,
+    }).select("id").single();
+    if (error) { console.error("Convert failed:", error); return; }
+    await supabase.from("comments").update({ blocker_id: data.id, raid_entry_id: null }).eq("raid_entry_id", id);
+    await supabase.from("raid_entries").delete().eq("id", id);
+    setEntries((prev) => prev.filter((e) => e.id !== id));
+    setExpandedId(null);
+  }
+
   function toggleMeeting(id: string) {
     const entry = entries.find((e) => e.id === id);
     if (!entry) return;
@@ -814,12 +863,20 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                           <div className="px-3 py-2.5 border-b border-gray-200">
                             <select
                               value={entry.raid_type}
-                              onChange={(e) => saveField(entry.id, "raid_type", e.target.value)}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                if (val === "__action_item") { convertToActionItem(entry.id); return; }
+                                if (val === "__blocker") { convertToBlocker(entry.id); return; }
+                                saveField(entry.id, "raid_type", val);
+                              }}
                               className="text-sm rounded border border-transparent hover:border-gray-300 bg-transparent py-0 focus:border-blue-500 focus:outline-none cursor-pointer -ml-0.5"
                             >
                               {raidTypes.map((t) => (
                                 <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
                               ))}
+                              <option disabled className="text-gray-300">────────────</option>
+                              <option value="__action_item">Action Item</option>
+                              <option value="__blocker">Blocker</option>
                             </select>
                           </div>
                           <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-200">Priority</span>
