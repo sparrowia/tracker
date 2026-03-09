@@ -263,7 +263,20 @@ export default function ProjectTabs({
         </div>
 
         <div style={{ display: active === "raid" ? "block" : "none" }}>
-          <RaidLog initialEntries={raidEntries} project={project} people={peopleList} vendors={vendorsList} onPersonAdded={addPerson} onVendorAdded={addVendor} addUndo={addUndo} onCountChange={setRaidCount} intakeSourceMap={intakeSourceMap} onMeetingToggle={bumpAgendaRefresh} />
+          <RaidLog initialEntries={raidEntries} project={project} people={peopleList} vendors={vendorsList} onPersonAdded={addPerson} onVendorAdded={addVendor} addUndo={addUndo} onCountChange={setRaidCount} intakeSourceMap={intakeSourceMap} onMeetingToggle={bumpAgendaRefresh}
+            onConvertedToAction={async (actionId) => {
+              const { data } = await supabase.from("action_items").select("*, owner:people!action_items_owner_id_fkey(*), vendor:vendors(*)").eq("id", actionId).single();
+              if (data && itemAddersRef.current.addAction) {
+                itemAddersRef.current.addAction(data as ActionRow);
+              }
+            }}
+            onConvertedToBlocker={async (blockerId) => {
+              const { data } = await supabase.from("blockers").select("*, owner:people!blockers_owner_id_fkey(*), vendor:vendors(*)").eq("id", blockerId).single();
+              if (data && itemAddersRef.current.addBlocker) {
+                itemAddersRef.current.addBlocker(data as BlockerRow);
+              }
+            }}
+          />
         </div>
 
         <div style={{ display: active === "actions" ? "block" : "none" }}>

@@ -23,6 +23,8 @@ interface RaidLogProps {
   onCountChange?: (count: number) => void;
   intakeSourceMap?: Record<string, string>;
   onMeetingToggle?: () => void;
+  onConvertedToAction?: (actionId: string) => void;
+  onConvertedToBlocker?: (blockerId: string) => void;
 }
 
 const raidTypes: RaidType[] = ["risk", "assumption", "issue", "decision"];
@@ -149,7 +151,7 @@ function InlineDate({ value, onSave }: { value: string | null; onSave: (v: strin
   );
 }
 
-export default function RaidLog({ initialEntries, project, people, vendors, onPersonAdded, onVendorAdded, addUndo, onCountChange, intakeSourceMap = {}, onMeetingToggle }: RaidLogProps) {
+export default function RaidLog({ initialEntries, project, people, vendors, onPersonAdded, onVendorAdded, addUndo, onCountChange, intakeSourceMap = {}, onMeetingToggle, onConvertedToAction, onConvertedToBlocker }: RaidLogProps) {
   const { role, profileId, userPersonId } = useRole();
   const [entries, setEntries] = useState<RaidRow[]>(initialEntries);
 
@@ -341,11 +343,11 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
       created_by: profileId,
     }).select("id").single();
     if (error) { console.error("Convert failed:", error); return; }
-    // Move comments to the new action item
     await supabase.from("comments").update({ action_item_id: data.id, raid_entry_id: null }).eq("raid_entry_id", id);
     await supabase.from("raid_entries").delete().eq("id", id);
     setEntries((prev) => prev.filter((e) => e.id !== id));
     setExpandedId(null);
+    onConvertedToAction?.(data.id);
   }
 
   async function convertToBlocker(id: string) {
@@ -370,6 +372,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
     await supabase.from("raid_entries").delete().eq("id", id);
     setEntries((prev) => prev.filter((e) => e.id !== id));
     setExpandedId(null);
+    onConvertedToBlocker?.(data.id);
   }
 
   function toggleMeeting(id: string) {
