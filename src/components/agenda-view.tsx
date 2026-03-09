@@ -168,6 +168,7 @@ export function AgendaView({
   onVendorAdded,
   onItemResolved,
   onItemRestored,
+  onItemFieldChanged,
   addUndo,
   refreshTrigger,
 }: {
@@ -181,6 +182,7 @@ export function AgendaView({
   onVendorAdded?: (vendor: Vendor) => void;
   onItemResolved?: (entityType: string, entityId: string) => void;
   onItemRestored?: (entityType: string, entityId: string) => void;
+  onItemFieldChanged?: (entityType: string, entityId: string, field: string, value: string) => void;
   addUndo?: (label: string, undo: () => Promise<void>) => void;
   refreshTrigger?: number;
 }) {
@@ -328,6 +330,8 @@ export function AgendaView({
       }
       return i;
     }));
+    // Notify parent so other tabs update their state
+    onItemFieldChanged?.(item.entity_type, item.entity_id, field, value);
   }
 
   async function handleDelete(item: ProjectAgendaRow) {

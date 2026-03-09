@@ -129,6 +129,8 @@ export default function ProjectTabs({
     addRaid?: (item: RaidEntry & { owner: Person | null; vendor: Vendor | null }) => void;
     resolveBlocker?: (id: string) => void;
     resolveAction?: (id: string) => void;
+    updateBlocker?: (id: string, field: string, value: string, person?: Person | null, vendor?: Vendor | null) => void;
+    updateAction?: (id: string, field: string, value: string, person?: Person | null, vendor?: Vendor | null) => void;
   }>({});
 
   const onNewItemsSuggested = useCallback((items: { title: string; suggested_type?: string; priority?: string; description?: string }[]) => {
@@ -159,6 +161,19 @@ export default function ProjectTabs({
     }
     // RAID entries are managed by RaidLog's own state — router.refresh() handles it
   }, []);
+
+  const handleAgendaFieldChanged = useCallback((entityType: string, entityId: string, field: string, value: string) => {
+    if (entityType === "action_item") {
+      const person = field === "owner_id" ? peopleList.find((p) => p.id === value) || null : null;
+      const vendor = field === "vendor_id" ? vendorsList.find((v) => v.id === value) || null : null;
+      itemAddersRef.current.updateAction?.(entityId, field, value, person, vendor);
+    } else if (entityType === "blocker") {
+      const person = field === "owner_id" ? peopleList.find((p) => p.id === value) || null : null;
+      const vendor = field === "vendor_id" ? vendorsList.find((v) => v.id === value) || null : null;
+      itemAddersRef.current.updateBlocker?.(entityId, field, value, person, vendor);
+    }
+    // RAID entries managed by RaidLog — router.refresh() handles it
+  }, [peopleList, vendorsList]);
 
   const handleAgendaItemRestored = useCallback(async (entityType: string, entityId: string) => {
     if (entityType === "action_item") {
@@ -277,11 +292,11 @@ export default function ProjectTabs({
       {/* Tab content — use display:none so panels stay mounted and state persists */}
       <div className="mt-6">
         <div style={{ display: active === "agenda" ? "block" : "none" }}>
-          <AgendaView project={project} initialItems={agendaRows} people={peopleList} vendors={vendorsList} onCountChange={setAgendaCount} onNewItemsSuggested={onNewItemsSuggested} onPersonAdded={addPerson} onVendorAdded={addVendor} onItemResolved={handleAgendaItemResolved} onItemRestored={handleAgendaItemRestored} addUndo={addUndo} refreshTrigger={agendaRefreshKey} />
+          <AgendaView project={project} initialItems={agendaRows} people={peopleList} vendors={vendorsList} onCountChange={setAgendaCount} onNewItemsSuggested={onNewItemsSuggested} onPersonAdded={addPerson} onVendorAdded={addVendor} onItemResolved={handleAgendaItemResolved} onItemRestored={handleAgendaItemRestored} onItemFieldChanged={handleAgendaFieldChanged} addUndo={addUndo} refreshTrigger={agendaRefreshKey} />
         </div>
 
         <div style={{ display: active === "blockers" ? "block" : "none" }}>
-          <BlockersPanel blockers={blockers} people={peopleList} vendors={vendorsList} onPersonAdded={addPerson} onVendorAdded={addVendor} addUndo={addUndo} onCountChange={setBlockerCount} intakeSourceMap={intakeSourceMap} onNewItemsSuggested={onNewItemsSuggested} registerAdder={(fn) => { itemAddersRef.current.addBlocker = fn; return () => { itemAddersRef.current.addBlocker = undefined; }; }} registerResolver={(fn) => { itemAddersRef.current.resolveBlocker = fn; return () => { itemAddersRef.current.resolveBlocker = undefined; }; }} onMeetingToggle={bumpAgendaRefresh} orgId={project.org_id} />
+          <BlockersPanel blockers={blockers} people={peopleList} vendors={vendorsList} onPersonAdded={addPerson} onVendorAdded={addVendor} addUndo={addUndo} onCountChange={setBlockerCount} intakeSourceMap={intakeSourceMap} onNewItemsSuggested={onNewItemsSuggested} registerAdder={(fn) => { itemAddersRef.current.addBlocker = fn; return () => { itemAddersRef.current.addBlocker = undefined; }; }} registerResolver={(fn) => { itemAddersRef.current.resolveBlocker = fn; return () => { itemAddersRef.current.resolveBlocker = undefined; }; }} registerUpdater={(fn) => { itemAddersRef.current.updateBlocker = fn; return () => { itemAddersRef.current.updateBlocker = undefined; }; }} onMeetingToggle={bumpAgendaRefresh} orgId={project.org_id} />
         </div>
 
         <div style={{ display: active === "raid" ? "block" : "none" }}>
@@ -302,7 +317,7 @@ export default function ProjectTabs({
         </div>
 
         <div style={{ display: active === "actions" ? "block" : "none" }}>
-          <ActionItemsPanel actions={actions} people={peopleList} vendors={vendorsList} onPersonAdded={addPerson} onVendorAdded={addVendor} addUndo={addUndo} onCountChange={setActionCount} intakeSourceMap={intakeSourceMap} onNewItemsSuggested={onNewItemsSuggested} registerAdder={(fn) => { itemAddersRef.current.addAction = fn; return () => { itemAddersRef.current.addAction = undefined; }; }} registerResolver={(fn) => { itemAddersRef.current.resolveAction = fn; return () => { itemAddersRef.current.resolveAction = undefined; }; }} onMeetingToggle={bumpAgendaRefresh} orgId={project.org_id} />
+          <ActionItemsPanel actions={actions} people={peopleList} vendors={vendorsList} onPersonAdded={addPerson} onVendorAdded={addVendor} addUndo={addUndo} onCountChange={setActionCount} intakeSourceMap={intakeSourceMap} onNewItemsSuggested={onNewItemsSuggested} registerAdder={(fn) => { itemAddersRef.current.addAction = fn; return () => { itemAddersRef.current.addAction = undefined; }; }} registerResolver={(fn) => { itemAddersRef.current.resolveAction = fn; return () => { itemAddersRef.current.resolveAction = undefined; }; }} registerUpdater={(fn) => { itemAddersRef.current.updateAction = fn; return () => { itemAddersRef.current.updateAction = undefined; }; }} onMeetingToggle={bumpAgendaRefresh} orgId={project.org_id} />
         </div>
 
         <div style={{ display: active === "intake" ? "block" : "none" }}>
@@ -660,6 +675,7 @@ function BlockersPanel({
   onNewItemsSuggested,
   registerAdder,
   registerResolver,
+  registerUpdater,
   onMeetingToggle,
   orgId,
 }: {
@@ -674,6 +690,7 @@ function BlockersPanel({
   onNewItemsSuggested?: (items: { title: string; suggested_type?: string; priority?: string; description?: string }[]) => void;
   registerAdder?: (fn: (item: BlockerRow) => void) => () => void;
   registerResolver?: (fn: (id: string) => void) => () => void;
+  registerUpdater?: (fn: (id: string, field: string, value: string, person?: Person | null, vendor?: Vendor | null) => void) => () => void;
   onMeetingToggle?: () => void;
   orgId: string;
 }) {
@@ -693,6 +710,19 @@ function BlockersPanel({
       setBlockers((prev) => prev.filter((b) => b.id !== id));
     });
   }, [registerResolver]);
+
+  useEffect(() => {
+    if (!registerUpdater) return;
+    return registerUpdater((id: string, field: string, value: string, person?: Person | null, vendor?: Vendor | null) => {
+      setBlockers((prev) => prev.map((b) => {
+        if (b.id !== id) return b;
+        if (field === "owner_id") return { ...b, owner_id: value || null, owner: person || null } as BlockerRow;
+        if (field === "vendor_id") return { ...b, vendor_id: value || null, vendor: vendor || null } as BlockerRow;
+        if (field === "status") return { ...b, status: value as ItemStatus, ...(["complete", "closed", "mitigated"].includes(value) ? {} : { resolved_at: null }) } as BlockerRow;
+        return { ...b, [field]: value || null } as BlockerRow;
+      }));
+    });
+  }, [registerUpdater]);
 
   useEffect(() => { onCountChange?.(blockers.length); }, [blockers.length, onCountChange]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -1192,6 +1222,7 @@ function ActionItemsPanel({
   onNewItemsSuggested,
   registerAdder,
   registerResolver,
+  registerUpdater,
   onMeetingToggle,
   orgId,
 }: {
@@ -1206,6 +1237,7 @@ function ActionItemsPanel({
   onNewItemsSuggested?: (items: { title: string; suggested_type?: string; priority?: string; description?: string }[]) => void;
   registerAdder?: (fn: (item: ActionRow) => void) => () => void;
   registerResolver?: (fn: (id: string) => void) => () => void;
+  registerUpdater?: (fn: (id: string, field: string, value: string, person?: Person | null, vendor?: Vendor | null) => void) => () => void;
   onMeetingToggle?: () => void;
   orgId: string;
 }) {
@@ -1225,6 +1257,19 @@ function ActionItemsPanel({
       setActions((prev) => prev.filter((a) => a.id !== id));
     });
   }, [registerResolver]);
+
+  useEffect(() => {
+    if (!registerUpdater) return;
+    return registerUpdater((id: string, field: string, value: string, person?: Person | null, vendor?: Vendor | null) => {
+      setActions((prev) => prev.map((a) => {
+        if (a.id !== id) return a;
+        if (field === "owner_id") return { ...a, owner_id: value || null, owner: person || null } as ActionRow;
+        if (field === "vendor_id") return { ...a, vendor_id: value || null, vendor: vendor || null } as ActionRow;
+        if (field === "status") return { ...a, status: value as ItemStatus, ...(["complete", "closed", "mitigated"].includes(value) ? {} : { resolved_at: null }) } as ActionRow;
+        return { ...a, [field]: value || null } as ActionRow;
+      }));
+    });
+  }, [registerUpdater]);
 
   useEffect(() => { onCountChange?.(actions.length); }, [actions.length, onCountChange]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
