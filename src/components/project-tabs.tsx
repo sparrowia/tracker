@@ -127,6 +127,8 @@ export default function ProjectTabs({
     addBlocker?: (item: BlockerRow) => void;
     addAction?: (item: ActionRow) => void;
     addRaid?: (item: RaidEntry & { owner: Person | null; vendor: Vendor | null }) => void;
+    resolveBlocker?: (id: string) => void;
+    resolveAction?: (id: string) => void;
   }>({});
 
   const onNewItemsSuggested = useCallback((items: { title: string; suggested_type?: string; priority?: string; description?: string }[]) => {
@@ -148,6 +150,15 @@ export default function ProjectTabs({
   // Incremented when meeting toggles change so AgendaView remounts with fresh data
   const [agendaRefreshKey, setAgendaRefreshKey] = useState(0);
   const bumpAgendaRefresh = useCallback(() => setAgendaRefreshKey((k) => k + 1), []);
+
+  const handleAgendaItemResolved = useCallback((entityType: string, entityId: string) => {
+    if (entityType === "action_item") {
+      itemAddersRef.current.resolveAction?.(entityId);
+    } else if (entityType === "blocker") {
+      itemAddersRef.current.resolveBlocker?.(entityId);
+    }
+    // RAID entries are managed by RaidLog's own state — router.refresh() handles it
+  }, []);
 
   const setBlockerCount = useCallback((n: number) => setTabCounts((p) => ({ ...p, blockers: n })), []);
   const setActionCount = useCallback((n: number) => setTabCounts((p) => ({ ...p, actions: n })), []);
@@ -255,11 +266,11 @@ export default function ProjectTabs({
       {/* Tab content — use display:none so panels stay mounted and state persists */}
       <div className="mt-6">
         <div style={{ display: active === "agenda" ? "block" : "none" }}>
-          <AgendaView project={project} initialItems={agendaRows} people={peopleList} vendors={vendorsList} onCountChange={setAgendaCount} onNewItemsSuggested={onNewItemsSuggested} onPersonAdded={addPerson} onVendorAdded={addVendor} refreshTrigger={agendaRefreshKey} />
+          <AgendaView project={project} initialItems={agendaRows} people={peopleList} vendors={vendorsList} onCountChange={setAgendaCount} onNewItemsSuggested={onNewItemsSuggested} onPersonAdded={addPerson} onVendorAdded={addVendor} onItemResolved={handleAgendaItemResolved} refreshTrigger={agendaRefreshKey} />
         </div>
 
         <div style={{ display: active === "blockers" ? "block" : "none" }}>
-          <BlockersPanel blockers={blockers} people={peopleList} vendors={vendorsList} onPersonAdded={addPerson} onVendorAdded={addVendor} addUndo={addUndo} onCountChange={setBlockerCount} intakeSourceMap={intakeSourceMap} onNewItemsSuggested={onNewItemsSuggested} registerAdder={(fn) => { itemAddersRef.current.addBlocker = fn; return () => { itemAddersRef.current.addBlocker = undefined; }; }} onMeetingToggle={bumpAgendaRefresh} orgId={project.org_id} />
+          <BlockersPanel blockers={blockers} people={peopleList} vendors={vendorsList} onPersonAdded={addPerson} onVendorAdded={addVendor} addUndo={addUndo} onCountChange={setBlockerCount} intakeSourceMap={intakeSourceMap} onNewItemsSuggested={onNewItemsSuggested} registerAdder={(fn) => { itemAddersRef.current.addBlocker = fn; return () => { itemAddersRef.current.addBlocker = undefined; }; }} registerResolver={(fn) => { itemAddersRef.current.resolveBlocker = fn; return () => { itemAddersRef.current.resolveBlocker = undefined; }; }} onMeetingToggle={bumpAgendaRefresh} orgId={project.org_id} />
         </div>
 
         <div style={{ display: active === "raid" ? "block" : "none" }}>
@@ -280,7 +291,7 @@ export default function ProjectTabs({
         </div>
 
         <div style={{ display: active === "actions" ? "block" : "none" }}>
-          <ActionItemsPanel actions={actions} people={peopleList} vendors={vendorsList} onPersonAdded={addPerson} onVendorAdded={addVendor} addUndo={addUndo} onCountChange={setActionCount} intakeSourceMap={intakeSourceMap} onNewItemsSuggested={onNewItemsSuggested} registerAdder={(fn) => { itemAddersRef.current.addAction = fn; return () => { itemAddersRef.current.addAction = undefined; }; }} onMeetingToggle={bumpAgendaRefresh} orgId={project.org_id} />
+          <ActionItemsPanel actions={actions} people={peopleList} vendors={vendorsList} onPersonAdded={addPerson} onVendorAdded={addVendor} addUndo={addUndo} onCountChange={setActionCount} intakeSourceMap={intakeSourceMap} onNewItemsSuggested={onNewItemsSuggested} registerAdder={(fn) => { itemAddersRef.current.addAction = fn; return () => { itemAddersRef.current.addAction = undefined; }; }} registerResolver={(fn) => { itemAddersRef.current.resolveAction = fn; return () => { itemAddersRef.current.resolveAction = undefined; }; }} onMeetingToggle={bumpAgendaRefresh} orgId={project.org_id} />
         </div>
 
         <div style={{ display: active === "intake" ? "block" : "none" }}>
@@ -637,6 +648,7 @@ function BlockersPanel({
   intakeSourceMap = {},
   onNewItemsSuggested,
   registerAdder,
+  registerResolver,
   onMeetingToggle,
   orgId,
 }: {
@@ -650,6 +662,7 @@ function BlockersPanel({
   intakeSourceMap?: Record<string, string>;
   onNewItemsSuggested?: (items: { title: string; suggested_type?: string; priority?: string; description?: string }[]) => void;
   registerAdder?: (fn: (item: BlockerRow) => void) => () => void;
+  registerResolver?: (fn: (id: string) => void) => () => void;
   onMeetingToggle?: () => void;
   orgId: string;
 }) {
@@ -662,6 +675,13 @@ function BlockersPanel({
       setBlockers((prev) => [...prev, newItem]);
     });
   }, [registerAdder]);
+
+  useEffect(() => {
+    if (!registerResolver) return;
+    return registerResolver((id: string) => {
+      setBlockers((prev) => prev.filter((b) => b.id !== id));
+    });
+  }, [registerResolver]);
 
   useEffect(() => { onCountChange?.(blockers.length); }, [blockers.length, onCountChange]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -1160,6 +1180,7 @@ function ActionItemsPanel({
   intakeSourceMap = {},
   onNewItemsSuggested,
   registerAdder,
+  registerResolver,
   onMeetingToggle,
   orgId,
 }: {
@@ -1173,6 +1194,7 @@ function ActionItemsPanel({
   intakeSourceMap?: Record<string, string>;
   onNewItemsSuggested?: (items: { title: string; suggested_type?: string; priority?: string; description?: string }[]) => void;
   registerAdder?: (fn: (item: ActionRow) => void) => () => void;
+  registerResolver?: (fn: (id: string) => void) => () => void;
   onMeetingToggle?: () => void;
   orgId: string;
 }) {
@@ -1185,6 +1207,13 @@ function ActionItemsPanel({
       setActions((prev) => [...prev, newItem]);
     });
   }, [registerAdder]);
+
+  useEffect(() => {
+    if (!registerResolver) return;
+    return registerResolver((id: string) => {
+      setActions((prev) => prev.filter((a) => a.id !== id));
+    });
+  }, [registerResolver]);
 
   useEffect(() => { onCountChange?.(actions.length); }, [actions.length, onCountChange]);
   const [expandedId, setExpandedId] = useState<string | null>(null);

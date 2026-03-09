@@ -163,6 +163,7 @@ export function AgendaView({
   onNewItemsSuggested,
   onPersonAdded,
   onVendorAdded,
+  onItemResolved,
   refreshTrigger,
 }: {
   project: Project;
@@ -173,6 +174,7 @@ export function AgendaView({
   onNewItemsSuggested?: (items: { title: string; suggested_type?: string; priority?: string; description?: string }[]) => void;
   onPersonAdded?: (person: Person) => void;
   onVendorAdded?: (vendor: Vendor) => void;
+  onItemResolved?: (entityType: string, entityId: string) => void;
   refreshTrigger?: number;
 }) {
   const [items, setItems] = useState(initialItems);
@@ -269,6 +271,7 @@ export function AgendaView({
 
     setResolvingId(null);
     setItems((prev) => prev.filter((i) => i.entity_id !== item.entity_id));
+    onItemResolved?.(item.entity_type, item.entity_id);
     router.refresh();
   }
 
