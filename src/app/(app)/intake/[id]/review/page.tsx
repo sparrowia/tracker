@@ -876,7 +876,11 @@ export default function IntakeReviewPage() {
         }
       }
 
-      router.push("/dashboard");
+      // Mark intake as confirmed
+      await supabase.from("intakes").update({ extraction_status: "confirmed" }).eq("id", intake.id);
+
+      // Force a full navigation to dashboard
+      window.location.href = "/dashboard";
     } catch (err) {
       console.error("[Confirm] Error:", err);
       setError(err instanceof Error ? err.message : "Failed to confirm");
