@@ -317,7 +317,13 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
       setEntries((prev) => prev.map((e) => e.id === id ? { ...e, vendor_id: value || null, vendor: newVendor } as RaidRow : e));
     } else {
       dbUpdates[field] = value || null;
-      setEntries((prev) => prev.map((e) => e.id === id ? { ...e, [field]: value || null } as RaidRow : e));
+      const resolvedStatuses = entry.raid_type === "risk" ? ["closed", "mitigated"] : ["complete", "closed"];
+      if (field === "status" && !resolvedStatuses.includes(value)) {
+        dbUpdates.resolved_at = null;
+        setEntries((prev) => prev.map((e) => e.id === id ? { ...e, [field]: value || null, resolved_at: null } as RaidRow : e));
+      } else {
+        setEntries((prev) => prev.map((e) => e.id === id ? { ...e, [field]: value || null } as RaidRow : e));
+      }
     }
 
     supabase.from("raid_entries").update(dbUpdates).eq("id", id).then(({ error }) => {

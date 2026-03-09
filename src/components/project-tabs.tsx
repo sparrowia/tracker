@@ -749,7 +749,12 @@ function BlockersPanel({
       setBlockers((prev) => prev.map((b) => b.id === id ? { ...b, vendor_id: value || null, vendor: newVendor } as BlockerRow : b));
     } else {
       dbUpdates[field] = value || null;
-      setBlockers((prev) => prev.map((b) => b.id === id ? { ...b, [field]: value || null } as BlockerRow : b));
+      if (field === "status" && value !== "complete") {
+        dbUpdates.resolved_at = null;
+        setBlockers((prev) => prev.map((b) => b.id === id ? { ...b, [field]: value || null, resolved_at: null } as BlockerRow : b));
+      } else {
+        setBlockers((prev) => prev.map((b) => b.id === id ? { ...b, [field]: value || null } as BlockerRow : b));
+      }
     }
 
     supabase.from("blockers").update(dbUpdates).eq("id", id).then(({ error }) => {
@@ -1267,7 +1272,13 @@ function ActionItemsPanel({
       setActions((prev) => prev.map((a) => a.id === id ? { ...a, vendor_id: value || null, vendor: newVendor } as ActionRow : a));
     } else {
       dbUpdates[field] = value || null;
-      setActions((prev) => prev.map((a) => a.id === id ? { ...a, [field]: value || null } as ActionRow : a));
+      // When changing status away from complete, clear resolved_at so RPC picks it up again
+      if (field === "status" && value !== "complete") {
+        dbUpdates.resolved_at = null;
+        setActions((prev) => prev.map((a) => a.id === id ? { ...a, [field]: value || null, resolved_at: null } as ActionRow : a));
+      } else {
+        setActions((prev) => prev.map((a) => a.id === id ? { ...a, [field]: value || null } as ActionRow : a));
+      }
     }
 
     supabase.from("action_items").update(dbUpdates).eq("id", id).then(({ error }) => {
