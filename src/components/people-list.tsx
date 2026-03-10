@@ -216,7 +216,8 @@ export default function PeopleList({ initialPeople, vendors, profiles, initialIn
             className="mt-1 w-full text-sm rounded border border-gray-300 px-2 py-1.5 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
           />
         </div>
-        <div className="flex items-center justify-between mt-3 max-w-3xl">
+        {/* Actions bar — full width with border, matching RAID log */}
+        <div className="flex justify-between items-center px-5 py-2 border-t border-gray-200 mt-3 -mx-4 -mb-4">
           <div className="flex items-center gap-3">
             {role === "super_admin" && (
               <button
