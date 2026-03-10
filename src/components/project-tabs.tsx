@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback, Fragment } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { priorityColor, priorityLabel, statusBadge, formatAge, formatDateShort } from "@/lib/utils";
-import type { Project, ActionItem, RaidEntry, Blocker, Person, Vendor, ProjectAgendaRow, PriorityLevel, ItemStatus, Intake, IntakeSource } from "@/lib/types";
+import type { Project, ActionItem, RaidEntry, Blocker, Person, Vendor, ProjectAgendaRow, PriorityLevel, ItemStatus, Intake, IntakeSource, ProjectDocument } from "@/lib/types";
 import RaidLog from "@/components/raid-log";
 import { AgendaView } from "@/components/agenda-view";
 import OwnerPicker from "@/components/owner-picker";
@@ -14,7 +14,7 @@ import VendorPicker from "@/components/vendor-picker";
 import { useRole } from "@/components/role-context";
 import { canCreate, canDelete, canEditItem } from "@/lib/permissions";
 
-type Tab = "actions" | "blockers" | "raid" | "agenda" | "intake";
+type Tab = "actions" | "blockers" | "raid" | "agenda" | "intake" | "docs";
 
 type SuggestedItem = {
   id: string;
@@ -42,9 +42,10 @@ const TAB_LABELS: Record<Tab, string> = {
   raid: "RAID Log",
   agenda: "Meeting Agenda",
   intake: "Intake",
+  docs: "Docs",
 };
 
-const DEFAULT_ORDER: Tab[] = ["actions", "blockers", "raid", "agenda", "intake"];
+const DEFAULT_ORDER: Tab[] = ["actions", "blockers", "raid", "agenda", "intake", "docs"];
 const STORAGE_KEY = "project-tab-order";
 
 function loadTabOrder(): Tab[] {
@@ -101,6 +102,7 @@ export default function ProjectTabs({
     raid: raidEntries.length,
     agenda: agendaRows.length,
     intake: intakes.length,
+    docs: 0,
   });
 
   const addPerson = useCallback((person: Person) => {
@@ -323,6 +325,10 @@ export default function ProjectTabs({
 
         <div style={{ display: active === "intake" ? "block" : "none" }}>
           <IntakePanel project={project} initialIntakes={intakes} vendors={vendorsList} onCountChange={setIntakeCount} />
+        </div>
+
+        <div style={{ display: active === "docs" ? "block" : "none" }}>
+          <DocsPanel projectId={project.id} />
         </div>
       </div>
       <UndoToast stack={undoStack} onUndo={performUndo} onDismiss={dismissUndo} />
@@ -2308,4 +2314,279 @@ function IntakePanel({
       )}
     </div>
   );
+}
+
+/* ─── Docs Panel ─── */
+
+function DocsPanel({ projectId }: { projectId: string }) {
+  const supabase = createClient();
+  const [sections, setSections] = useState<ProjectDocument[]>([]);
+  const [activeSection, setActiveSection] = useState<string | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Ask feature state
+  const [question, setQuestion] = useState("");
+  const [asking, setAsking] = useState(false);
+  const [chatHistory, setChatHistory] = useState<{ role: "user" | "assistant"; text: string; sources?: string[] }[]>([]);
+
+  // Load existing docs on mount
+  useEffect(() => {
+    supabase
+      .from("project_documents")
+      .select("*")
+      .eq("project_id", projectId)
+      .order("sort_order")
+      .then(({ data }) => {
+        const docs = (data || []) as ProjectDocument[];
+        setSections(docs);
+        if (docs.length > 0) setActiveSection(docs[0].section_key);
+        setLoading(false);
+      });
+  }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function handleGenerate() {
+    setGenerating(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/docs/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ project_id: projectId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to generate");
+      const docs = (data.sections || []) as ProjectDocument[];
+      setSections(docs);
+      if (docs.length > 0) setActiveSection(docs[0].section_key);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Generation failed");
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  async function handleAsk() {
+    const q = question.trim();
+    if (!q || asking) return;
+    setAsking(true);
+    setChatHistory((prev) => [...prev, { role: "user", text: q }]);
+    setQuestion("");
+    try {
+      const res = await fetch("/api/docs/ask", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ project_id: projectId, question: q }),
+      });
+      const data = await res.json();
+      setChatHistory((prev) => [...prev, { role: "assistant", text: data.answer || data.error || "No response", sources: data.sources }]);
+    } catch {
+      setChatHistory((prev) => [...prev, { role: "assistant", text: "Failed to get answer. Please try again." }]);
+    } finally {
+      setAsking(false);
+    }
+  }
+
+  const current = sections.find((s) => s.section_key === activeSection);
+
+  if (loading) {
+    return <div className="text-sm text-gray-400 py-8 text-center">Loading documentation...</div>;
+  }
+
+  return (
+    <div>
+      {/* Header bar */}
+      <div className="bg-gray-800 text-white px-4 py-2 rounded-t flex items-center justify-between">
+        <span className="text-xs font-semibold uppercase tracking-wider">Project Documentation</span>
+        <button
+          onClick={handleGenerate}
+          disabled={generating}
+          className="text-xs bg-blue-600 hover:bg-blue-500 disabled:bg-gray-600 text-white px-3 py-1 rounded transition-colors font-medium"
+        >
+          {generating ? "Generating..." : sections.length > 0 ? "Regenerate" : "Generate Documentation"}
+        </button>
+      </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-2">{error}</div>
+      )}
+
+      {sections.length === 0 && !generating ? (
+        <div className="border border-t-0 border-gray-300 rounded-b px-6 py-12 text-center">
+          <p className="text-gray-500 text-sm">No documentation generated yet.</p>
+          <p className="text-gray-400 text-xs mt-1">Click &ldquo;Generate Documentation&rdquo; to create a comprehensive project document from all tasks, risks, blockers, and decisions.</p>
+        </div>
+      ) : generating ? (
+        <div className="border border-t-0 border-gray-300 rounded-b px-6 py-12 text-center">
+          <div className="inline-flex items-center gap-2 text-gray-500 text-sm">
+            <svg className="animate-spin h-4 w-4 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+            Analyzing project data and generating documentation...
+          </div>
+        </div>
+      ) : (
+        <div className="border border-t-0 border-gray-300 rounded-b flex" style={{ minHeight: 400 }}>
+          {/* Index sidebar */}
+          <div className="w-56 border-r border-gray-200 bg-gray-50 flex-shrink-0">
+            <div className="px-3 py-2 border-b border-gray-200">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Index</span>
+            </div>
+            <nav className="py-1">
+              {sections.map((s) => (
+                <button
+                  key={s.section_key}
+                  onClick={() => setActiveSection(s.section_key)}
+                  className={`w-full text-left px-3 py-1.5 text-sm transition-colors ${
+                    activeSection === s.section_key
+                      ? "bg-blue-50 text-blue-700 font-medium border-l-2 border-blue-600"
+                      : "text-gray-600 hover:bg-gray-100 border-l-2 border-transparent"
+                  }`}
+                >
+                  {s.section_title}
+                </button>
+              ))}
+            </nav>
+            {/* Generated timestamp */}
+            {sections[0] && (
+              <div className="px-3 py-2 border-t border-gray-200 mt-auto">
+                <span className="text-[10px] text-gray-400">Generated {new Date(sections[0].generated_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Content area */}
+          <div className="flex-1 flex flex-col min-w-0">
+            {current ? (
+              <div className="flex-1 overflow-auto px-6 py-4">
+                <div className="prose prose-sm max-w-none prose-headings:text-gray-900 prose-p:text-gray-700 prose-li:text-gray-700 prose-strong:text-gray-900">
+                  <MarkdownRenderer content={current.content} />
+                </div>
+              </div>
+            ) : (
+              <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">Select a section from the index</div>
+            )}
+
+            {/* Ask bar */}
+            <div className="border-t border-gray-200 bg-gray-50 px-4 py-3">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-2">Ask about this project</div>
+              {chatHistory.length > 0 && (
+                <div className="mb-3 space-y-2 max-h-48 overflow-y-auto">
+                  {chatHistory.map((msg, i) => (
+                    <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                      <div className={`max-w-[80%] rounded px-3 py-1.5 text-sm ${msg.role === "user" ? "bg-blue-600 text-white" : "bg-white border border-gray-200 text-gray-700"}`}>
+                        {msg.role === "assistant" ? <MarkdownRenderer content={msg.text} /> : msg.text}
+                        {msg.sources && msg.sources.length > 0 && (
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {msg.sources.map((s, j) => (
+                              <span key={j} className="text-[10px] bg-gray-100 text-gray-500 rounded px-1.5 py-0.5">{s}</span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  {asking && (
+                    <div className="flex justify-start">
+                      <div className="bg-white border border-gray-200 rounded px-3 py-1.5 text-sm text-gray-400">Thinking...</div>
+                    </div>
+                  )}
+                </div>
+              )}
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={question}
+                  onChange={(e) => setQuestion(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleAsk(); } }}
+                  placeholder="Ask a question about this project's documentation..."
+                  className="flex-1 rounded border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+                  disabled={asking}
+                />
+                <button
+                  onClick={handleAsk}
+                  disabled={asking || !question.trim()}
+                  className="bg-blue-600 hover:bg-blue-500 disabled:bg-gray-300 text-white text-sm px-4 py-1.5 rounded transition-colors font-medium"
+                >
+                  Ask
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Simple Markdown Renderer ─── */
+
+function MarkdownRenderer({ content }: { content: string }) {
+  const html = markdownToHtml(content);
+  return <div dangerouslySetInnerHTML={{ __html: html }} />;
+}
+
+function markdownToHtml(md: string): string {
+  let html = md
+    // Headers
+    .replace(/^### (.+)$/gm, '<h3 class="text-sm font-semibold text-gray-900 mt-4 mb-1">$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2 class="text-base font-semibold text-gray-900 mt-5 mb-2">$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1 class="text-lg font-bold text-gray-900 mt-6 mb-2">$1</h1>')
+    // Bold and italic
+    .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    // Inline code
+    .replace(/`([^`]+)`/g, '<code class="bg-gray-100 px-1 py-0.5 rounded text-xs">$1</code>')
+    // Horizontal rules
+    .replace(/^---$/gm, '<hr class="my-4 border-gray-200" />');
+
+  // Process tables
+  html = html.replace(/(\|.+\|[\r\n]+\|[-| :]+\|[\r\n]+((\|.+\|[\r\n]*)+))/g, (table) => {
+    const lines = table.trim().split("\n").filter((l) => l.trim());
+    if (lines.length < 2) return table;
+    const headerCells = lines[0].split("|").filter((c) => c.trim());
+    const bodyLines = lines.slice(2); // skip header and separator
+    let t = '<table class="w-full text-sm border border-gray-200 my-3"><thead><tr>';
+    headerCells.forEach((c) => { t += `<th class="bg-gray-50 border border-gray-200 px-2 py-1 text-left text-xs font-medium text-gray-500">${c.trim()}</th>`; });
+    t += "</tr></thead><tbody>";
+    bodyLines.forEach((line) => {
+      const cells = line.split("|").filter((c) => c.trim());
+      t += "<tr>";
+      cells.forEach((c) => { t += `<td class="border border-gray-200 px-2 py-1">${c.trim()}</td>`; });
+      t += "</tr>";
+    });
+    t += "</tbody></table>";
+    return t;
+  });
+
+  // Process bullet lists (unordered)
+  html = html.replace(/(^[ \t]*[-*] .+$(\n|$))+/gm, (block) => {
+    const items = block.trim().split("\n").map((line) => {
+      const text = line.replace(/^[ \t]*[-*] /, "");
+      return `<li class="text-sm text-gray-700">${text}</li>`;
+    });
+    return `<ul class="list-disc pl-5 my-2 space-y-0.5">${items.join("")}</ul>`;
+  });
+
+  // Process numbered lists
+  html = html.replace(/(^[ \t]*\d+\. .+$(\n|$))+/gm, (block) => {
+    const items = block.trim().split("\n").map((line) => {
+      const text = line.replace(/^[ \t]*\d+\. /, "");
+      return `<li class="text-sm text-gray-700">${text}</li>`;
+    });
+    return `<ol class="list-decimal pl-5 my-2 space-y-0.5">${items.join("")}</ol>`;
+  });
+
+  // Paragraphs: wrap remaining plain text lines
+  html = html.split("\n").map((line) => {
+    const trimmed = line.trim();
+    if (!trimmed) return "";
+    if (trimmed.startsWith("<")) return line;
+    return `<p class="text-sm text-gray-700 my-1">${trimmed}</p>`;
+  }).join("\n");
+
+  return html;
 }

@@ -55,6 +55,19 @@ export interface Profile {
   updated_at: string;
 }
 
+export interface ProjectDocument {
+  id: string;
+  org_id: string;
+  project_id: string;
+  section_key: string;
+  section_title: string;
+  content: string;
+  sort_order: number;
+  generated_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Invitation {
   id: string;
   org_id: string;
