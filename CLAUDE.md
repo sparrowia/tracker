@@ -65,12 +65,13 @@ src/
 │   ├── vendor-agenda-view.tsx    # Vendor meeting agenda — same layout as agenda-view for vendor detail pages
 │   ├── project-tabs.tsx          # Project detail tabs (actions, blockers, RAID, agenda, intake) with cross-tab state sync
 │   ├── raid-log.tsx              # RAID log with columns, filters, archived view, subtasks, drag-and-drop
+│   ├── people-list.tsx            # People page client component — inline editing, status badges, invite, impersonation
 │   ├── comment-thread.tsx        # Threaded comments with file attachments
 │   ├── owner-picker.tsx          # Person selection dropdown with inline creation
 │   ├── vendor-picker.tsx         # Vendor selection dropdown with inline creation
-│   ├── role-context.tsx          # React context providing role, profileId, vendorId, userPersonId
+│   ├── role-context.tsx          # React context providing role, profileId, vendorId, userPersonId + impersonation
 │   ├── sidebar.tsx               # App navigation sidebar (role-aware)
-│   └── topbar.tsx                # Top bar
+│   └── topbar.tsx                # Top bar with impersonation banner
 └── lib/
     ├── types.ts                  # All TypeScript interfaces
     ├── utils.ts                  # Formatting helpers (priorityColor, formatAge, etc.)
@@ -164,7 +165,7 @@ Separate SELECT/INSERT/UPDATE/DELETE policies on every data table. Vendor-scoped
 ### UI Enforcement
 
 - **`src/lib/permissions.ts`**: `canCreate(role)`, `canDelete(role)`, `canEditItem(role, profileId, item, userPersonId)`, `canUpdateStatus(role)`, `canInvite(role)`
-- **`src/components/role-context.tsx`**: React context (`useRole()` hook) provides role, profileId, orgId, vendorId, userPersonId to all client components
+- **`src/components/role-context.tsx`**: React context (`useRole()` hook) provides role, profileId, orgId, vendorId, userPersonId, impersonation, stopImpersonation to all client components
 - **`src/app/(app)/layout.tsx`**: Wraps app in `<RoleProvider>`
 - **`src/components/sidebar.tsx`**: Hides admin pages from users/vendors; hides Intake/Ask from vendors
 - Components (raid-log, agenda-view, comment-thread, pickers) check permissions to show/hide create, delete, edit controls
@@ -189,6 +190,33 @@ Separate SELECT/INSERT/UPDATE/DELETE policies on every data table. Vendor-scoped
 - Pending invitations table with resend/cancel
 - Deactivated users (collapsible) with reactivate button (super_admin only)
 - Invite form: email, role dropdown, vendor picker (for vendor role)
+
+### Impersonation (super_admin only)
+
+Super admins can impersonate any person from the People page (`/settings/people`). Stored in `sessionStorage` under key `"impersonation"`, picked up by `RoleProvider` via a custom `"impersonation-change"` event. While impersonating:
+- Role context overrides `role`, `vendorId`, and `userPersonId` to match the impersonated person
+- Purple banner in topbar shows "Viewing as [Name] (role)" with a Stop button
+- All permission checks (sidebar, create/edit/delete buttons) reflect the impersonated role
+- RLS still uses the real auth user, so all data remains visible — impersonation is UI-level only
+
+### People Page (`/settings/people`)
+
+Client component `people-list.tsx` with:
+- Click-to-expand inline editing for all person fields (name, title, email, phone, vendor, internal, notes)
+- Checking "Internal" clears vendor assignment and hides vendor field
+- Contact status badges: **Joined** (has profile_id), **Invited** (pending invitation by email match), **Added** (manually created)
+- Invite button on "Added" contacts with email — calls `POST /api/invite` with role inferred from vendor_id
+- "+ Add Person" / "+ Add Contact" buttons on section headers
+- Delete via trash icon in full-width action bar (matching RAID log pattern)
+- Impersonate button for super_admin
+
+## Inline Add Pattern
+
+Consistent inline add form across RAID log, Action Items, Blockers, and People:
+- "+ Add [Type]" button in the dark header bar
+- Blue-50 background form appears below header with title input, priority selector, Add/Cancel buttons
+- Enter to submit, Escape to cancel
+- New item inserted into DB with `created_by: profileId` and auto-added to local state
 
 ## RAID Log — Decisions
 
