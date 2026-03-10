@@ -95,9 +95,10 @@ The app uses a consistent Asana-inspired visual style across all pages:
 - **Resolve animation:** Inline `transition: all 350ms ease-out` — green flash + fade + collapse
 - **Comments:** Below description in expanded detail panels; auto-author from logged-in user; Cmd+Enter posting; file attachments via Supabase Storage bucket `comment-attachments`
 - **VendorPicker:** Inline "+ Add Vendor" creation, same pattern as OwnerPicker
-- **Meeting Agenda:** Same RAID-style layout — complete circles with resolve animation, disclosure triangles for subtask groups, bell toggles, collapsible priority groups, editable detail panels (title, owner via OwnerPicker, vendor via VendorPicker, priority, context, ask). Call Notes textarea with AI "Process Notes" button.
-- **Cross-tab state sync:** Resolving an item from Meeting Agenda updates the source tab (Action Items / Blockers) via `registerResolver` callback pattern on `itemAddersRef`. Undo restores both the agenda and source tab state. Same ref pattern used for `registerAdder` when creating items from RAID log conversions or AI suggestions.
-- **Undo system:** `useUndo` hook in project-tabs provides a toast stack (up to 5). Panels receive `addUndo` prop. Undo callbacks restore DB state and re-add items to local state.
+- **Meeting Agenda:** Same RAID-style layout — complete circles with resolve animation, disclosure triangles for subtask groups, bell toggles, collapsible priority groups. Fully editable detail panels: title, owner (OwnerPicker), vendor (VendorPicker), priority, status, due date, RAID type (risk/issue/assumption/decision dropdown), context, ask. Call Notes textarea with AI "Process Notes" button. Vendor agenda also shows linked project names.
+- **Cross-tab state sync:** ALL field edits from Meeting Agenda sync to source tabs (Action Items, Blockers, RAID Log) via `registerUpdater` callback pattern on `itemAddersRef`. Resolving uses `registerResolver`. Undo restores both agenda and source tab state. Same ref pattern used for `registerAdder` when creating items from RAID log conversions or AI suggestions.
+- **Undo system:** `useUndo` hook in project-tabs provides a toast stack (up to 5). Panels and AgendaView receive `addUndo` prop. Undo callbacks restore DB state and re-add items to local state.
+- **Supabase query execution:** Fire-and-forget Supabase queries MUST have `.then(() => {})` appended — the query builder is lazy and won't execute unless the promise is consumed.
 
 ## Key Data Models
 
@@ -114,7 +115,8 @@ Defined in `src/lib/types.ts`:
 - **CommentAttachment** — file attachments on comments (Supabase Storage)
 - **SupportTicket** — external support requests
 - **Intake** — raw text submissions for AI extraction
-- **VendorAgendaRow** — RPC output for ranked agenda generation
+- **ProjectAgendaRow** — RPC output for project agenda (includes status, due_date, owner_id, vendor_id)
+- **VendorAgendaRow** — RPC output for vendor agenda (includes status, due_date, project_slug, owner_id, vendor_id)
 - **VendorAccountabilityRow** — combined view of vendor action items + blockers
 
 ## Development
