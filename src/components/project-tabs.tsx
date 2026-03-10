@@ -318,7 +318,7 @@ export default function ProjectTabs({
         </div>
 
         <div style={{ display: active === "actions" ? "block" : "none" }}>
-          <ActionItemsPanel actions={actions} people={peopleList} vendors={vendorsList} onPersonAdded={addPerson} onVendorAdded={addVendor} addUndo={addUndo} onCountChange={setActionCount} intakeSourceMap={intakeSourceMap} onNewItemsSuggested={onNewItemsSuggested} registerAdder={(fn) => { itemAddersRef.current.addAction = fn; return () => { itemAddersRef.current.addAction = undefined; }; }} registerResolver={(fn) => { itemAddersRef.current.resolveAction = fn; return () => { itemAddersRef.current.resolveAction = undefined; }; }} registerUpdater={(fn) => { itemAddersRef.current.updateAction = fn; return () => { itemAddersRef.current.updateAction = undefined; }; }} onMeetingToggle={bumpAgendaRefresh} orgId={project.org_id} />
+          <ActionItemsPanel actions={actions} people={peopleList} vendors={vendorsList} onPersonAdded={addPerson} onVendorAdded={addVendor} addUndo={addUndo} onCountChange={setActionCount} intakeSourceMap={intakeSourceMap} onNewItemsSuggested={onNewItemsSuggested} registerAdder={(fn) => { itemAddersRef.current.addAction = fn; return () => { itemAddersRef.current.addAction = undefined; }; }} registerResolver={(fn) => { itemAddersRef.current.resolveAction = fn; return () => { itemAddersRef.current.resolveAction = undefined; }; }} registerUpdater={(fn) => { itemAddersRef.current.updateAction = fn; return () => { itemAddersRef.current.updateAction = undefined; }; }} onMeetingToggle={bumpAgendaRefresh} orgId={project.org_id} projectId={project.id} />
         </div>
 
         <div style={{ display: active === "intake" ? "block" : "none" }}>
@@ -1226,6 +1226,7 @@ function ActionItemsPanel({
   registerUpdater,
   onMeetingToggle,
   orgId,
+  projectId,
 }: {
   actions: ActionRow[];
   people: Person[];
@@ -1241,6 +1242,7 @@ function ActionItemsPanel({
   registerUpdater?: (fn: (id: string, field: string, value: string, person?: Person | null, vendor?: Vendor | null) => void) => () => void;
   onMeetingToggle?: () => void;
   orgId: string;
+  projectId: string;
 }) {
   const { role, profileId, userPersonId } = useRole();
   const [actions, setActions] = useState<ActionRow[]>(initialActions);
@@ -1279,6 +1281,9 @@ function ActionItemsPanel({
   const [savingNotes, setSavingNotes] = useState(false);
   const [visibleCols, setVisibleCols] = useState<ActionColumnKey[]>(loadActionColumns);
   const [showColPicker, setShowColPicker] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [addTitle, setAddTitle] = useState("");
+  const [addPriority, setAddPriority] = useState<PriorityLevel>("medium");
   const colPickerRef = useRef<HTMLDivElement>(null);
   const supabase = createClient();
 
@@ -1464,41 +1469,115 @@ function ActionItemsPanel({
     }
   }
 
-  if (actions.length === 0) {
-    return <p className="text-sm text-gray-500">No action items.</p>;
+  async function handleAdd() {
+    if (!addTitle.trim()) return;
+    const { data, error } = await supabase
+      .from("action_items")
+      .insert({
+        title: addTitle.trim(),
+        priority: addPriority,
+        status: "pending" as ItemStatus,
+        project_id: projectId,
+        org_id: orgId,
+        created_by: profileId,
+      })
+      .select("*, owner:people!action_items_owner_id_fkey(*), vendor:vendors(*)")
+      .single();
+
+    if (error) {
+      console.error("Add failed:", error);
+      return;
+    }
+    if (data) {
+      setActions((prev) => [...prev, data as ActionRow]);
+      setAddTitle("");
+      setAddPriority("medium");
+      setAdding(false);
+    }
   }
 
   return (
     <div className="bg-white rounded-lg border border-gray-300 overflow-hidden">
       <div className="bg-gray-800 px-4 py-2.5 flex items-center justify-between">
         <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Action Items ({actions.length})</h2>
-        <div className="relative" ref={colPickerRef}>
-          <button
-            onClick={() => setShowColPicker((p) => !p)}
-            className="text-white hover:text-gray-300 transition-colors"
-            title="Configure columns"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-            </svg>
-          </button>
-          {showColPicker && (
-            <div className="absolute right-0 top-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg z-20 py-1 w-44">
-              {ACTION_COLUMNS.map((col) => (
-                <label key={col.key} className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 cursor-pointer text-xs text-gray-700">
-                  <input
-                    type="checkbox"
-                    checked={visibleCols.includes(col.key)}
-                    onChange={() => toggleColumn(col.key)}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  {col.label}
-                </label>
-              ))}
-            </div>
+        <div className="flex items-center gap-3">
+          <div className="relative" ref={colPickerRef}>
+            <button
+              onClick={() => setShowColPicker((p) => !p)}
+              className="text-white hover:text-gray-300 transition-colors"
+              title="Configure columns"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+              </svg>
+            </button>
+            {showColPicker && (
+              <div className="absolute right-0 top-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg z-20 py-1 w-44">
+                {ACTION_COLUMNS.map((col) => (
+                  <label key={col.key} className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 cursor-pointer text-xs text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={visibleCols.includes(col.key)}
+                      onChange={() => toggleColumn(col.key)}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    {col.label}
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+          {canCreate(role) && (
+            <button
+              onClick={() => { setAdding(!adding); setAddTitle(""); setAddPriority("medium"); }}
+              className="text-xs text-blue-300 hover:text-white transition-colors"
+            >
+              + Add Action Item
+            </button>
           )}
         </div>
       </div>
+      {adding && (
+        <div className="bg-blue-50 border-b border-blue-200 p-3">
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={addTitle}
+              onChange={(e) => setAddTitle(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && addTitle.trim()) handleAdd(); if (e.key === "Escape") setAdding(false); }}
+              placeholder="New action item title..."
+              className="flex-1 rounded border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              autoFocus
+            />
+            <select
+              value={addPriority}
+              onChange={(e) => setAddPriority(e.target.value as PriorityLevel)}
+              className="rounded border border-gray-300 px-2 py-1 text-xs focus:border-blue-500 focus:outline-none"
+            >
+              {actionPriorityOptions.map((p) => (
+                <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</option>
+              ))}
+            </select>
+            <button
+              onClick={handleAdd}
+              disabled={!addTitle.trim()}
+              className="px-3 py-1 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50"
+            >
+              Add
+            </button>
+            <button
+              onClick={() => setAdding(false)}
+              className="px-2 py-1 text-xs text-gray-500 hover:text-gray-700"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+      {actions.length === 0 && !adding ? (
+        <p className="text-sm text-gray-400 p-4">No action items.</p>
+      ) : actions.length > 0 ? (
+        <>
       <div className="bg-gray-50 px-3 py-1 border-b border-gray-300">
         <div className="flex items-center gap-4">
           <div className="flex-1" />
@@ -1722,6 +1801,8 @@ function ActionItemsPanel({
           );
         })}
       </div>
+        </>
+      ) : null}
     </div>
   );
 }
