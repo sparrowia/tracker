@@ -32,6 +32,7 @@ const raidTypes: RaidType[] = ["risk", "assumption", "issue", "decision"];
 const priorityOptions: PriorityLevel[] = ["critical", "high", "medium", "low"];
 const statusOptions: ItemStatus[] = ["pending", "in_progress", "complete", "needs_verification", "paused", "at_risk", "blocked"];
 const riskStatusOptions: ItemStatus[] = ["identified", "assessing", "in_progress", "mitigated", "closed"];
+const decisionStatusOptions: ItemStatus[] = ["pending", "complete"];
 
 const typePrefix: Record<RaidType, string> = { risk: "R", assumption: "A", issue: "I", decision: "D" };
 
@@ -248,12 +249,15 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
             <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border ${priorityColor(entry.priority)}`}>{priorityLabel(entry.priority)}</span>
           </div>
         );
-      case "status":
+      case "status": {
+        const statusLabel = entry.raid_type === "decision" && entry.status === "complete" ? "Final" : badge.label;
+        const statusClass = entry.raid_type === "decision" && entry.status === "complete" ? "text-green-700 bg-green-100" : badge.className;
         return (
           <div className="w-[88px] flex-shrink-0 flex justify-end">
-            <span className={`inline-flex px-1.5 py-0.5 text-xs rounded ${badge.className}`}>{badge.label}</span>
+            <span className={`inline-flex px-1.5 py-0.5 text-xs rounded ${statusClass}`}>{statusLabel}</span>
           </div>
         );
+      }
       case "owner":
         return (
           <div className="w-[150px] flex-shrink-0 flex justify-end">
@@ -586,7 +590,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
 
   function renderQuadrant(label: string, raidType: RaidType, allItems: RaidRow[]) {
     const items = applyFilters(allItems);
-    const statusesForType = raidType === "risk" ? riskStatusOptions : statusOptions;
+    const statusesForType = raidType === "decision" ? decisionStatusOptions : raidType === "risk" ? riskStatusOptions : statusOptions;
     // Collect unique owners from unfiltered items for the filter dropdown
     const ownerOptions = Array.from(
       new Map(allItems.filter((e) => e.owner).map((e) => [e.owner!.id, e.owner!.full_name])).entries()
@@ -694,7 +698,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
               >
                 <option value="">Status</option>
                 {statusesForType.map((s) => (
-                  <option key={s} value={s}>{s.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase())}</option>
+                  <option key={s} value={s}>{raidType === "decision" && s === "complete" ? "Final" : s.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase())}</option>
                 ))}
               </select>
               <select
@@ -796,12 +800,12 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                     className={`border-b last:border-b-0 cursor-pointer relative ${isResolving ? "bg-green-100 opacity-0 border-transparent" : isDragging ? "opacity-40 bg-white border-gray-400" : isDropNest ? "bg-blue-50 border-blue-300" : "bg-white hover:bg-gray-50 border-gray-400"}`}
                     style={{ transition: isResolving ? "all 350ms ease-out" : undefined, paddingLeft: isChild ? "2rem" : "0.75rem", paddingRight: "0.75rem", ...(isResolving ? { maxHeight: 0, paddingTop: 0, paddingBottom: 0, overflow: "hidden" } : { maxHeight: 200, paddingTop: "0.5rem", paddingBottom: "0.5rem" }) }}
                     onClick={() => toggleExpand(entry.id)}
-                    draggable
-                    onDragStart={(e) => handleDragStart(entry.id, e)}
-                    onDragOver={(e) => handleDragOver(entry.id, e)}
-                    onDragEnd={handleDragEnd}
-                    onDrop={() => handleDrop(entry.id)}
-                    onDragLeave={() => { if (dropTarget?.id === entry.id) setDropTarget(null); }}
+                    draggable={entry.raid_type !== "decision"}
+                    onDragStart={entry.raid_type !== "decision" ? (e) => handleDragStart(entry.id, e) : undefined}
+                    onDragOver={entry.raid_type !== "decision" ? (e) => handleDragOver(entry.id, e) : undefined}
+                    onDragEnd={entry.raid_type !== "decision" ? handleDragEnd : undefined}
+                    onDrop={entry.raid_type !== "decision" ? () => handleDrop(entry.id) : undefined}
+                    onDragLeave={entry.raid_type !== "decision" ? () => { if (dropTarget?.id === entry.id) setDropTarget(null); } : undefined}
                   >
                     {/* Drop indicator lines */}
                     {isDropAbove && <div className="absolute top-0 left-0 right-0 h-0.5 bg-blue-500 -translate-y-px z-10" />}
@@ -810,38 +814,42 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                       {isChild && (
                         <span className="text-gray-300 flex-shrink-0 -ml-2 mr--2">↳</span>
                       )}
-                      {/* Subtask toggle */}
-                      {childCount > 0 ? (
+                      {/* Subtask toggle — not for decisions */}
+                      {entry.raid_type !== "decision" && (
+                        childCount > 0 ? (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setExpandedParents((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(entry.id)) next.delete(entry.id);
+                                else next.add(entry.id);
+                                return next;
+                              });
+                            }}
+                            className="flex items-center gap-1 text-[10px] text-[#000000] hover:text-[#000000] flex-shrink-0 transition-colors w-[20px] justify-center"
+                            title={expandedParents.has(entry.id) ? "Hide subtasks" : "Show subtasks"}
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="currentColor" stroke="none" className={`transition-transform ${expandedParents.has(entry.id) ? "rotate-90" : ""}`}>
+                              <polygon points="6,4 20,12 6,20" />
+                            </svg>
+                          </button>
+                        ) : (
+                          <span className="w-[20px] flex-shrink-0" />
+                        )
+                      )}
+                      {/* Complete button — not for decisions */}
+                      {entry.raid_type !== "decision" && (
                         <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setExpandedParents((prev) => {
-                              const next = new Set(prev);
-                              if (next.has(entry.id)) next.delete(entry.id);
-                              else next.add(entry.id);
-                              return next;
-                            });
-                          }}
-                          className="flex items-center gap-1 text-[10px] text-[#000000] hover:text-[#000000] flex-shrink-0 transition-colors w-[20px] justify-center"
-                          title={expandedParents.has(entry.id) ? "Hide subtasks" : "Show subtasks"}
+                          onClick={(e) => { e.stopPropagation(); handleResolve(entry.id); }}
+                          className="w-[18px] h-[18px] rounded-full border-2 border-gray-300 hover:border-green-500 hover:bg-green-50 flex items-center justify-center flex-shrink-0 transition-colors group/check"
+                          title="Resolve"
                         >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="currentColor" stroke="none" className={`transition-transform ${expandedParents.has(entry.id) ? "rotate-90" : ""}`}>
-                            <polygon points="6,4 20,12 6,20" />
+                          <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-transparent group-hover/check:text-green-500 transition-colors">
+                            <polyline points="20 6 9 17 4 12" />
                           </svg>
                         </button>
-                      ) : (
-                        <span className="w-[20px] flex-shrink-0" />
                       )}
-                      {/* Complete button */}
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleResolve(entry.id); }}
-                        className="w-[18px] h-[18px] rounded-full border-2 border-gray-300 hover:border-green-500 hover:bg-green-50 flex items-center justify-center flex-shrink-0 transition-colors group/check"
-                        title="Resolve"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-transparent group-hover/check:text-green-500 transition-colors">
-                          <polyline points="20 6 9 17 4 12" />
-                        </svg>
-                      </button>
                       {/* Meeting toggle */}
                       <button
                         onClick={(e) => { e.stopPropagation(); toggleMeeting(entry.id); }}
@@ -881,7 +889,41 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                     <div className="bg-white border-b border-gray-200" onClick={(e) => e.stopPropagation()}>
                       {/* Properties grid */}
                       <div className="border-t border-gray-200">
-                        <div className="grid grid-cols-[120px_1fr_120px_1fr] items-stretch">
+                        {entry.raid_type === "decision" ? (
+                          /* Simplified decision detail panel */
+                          <div className="grid grid-cols-[120px_1fr_120px_1fr] items-stretch">
+                            {/* Row: Status / Owner */}
+                            <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-200">Status</span>
+                            <div className="px-3 py-2.5 border-b border-gray-200">
+                              <select
+                                value={entry.status}
+                                onChange={(e) => saveField(entry.id, "status", e.target.value)}
+                                className="text-sm rounded border border-transparent hover:border-gray-300 bg-transparent py-0 focus:border-blue-500 focus:outline-none cursor-pointer -ml-0.5"
+                              >
+                                {decisionStatusOptions.map((s) => (
+                                  <option key={s} value={s}>{s === "complete" ? "Final" : "Pending"}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-200">Owner</span>
+                            <div className="px-3 py-1.5 border-b border-gray-200">
+                              <OwnerPicker
+                                value={entry.owner_id || ""}
+                                onChange={(id) => saveField(entry.id, "owner_id", id)}
+                                people={people}
+                                onPersonAdded={onPersonAdded}
+                              />
+                            </div>
+
+                            {/* Row: Decision Date */}
+                            <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-200">Decision Date</span>
+                            <div className="px-3 py-2.5 border-b border-gray-200 col-span-3">
+                              <InlineDate value={entry.decision_date} onSave={(v) => saveField(entry.id, "decision_date", v)} />
+                            </div>
+                          </div>
+                        ) : (
+                          /* Full detail panel for risks, assumptions, issues */
+                          <div className="grid grid-cols-[120px_1fr_120px_1fr] items-stretch">
                           {/* Row: Type / Priority */}
                           <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-200">Type</span>
                           <div className="px-3 py-2.5 border-b border-gray-200">
@@ -997,15 +1039,6 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                             </select>
                           </div>
 
-                          {/* Conditional: Decision Date / Resolved */}
-                          {entry.raid_type === "decision" && (
-                            <>
-                              <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-200">Decision Date</span>
-                              <div className="px-3 py-2.5 border-b border-gray-200 col-span-3">
-                                <InlineDate value={entry.decision_date} onSave={(v) => saveField(entry.id, "decision_date", v)} />
-                              </div>
-                            </>
-                          )}
                           {entry.resolved_at && (
                             <>
                               <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-200">Resolved</span>
@@ -1014,7 +1047,8 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                               </div>
                             </>
                           )}
-                        </div>
+                          </div>
+                        )}
                       </div>
 
                       {/* Description */}
