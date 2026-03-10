@@ -861,8 +861,14 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                           <path d="M13.73 21a2 2 0 0 1-3.46 0" />
                         </svg>
                       </button>
-                      {/* Title */}
-                      <span className={`text-sm font-semibold truncate min-w-0 ${isChild ? "text-gray-700" : "text-gray-900"}`}>{entry.title}</span>
+                      {/* Title — inline editable for decisions */}
+                      {entry.raid_type === "decision" ? (
+                        <span className="text-sm font-semibold min-w-0 flex-1" onClick={(e) => e.stopPropagation()}>
+                          <InlineText value={entry.title} onSave={(v) => { if (v.trim()) saveField(entry.id, "title", v.trim()); }} placeholder="Decision title..." />
+                        </span>
+                      ) : (
+                        <span className={`text-sm font-semibold truncate min-w-0 ${isChild ? "text-gray-700" : "text-gray-900"}`}>{entry.title}</span>
+                      )}
                       {childCount > 0 && (
                         <span className="text-[10px] text-[#000000] bg-gray-200 rounded px-1.5 py-0.5 flex-shrink-0">{childCount}</span>
                       )}
