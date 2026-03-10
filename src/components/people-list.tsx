@@ -5,28 +5,65 @@ import { createClient } from "@/lib/supabase/client";
 import { useRole } from "@/components/role-context";
 import { isAdmin } from "@/lib/permissions";
 import Link from "next/link";
-import type { Person, Vendor, Profile } from "@/lib/types";
+import type { Person, Vendor, Profile, Invitation } from "@/lib/types";
 
-type PersonRow = Person & { vendor: Vendor | null };
+type PersonRow = Omit<Person, "vendor"> & { vendor: Vendor | null };
+
+type ContactStatus = "joined" | "invited" | "added";
 
 interface PeopleListProps {
   initialPeople: PersonRow[];
   vendors: Vendor[];
   profiles: Pick<Profile, "id" | "role" | "vendor_id" | "full_name">[];
+  initialInvitations: Pick<Invitation, "id" | "email" | "accepted_at">[];
 }
 
-export default function PeopleList({ initialPeople, vendors, profiles }: PeopleListProps) {
-  const { role } = useRole();
+export default function PeopleList({ initialPeople, vendors, profiles, initialInvitations }: PeopleListProps) {
+  const { role, profileId, orgId } = useRole();
   const [people, setPeople] = useState<PersonRow[]>(initialPeople);
+  const [invitations, setInvitations] = useState(initialInvitations);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [addingInternal, setAddingInternal] = useState(false);
+  const [addingExternal, setAddingExternal] = useState(false);
+  const [addName, setAddName] = useState("");
+  const [invitingId, setInvitingId] = useState<string | null>(null);
   const supabase = createClient();
 
   const internal = people.filter((p) => p.is_internal);
   const external = people.filter((p) => !p.is_internal);
   const canEdit = isAdmin(role);
 
+  function getContactStatus(person: PersonRow): ContactStatus {
+    if (person.profile_id) return "joined";
+    if (person.email && invitations.some((inv) => inv.email.toLowerCase() === person.email!.toLowerCase() && !inv.accepted_at)) return "invited";
+    return "added";
+  }
+
+  function statusBadge(status: ContactStatus) {
+    switch (status) {
+      case "joined": return { label: "Joined", className: "text-green-700 bg-green-100" };
+      case "invited": return { label: "Invited", className: "text-blue-700 bg-blue-100" };
+      case "added": return { label: "Added", className: "text-gray-700 bg-gray-100" };
+    }
+  }
+
   function saveField(id: string, field: string, value: string | boolean | null) {
     const dbUpdates: Record<string, unknown> = { [field]: value };
+
+    // When toggling to internal, also clear vendor
+    if (field === "is_internal" && value === true) {
+      dbUpdates.vendor_id = null;
+      setPeople((prev) => prev.map((p) => {
+        if (p.id !== id) return p;
+        const updated = { ...p, is_internal: true, vendor_id: null };
+        updated.vendor = null;
+        return updated;
+      }));
+      supabase.from("people").update(dbUpdates).eq("id", id).then(({ error }) => {
+        if (error) console.error("Save failed:", error);
+      });
+      return;
+    }
 
     if (field === "vendor_id") {
       const newVendor = vendors.find((v) => v.id === value) || null;
@@ -48,23 +85,68 @@ export default function PeopleList({ initialPeople, vendors, profiles }: PeopleL
     }
   }
 
-  function startImpersonation(person: PersonRow) {
-    // Find linked profile for this person
-    const linkedProfile = person.profile_id ? profiles.find((pr) => pr.id === person.profile_id) : null;
+  async function handleAdd(isInternal: boolean) {
+    if (!addName.trim()) return;
+    const { data, error } = await supabase
+      .from("people")
+      .insert({
+        full_name: addName.trim(),
+        org_id: orgId,
+        is_internal: isInternal,
+        created_by: profileId,
+      })
+      .select("*, vendor:vendors(*)")
+      .single();
+    if (!error && data) {
+      setPeople((prev) => [...prev, data as PersonRow]);
+      setAddName("");
+      setAddingInternal(false);
+      setAddingExternal(false);
+      setExpandedId(data.id);
+    }
+  }
 
+  async function handleInvite(person: PersonRow) {
+    if (!person.email) return;
+    setInvitingId(person.id);
+    try {
+      const inviteRole = person.vendor_id ? "vendor" : "user";
+      const res = await fetch("/api/invite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: person.email,
+          role: inviteRole,
+          vendor_id: person.vendor_id || undefined,
+        }),
+      });
+      const result = await res.json();
+      if (res.ok) {
+        setInvitations((prev) => [...prev, { id: result.invitation.id, email: person.email!, accepted_at: null }]);
+      } else {
+        alert(result.error || "Failed to send invitation");
+      }
+    } catch {
+      alert("Failed to send invitation");
+    } finally {
+      setInvitingId(null);
+    }
+  }
+
+  function startImpersonation(person: PersonRow) {
+    const linkedProfile = person.profile_id ? profiles.find((pr) => pr.id === person.profile_id) : null;
     const impersonation = {
       personId: person.id,
       personName: person.full_name,
       role: linkedProfile?.role || (person.vendor_id ? "vendor" : "user"),
       vendorId: person.vendor_id || linkedProfile?.vendor_id || null,
     };
-
     sessionStorage.setItem("impersonation", JSON.stringify(impersonation));
-    // Trigger a storage event for the role context to pick up
     window.dispatchEvent(new Event("impersonation-change"));
   }
 
   function renderEditPanel(person: PersonRow) {
+    const status = getContactStatus(person);
     return (
       <div className="bg-white border-b border-gray-200 px-4 py-4" onClick={(e) => e.stopPropagation()}>
         <div className="grid grid-cols-[100px_1fr_100px_1fr] gap-y-3 gap-x-4 items-center max-w-3xl">
@@ -99,22 +181,26 @@ export default function PeopleList({ initialPeople, vendors, profiles }: PeopleL
             placeholder="—"
             className="text-sm rounded border border-gray-300 px-2 py-1.5 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
-          <label className="text-xs font-medium text-gray-400">Vendor</label>
-          <select
-            defaultValue={person.vendor_id || ""}
-            onChange={(e) => saveField(person.id, "vendor_id", e.target.value || null)}
-            className="text-sm rounded border border-gray-300 px-2 py-1.5 focus:border-blue-500 focus:outline-none cursor-pointer"
-          >
-            <option value="">None</option>
-            {vendors.map((v) => (
-              <option key={v.id} value={v.id}>{v.name}</option>
-            ))}
-          </select>
+          {!person.is_internal && (
+            <>
+              <label className="text-xs font-medium text-gray-400">Vendor</label>
+              <select
+                value={person.vendor_id || ""}
+                onChange={(e) => saveField(person.id, "vendor_id", e.target.value || null)}
+                className="text-sm rounded border border-gray-300 px-2 py-1.5 focus:border-blue-500 focus:outline-none cursor-pointer"
+              >
+                <option value="">None</option>
+                {vendors.map((v) => (
+                  <option key={v.id} value={v.id}>{v.name}</option>
+                ))}
+              </select>
+            </>
+          )}
           <label className="text-xs font-medium text-gray-400">Internal</label>
           <div>
             <input
               type="checkbox"
-              defaultChecked={person.is_internal}
+              checked={person.is_internal}
               onChange={(e) => saveField(person.id, "is_internal", e.target.checked)}
               className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
             />
@@ -131,7 +217,7 @@ export default function PeopleList({ initialPeople, vendors, profiles }: PeopleL
           />
         </div>
         <div className="flex items-center justify-between mt-3 max-w-3xl">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             {role === "super_admin" && (
               <button
                 onClick={() => startImpersonation(person)}
@@ -145,12 +231,60 @@ export default function PeopleList({ initialPeople, vendors, profiles }: PeopleL
                 Impersonate
               </button>
             )}
+            {status === "added" && person.email && (
+              <button
+                onClick={() => handleInvite(person)}
+                disabled={invitingId === person.id}
+                className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors disabled:opacity-50"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                  <polyline points="22,6 12,13 2,6"/>
+                </svg>
+                {invitingId === person.id ? "Sending..." : "Invite"}
+              </button>
+            )}
           </div>
           <button
             onClick={() => { if (confirm(`Delete ${person.full_name}?`)) handleDelete(person.id); }}
-            className="text-xs text-gray-400 hover:text-red-600 transition-colors"
+            className="text-gray-400 hover:text-red-600 transition-colors"
+            title="Delete"
           >
-            Delete
+            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="3 6 5 6 21 6"/>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  function renderAddForm(isInternal: boolean) {
+    return (
+      <div className="bg-blue-50 border-b border-blue-200 p-3">
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={addName}
+            onChange={(e) => setAddName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && addName.trim()) handleAdd(isInternal); if (e.key === "Escape") { setAddingInternal(false); setAddingExternal(false); setAddName(""); } }}
+            placeholder="Full name..."
+            className="flex-1 rounded border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            autoFocus
+          />
+          <button
+            onClick={() => handleAdd(isInternal)}
+            disabled={!addName.trim()}
+            className="px-3 py-1 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50"
+          >
+            Add
+          </button>
+          <button
+            onClick={() => { setAddingInternal(false); setAddingExternal(false); setAddName(""); }}
+            className="px-2 py-1 text-xs text-gray-500 hover:text-gray-700"
+          >
+            Cancel
           </button>
         </div>
       </div>
@@ -163,46 +297,64 @@ export default function PeopleList({ initialPeople, vendors, profiles }: PeopleL
 
       {/* Internal Team */}
       <section>
-        <div className="bg-gray-800 px-4 py-2.5 rounded-t-lg">
+        <div className="bg-gray-800 px-4 py-2.5 rounded-t-lg flex items-center justify-between">
           <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Internal Team ({internal.length})</h2>
+          {canEdit && (
+            <button
+              onClick={() => { setAddingInternal(!addingInternal); setAddingExternal(false); setAddName(""); }}
+              className="text-xs text-blue-300 hover:text-white transition-colors"
+            >
+              + Add Person
+            </button>
+          )}
         </div>
-        {internal.length === 0 ? (
-          <div className="bg-white rounded-b-lg border border-t-0 border-gray-300 p-4">
-            <p className="text-sm text-gray-500">No internal contacts.</p>
-          </div>
-        ) : (
-          <div className="bg-white rounded-b-lg border border-t-0 border-gray-300 overflow-hidden">
-            {internal.map((p) => (
-              <Fragment key={p.id}>
-                <div
-                  className={`px-4 py-3 border-b border-gray-200 last:border-b-0 hover:bg-gray-50 cursor-pointer flex items-center gap-4 ${expandedId === p.id ? "bg-gray-50" : ""}`}
-                  onClick={() => canEdit && setExpandedId(expandedId === p.id ? null : p.id)}
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-sm text-gray-900">{p.full_name}</p>
-                    {p.title && <p className="text-xs text-gray-500">{p.title}</p>}
+        <div className="bg-white rounded-b-lg border border-t-0 border-gray-300 overflow-hidden">
+          {addingInternal && renderAddForm(true)}
+          {internal.length === 0 && !addingInternal ? (
+            <p className="text-sm text-gray-500 p-4">No internal contacts.</p>
+          ) : (
+            internal.map((p) => {
+              const status = getContactStatus(p);
+              const badge = statusBadge(status);
+              return (
+                <Fragment key={p.id}>
+                  <div
+                    className={`px-4 py-3 border-b border-gray-200 last:border-b-0 hover:bg-gray-50 cursor-pointer flex items-center gap-4 ${expandedId === p.id ? "bg-gray-50" : ""}`}
+                    onClick={() => canEdit && setExpandedId(expandedId === p.id ? null : p.id)}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm text-gray-900">{p.full_name}</p>
+                      {p.title && <p className="text-xs text-gray-500">{p.title}</p>}
+                    </div>
+                    {p.email && <span className="text-xs text-gray-500 truncate">{p.email}</span>}
+                    <span className={`inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded ${badge.className}`}>{badge.label}</span>
                   </div>
-                  {p.email && <span className="text-xs text-gray-500 truncate">{p.email}</span>}
-                </div>
-                {expandedId === p.id && canEdit && renderEditPanel(p)}
-              </Fragment>
-            ))}
-          </div>
-        )}
+                  {expandedId === p.id && canEdit && renderEditPanel(p)}
+                </Fragment>
+              );
+            })
+          )}
+        </div>
       </section>
 
       {/* External Contacts */}
       <section>
-        {external.length === 0 ? (
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900 mb-3">Vendor Contacts</h2>
-            <p className="text-sm text-gray-500">No vendor contacts.</p>
+        <div className="bg-white rounded-lg border border-gray-300 overflow-hidden">
+          <div className="bg-gray-800 px-4 py-2.5 flex items-center justify-between">
+            <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Vendor Contacts ({external.length})</h2>
+            {canEdit && (
+              <button
+                onClick={() => { setAddingExternal(!addingExternal); setAddingInternal(false); setAddName(""); }}
+                className="text-xs text-blue-300 hover:text-white transition-colors"
+              >
+                + Add Contact
+              </button>
+            )}
           </div>
-        ) : (
-          <div className="bg-white rounded-lg border border-gray-300 overflow-hidden">
-            <div className="bg-gray-800 px-4 py-2.5">
-              <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Vendor Contacts ({external.length})</h2>
-            </div>
+          {addingExternal && renderAddForm(false)}
+          {external.length === 0 && !addingExternal ? (
+            <p className="text-sm text-gray-500 p-4">No vendor contacts.</p>
+          ) : external.length > 0 ? (
             <table className="min-w-full">
               <thead className="bg-gray-50 border-b border-gray-300">
                 <tr>
@@ -210,43 +362,49 @@ export default function PeopleList({ initialPeople, vendors, profiles }: PeopleL
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Title</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Vendor</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase w-[70px]">Status</th>
                 </tr>
               </thead>
               <tbody>
-                {external.map((p) => (
-                  <Fragment key={p.id}>
-                    <tr
-                      className={`border-b border-gray-200 hover:bg-gray-50 ${canEdit ? "cursor-pointer" : ""} ${expandedId === p.id ? "bg-gray-50" : ""}`}
-                      onClick={() => canEdit && setExpandedId(expandedId === p.id ? null : p.id)}
-                    >
-                      <td className="px-4 py-3 text-sm font-semibold text-gray-900">{p.full_name}</td>
-                      <td className="px-4 py-3 text-sm text-gray-600">{p.title || "—"}</td>
-                      <td className="px-4 py-3 text-sm">
-                        {p.vendor ? (
-                          <Link href={`/settings/vendors/${p.vendor.id}`} className="text-blue-600 hover:underline" onClick={(e) => e.stopPropagation()}>
-                            {p.vendor.name}
-                          </Link>
-                        ) : "—"}
-                      </td>
-                      <td className="px-4 py-3 text-sm">
-                        {p.email ? (
-                          <span className="text-blue-600">{p.email}</span>
-                        ) : "—"}
-                      </td>
-                    </tr>
-                    {expandedId === p.id && canEdit && (
-                      <tr>
-                        <td colSpan={4} className="p-0">
-                          {renderEditPanel(p)}
+                {external.map((p) => {
+                  const status = getContactStatus(p);
+                  const badge = statusBadge(status);
+                  return (
+                    <Fragment key={p.id}>
+                      <tr
+                        className={`border-b border-gray-200 hover:bg-gray-50 ${canEdit ? "cursor-pointer" : ""} ${expandedId === p.id ? "bg-gray-50" : ""}`}
+                        onClick={() => canEdit && setExpandedId(expandedId === p.id ? null : p.id)}
+                      >
+                        <td className="px-4 py-3 text-sm font-semibold text-gray-900">{p.full_name}</td>
+                        <td className="px-4 py-3 text-sm text-gray-600">{p.title || "—"}</td>
+                        <td className="px-4 py-3 text-sm">
+                          {p.vendor ? (
+                            <Link href={`/settings/vendors/${p.vendor.id}`} className="text-blue-600 hover:underline" onClick={(e) => e.stopPropagation()}>
+                              {p.vendor.name}
+                            </Link>
+                          ) : "—"}
+                        </td>
+                        <td className="px-4 py-3 text-sm">
+                          {p.email ? <span className="text-blue-600">{p.email}</span> : "—"}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <span className={`inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded ${badge.className}`}>{badge.label}</span>
                         </td>
                       </tr>
-                    )}
-                  </Fragment>
-                ))}
+                      {expandedId === p.id && canEdit && (
+                        <tr>
+                          <td colSpan={5} className="p-0">
+                            {renderEditPanel(p)}
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
               </tbody>
             </table>
-          </div>
-        )}
+          ) : null}
+        </div>
       </section>
     </div>
   );
