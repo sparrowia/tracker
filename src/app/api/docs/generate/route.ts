@@ -7,53 +7,31 @@ export const maxDuration = 300;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Row = Record<string, any>;
 
-const SYSTEM_PROMPT = `You are a project documentation generator. Given structured project management data, produce a factual project document organized into discrete sections.
+/* ── AI prompt: only used for overview, stakeholders, vendor summary ── */
 
-CRITICAL RULES:
-- ONLY state facts that are explicitly present in the data. Never assume, infer, or fabricate information.
-- If a field says "Owner: Olivia Wolf", write "Olivia Wolf" — do NOT write "Unassigned".
-- Copy names, statuses, dates, and priorities EXACTLY as they appear in the data.
-- If data for a section is empty or not provided, skip that section entirely.
-- Do NOT add commentary, recommendations, or observations that aren't directly supported by the data.
+const SYSTEM_PROMPT = `You are a project documentation writer. You will receive structured project data and must produce THREE sections as markdown. Do not produce any other sections.
 
-Return a JSON object with a "sections" array. Each section has:
-- "key": a short snake_case identifier
-- "title": a human-readable section title
-- "content": the section content in markdown format
+CRITICAL: Only state facts present in the data. Never invent, assume, or editorialize.
 
-Generate these sections in order (skip any with no data):
+Return JSON: { "sections": [ { "key": string, "title": string, "content": string }, ... ] }
 
-1. "overview" — Project Overview
-   Template: Project name, description, health status, linked initiative, vendors involved.
+Sections to generate:
 
-2. "stakeholders" — Stakeholders & Team
-   Template: List each person from the PEOPLE data with their title and whether they are internal or a vendor contact. Group by internal vs. vendor.
+1. key: "overview", title: "Project Overview"
+   Write 2-4 sentences covering: project name, what it is (from description/notes), current health status, which initiative it belongs to, and which vendors are involved.
+   If description or notes say "none", do not mention them.
 
-3. "action_items" — Action Items
-   Template: Use a markdown table with columns: Item | Priority | Status | Owner | Due Date | Age. List every action item exactly as provided.
+2. key: "stakeholders", title: "Stakeholders & Team"
+   Group the PEOPLE list into "Internal Team" and "Vendor Contacts" (grouped by vendor name).
+   Use bullet points: "- **Name** — Title" (or just "- **Name**" if no title).
+   Only include people provided in the data. Do not add anyone.
 
-4. "blockers" — Blockers
-   Template: Use a markdown table with columns: Blocker | Priority | Status | Owner | Age. List every blocker exactly as provided.
+3. key: "vendor_summary", title: "Vendor Summary"
+   For each vendor, write 1-2 sentences summarizing their involvement using the VENDOR STATS provided.
+   Example: "**Silk Commerce** has 2 open action items and 3 open issues assigned to them."
+   Only include vendors that appear in the data.
 
-5. "risks" — Risk Register
-   Template: Use a markdown table with columns: Risk | Priority | Status | Owner | Impact. List every risk exactly as provided.
-
-6. "issues" — Issues
-   Template: Use a markdown table with columns: Issue | Priority | Status | Owner | Stage | Age. List every issue exactly as provided.
-
-7. "decisions" — Key Decisions
-   Template: Use a markdown table with columns: Decision | Status | Owner | Date. List every decision exactly as provided.
-
-8. "assumptions" — Assumptions
-   Template: Use a markdown table with columns: Assumption | Priority | Status | Owner. List every assumption exactly as provided.
-
-9. "vendor_summary" — Vendor Summary
-   Template: For each vendor linked to the project, list their open action items, blockers, and RAID entries. Only include vendors that appear in the data.
-
-Formatting rules:
-- Use markdown tables for item lists (they render well)
-- Use **bold** for the section title only
-- Keep it factual and structured — this is a reference document, not a narrative`;
+Do NOT generate sections for action items, blockers, risks, issues, decisions, or assumptions — those are handled separately.`;
 
 export async function POST(request: Request) {
   try {
@@ -69,57 +47,38 @@ export async function POST(request: Request) {
 
     const orgId = profile.org_id;
 
-    // Fetch project data in parallel
-    const [projectRes, actionsRes, blockersRes, raidRes, pvRes] = await Promise.all([
+    // Fetch all project data in parallel
+    const [projectRes, actionsOpenRes, actionsClosedRes, blockersOpenRes, blockersClosedRes, raidRes, raidResolvedRes, pvRes] = await Promise.all([
       supabase.from("projects").select("*, initiative:initiatives(name)").eq("id", project_id).single(),
       supabase.from("action_item_ages").select("*, owner:people!action_items_owner_id_fkey(id, full_name), vendor:vendors(id, name)").eq("project_id", project_id),
+      supabase.from("action_items").select("id").eq("project_id", project_id).eq("status", "complete"),
       supabase.from("blocker_ages").select("*, owner:people!blockers_owner_id_fkey(id, full_name), vendor:vendors(id, name)").eq("project_id", project_id),
-      supabase.from("raid_entries").select("*, owner:people!raid_entries_owner_id_fkey(id, full_name, title, is_internal, vendor_id), reporter:people!raid_entries_reporter_id_fkey(id, full_name, title, is_internal, vendor_id), vendor:vendors(id, name)").eq("project_id", project_id),
+      supabase.from("blockers").select("id").eq("project_id", project_id).not("resolved_at", "is", null),
+      supabase.from("raid_entries").select("*, owner:people!raid_entries_owner_id_fkey(id, full_name, title, is_internal, vendor_id), reporter:people!raid_entries_reporter_id_fkey(id, full_name), vendor:vendors(id, name)").eq("project_id", project_id).is("resolved_at", null),
+      supabase.from("raid_entries").select("id, raid_type").eq("project_id", project_id).not("resolved_at", "is", null),
       supabase.from("project_vendors").select("vendor:vendors(id, name)").eq("project_id", project_id),
     ]);
 
     const project = projectRes.data;
     if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
 
-    const actions = (actionsRes.data || []) as Row[];
-    const blockers = (blockersRes.data || []) as Row[];
-    const raidEntries = (raidRes.data || []) as Row[];
+    const actionsOpen = (actionsOpenRes.data || []) as Row[];
+    const actionsClosedCount = (actionsClosedRes.data || []).length;
+    const blockersOpen = (blockersOpenRes.data || []) as Row[];
+    const blockersClosedCount = (blockersClosedRes.data || []).length;
+    const raidOpen = (raidRes.data || []) as Row[];
+    const raidResolved = (raidResolvedRes.data || []) as Row[];
 
-    // Collect people and vendor IDs actually referenced in this project's data
+    // Collect people IDs referenced in this project
     const referencedPersonIds = new Set<string>();
-    const referencedVendorIds = new Set<string>();
-
-    // From project's linked vendors
-    const projectVendors = ((pvRes.data || []) as Row[]).map((pv: Row) => pv.vendor).filter(Boolean);
-    projectVendors.forEach((v: Row) => referencedVendorIds.add(v.id));
-
-    // From action items
-    actions.forEach((a: Row) => {
-      const owner = a.owner as Row | null;
-      const vendor = a.vendor as Row | null;
-      if (owner?.id) referencedPersonIds.add(owner.id);
-      if (vendor?.id) referencedVendorIds.add(vendor.id);
+    actionsOpen.forEach((a: Row) => { if ((a.owner as Row)?.id) referencedPersonIds.add((a.owner as Row).id); });
+    blockersOpen.forEach((b: Row) => { if ((b.owner as Row)?.id) referencedPersonIds.add((b.owner as Row).id); });
+    raidOpen.forEach((r: Row) => {
+      if ((r.owner as Row)?.id) referencedPersonIds.add((r.owner as Row).id);
+      if ((r.reporter as Row)?.id) referencedPersonIds.add((r.reporter as Row).id);
     });
 
-    // From blockers
-    blockers.forEach((b: Row) => {
-      const owner = b.owner as Row | null;
-      const vendor = b.vendor as Row | null;
-      if (owner?.id) referencedPersonIds.add(owner.id);
-      if (vendor?.id) referencedVendorIds.add(vendor.id);
-    });
-
-    // From RAID entries
-    raidEntries.forEach((r: Row) => {
-      const owner = r.owner as Row | null;
-      const reporter = r.reporter as Row | null;
-      const vendor = r.vendor as Row | null;
-      if (owner?.id) referencedPersonIds.add(owner.id);
-      if (reporter?.id) referencedPersonIds.add(reporter.id);
-      if (vendor?.id) referencedVendorIds.add(vendor.id);
-    });
-
-    // Fetch only referenced people
+    // Fetch referenced people
     let people: Row[] = [];
     if (referencedPersonIds.size > 0) {
       const { data } = await supabase
@@ -129,83 +88,119 @@ export async function POST(request: Request) {
       people = (data || []) as Row[];
     }
 
-    // Build context string
-    const sections: string[] = [];
+    const projectVendors = ((pvRes.data || []) as Row[]).map((pv: Row) => pv.vendor).filter(Boolean);
 
-    sections.push(`PROJECT: ${project.name}
+    // ── Build server-side sections (no AI needed) ──
+
+    const codeSections: { key: string; title: string; content: string }[] = [];
+
+    // Status Summary — built in code, guaranteed accurate
+    const risks = raidOpen.filter((r: Row) => r.raid_type === "risk");
+    const issues = raidOpen.filter((r: Row) => r.raid_type === "issue");
+    const decisions = raidOpen.filter((r: Row) => r.raid_type === "decision");
+    const assumptions = raidOpen.filter((r: Row) => r.raid_type === "assumption");
+    const risksResolved = raidResolved.filter((r: Row) => r.raid_type === "risk").length;
+    const issuesResolved = raidResolved.filter((r: Row) => r.raid_type === "issue").length;
+    const decisionsResolved = raidResolved.filter((r: Row) => r.raid_type === "decision").length;
+    const assumptionsResolved = raidResolved.filter((r: Row) => r.raid_type === "assumption").length;
+
+    let summary = "| Category | Open | Completed | Total |\n|----------|------|-----------|-------|\n";
+    summary += `| Action Items | ${actionsOpen.length} | ${actionsClosedCount} | ${actionsOpen.length + actionsClosedCount} |\n`;
+    summary += `| Blockers | ${blockersOpen.length} | ${blockersClosedCount} | ${blockersOpen.length + blockersClosedCount} |\n`;
+    summary += `| Risks | ${risks.length} | ${risksResolved} | ${risks.length + risksResolved} |\n`;
+    summary += `| Issues | ${issues.length} | ${issuesResolved} | ${issues.length + issuesResolved} |\n`;
+    summary += `| Decisions | ${decisions.length} | ${decisionsResolved} | ${decisions.length + decisionsResolved} |\n`;
+    summary += `| Assumptions | ${assumptions.length} | ${assumptionsResolved} | ${assumptions.length + assumptionsResolved} |`;
+
+    codeSections.push({ key: "status_summary", title: "Status Summary", content: summary });
+
+    // ── Build AI context (only for overview, stakeholders, vendor summary) ──
+
+    const aiContext: string[] = [];
+
+    aiContext.push(`PROJECT: ${project.name}
 Health: ${project.health || "unknown"}
 Description: ${project.description || "none"}
 Notes: ${project.notes || "none"}
 Initiative: ${(project.initiative as Row)?.name || "none"}`);
 
-    // Only list vendors linked to this project
     if (projectVendors.length > 0) {
-      sections.push(`VENDORS (${projectVendors.length}): ${projectVendors.map((v: Row) => v.name).join(", ")}`);
+      aiContext.push(`VENDORS: ${projectVendors.map((v: Row) => v.name).join(", ")}`);
     }
 
     if (people.length > 0) {
-      sections.push(`PEOPLE INVOLVED IN THIS PROJECT (${people.length}):\n${people.map((p: Row) => {
+      aiContext.push(`PEOPLE:\n${people.map((p: Row) => {
         const vendor = (p.vendor as Row)?.name;
         return `- ${p.full_name}${p.title ? ` (${p.title})` : ""} — ${p.is_internal ? "internal" : `vendor: ${vendor || "unknown"}`}`;
       }).join("\n")}`);
     }
 
-    if (actions.length > 0) {
-      sections.push(`ACTION ITEMS (${actions.length}):\n${actions.map((a: Row) => {
-        const ownerName = (a.owner as Row | null)?.full_name || "Unassigned";
-        const vendorName = (a.vendor as Row | null)?.name;
-        return `- [${a.priority}/${a.status}] ${a.title} | Owner: ${ownerName}${vendorName ? ` | Vendor: ${vendorName}` : ""}${a.due_date ? ` | Due: ${a.due_date}` : ""}${a.age_days != null ? ` | Age: ${a.age_days}d` : ""}${a.stage ? ` | Stage: ${a.stage}` : ""}`;
-      }).join("\n")}`);
+    // Vendor stats for AI vendor summary
+    const vendorStats: Record<string, { actions: number; blockers: number; risks: number; issues: number }> = {};
+    for (const v of projectVendors) {
+      vendorStats[v.name] = { actions: 0, blockers: 0, risks: 0, issues: 0 };
+    }
+    actionsOpen.forEach((a: Row) => {
+      const vName = (a.vendor as Row)?.name;
+      if (vName && vendorStats[vName]) vendorStats[vName].actions++;
+    });
+    blockersOpen.forEach((b: Row) => {
+      const vName = (b.vendor as Row)?.name;
+      if (vName && vendorStats[vName]) vendorStats[vName].blockers++;
+    });
+    raidOpen.forEach((r: Row) => {
+      const vName = (r.vendor as Row)?.name;
+      if (vName && vendorStats[vName]) {
+        if (r.raid_type === "risk") vendorStats[vName].risks++;
+        if (r.raid_type === "issue") vendorStats[vName].issues++;
+      }
+    });
+
+    if (Object.keys(vendorStats).length > 0) {
+      aiContext.push(`VENDOR STATS:\n${Object.entries(vendorStats).map(([name, s]) =>
+        `- ${name}: ${s.actions} open action items, ${s.blockers} open blockers, ${s.risks} open risks, ${s.issues} open issues`
+      ).join("\n")}`);
     }
 
-    if (blockers.length > 0) {
-      sections.push(`BLOCKERS (${blockers.length}):\n${blockers.map((b: Row) => {
-        const ownerName = (b.owner as Row | null)?.full_name || "Unassigned";
-        const vendorName = (b.vendor as Row | null)?.name;
-        return `- [${b.priority}/${b.status}] ${b.title} | Owner: ${ownerName}${vendorName ? ` | Vendor: ${vendorName}` : ""}${b.age_days != null ? ` | Age: ${b.age_days}d` : ""}`;
-      }).join("\n")}`);
-    }
-
-    const risks = raidEntries.filter((r: Row) => r.raid_type === "risk");
-    const issues = raidEntries.filter((r: Row) => r.raid_type === "issue");
-    const decisions = raidEntries.filter((r: Row) => r.raid_type === "decision");
-    const assumptions = raidEntries.filter((r: Row) => r.raid_type === "assumption");
-
-    function formatRaid(label: string, items: Row[]) {
-      if (!items.length) return "";
-      return `${label} (${items.length}):\n${items.map((r: Row) => {
-        const owner = (r.owner as Row)?.full_name || "Unassigned";
-        const vendor = (r.vendor as Row)?.name;
-        return `- [${r.priority}/${r.status}] ${r.title} | Owner: ${owner}${vendor ? ` | Vendor: ${vendor}` : ""}${r.description ? ` | ${r.description}` : ""}${r.impact ? ` | Impact: ${r.impact}` : ""}${r.stage ? ` | Stage: ${r.stage}` : ""}${r.decision_date ? ` | Date: ${r.decision_date}` : ""}${r.resolved_at ? ` | Resolved: ${r.resolved_at.slice(0, 10)}` : ""}`;
-      }).join("\n")}`;
-    }
-
-    if (risks.length) sections.push(formatRaid("RISKS", risks));
-    if (issues.length) sections.push(formatRaid("ISSUES", issues));
-    if (decisions.length) sections.push(formatRaid("DECISIONS", decisions));
-    if (assumptions.length) sections.push(formatRaid("ASSUMPTIONS", assumptions));
-
-    const dataContext = sections.join("\n\n");
-
+    // Call AI for overview, stakeholders, vendor summary only
     const result = await callDeepSeek<{ sections: { key: string; title: string; content: string }[] }>({
       system: SYSTEM_PROMPT,
-      user: `Generate comprehensive project documentation from this data:\n\n${dataContext}`,
-      maxTokens: 4000,
-      temperature: 0.2,
+      user: aiContext.join("\n\n"),
+      maxTokens: 2000,
+      temperature: 0,
     });
 
     if (!result.ok) {
       return NextResponse.json({ error: result.error }, { status: result.status });
     }
 
-    const generatedSections = result.data.sections || [];
+    const aiSections = result.data.sections || [];
+
+    // ── Assemble final doc: AI sections first, then code sections ──
+
+    const allSections: { key: string; title: string; content: string }[] = [];
+
+    // Insert AI sections in order: overview, stakeholders
+    const overview = aiSections.find((s) => s.key === "overview");
+    if (overview) allSections.push(overview);
+
+    const stakeholders = aiSections.find((s) => s.key === "stakeholders");
+    if (stakeholders) allSections.push(stakeholders);
+
+    // Status summary (code-generated)
+    allSections.push(...codeSections);
+
+    // Vendor summary (AI)
+    const vendorSummary = aiSections.find((s) => s.key === "vendor_summary");
+    if (vendorSummary) allSections.push(vendorSummary);
+
     const now = new Date().toISOString();
 
-    // Delete existing docs for this project, then insert new ones
+    // Delete existing docs, insert new
     await supabase.from("project_documents").delete().eq("project_id", project_id);
 
-    if (generatedSections.length > 0) {
-      const rows = generatedSections.map((s, i) => ({
+    if (allSections.length > 0) {
+      const rows = allSections.map((s, i) => ({
         org_id: orgId,
         project_id,
         section_key: s.key,
@@ -217,7 +212,6 @@ Initiative: ${(project.initiative as Row)?.name || "none"}`);
       await supabase.from("project_documents").insert(rows);
     }
 
-    // Fetch back the inserted docs
     const { data: docs } = await supabase
       .from("project_documents")
       .select("*")
