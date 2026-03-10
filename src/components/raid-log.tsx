@@ -753,7 +753,13 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
             </div>
             {(() => {
               // Build ordered list: parents followed by their children
-              const parentItems = items.filter((e) => !e.parent_id).sort((a, b) => a.sort_order - b.sort_order);
+              const parentItems = items.filter((e) => !e.parent_id).sort((a, b) => {
+                // Closed risks go to the bottom
+                const aClosed = a.status === "closed" ? 1 : 0;
+                const bClosed = b.status === "closed" ? 1 : 0;
+                if (aClosed !== bClosed) return aClosed - bClosed;
+                return a.sort_order - b.sort_order;
+              });
               const childMap = new Map<string, RaidRow[]>();
               for (const e of items) {
                 if (e.parent_id) {
@@ -788,6 +794,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
               const isResolving = resolvingId === entry.id;
               const childCount = items.filter((e) => e.parent_id === entry.id).length;
 
+              const isClosed = entry.status === "closed";
               const isDragging = draggedId === entry.id;
               const isDropNest = dropTarget?.id === entry.id && dropTarget.zone === "nest";
               const isDropAbove = dropTarget?.id === entry.id && dropTarget.zone === "above";
@@ -797,7 +804,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                 <Fragment key={entry.id}>
                   {/* Collapsed row */}
                   <div
-                    className={`border-b last:border-b-0 cursor-pointer relative ${isResolving ? "bg-green-100 opacity-0 border-transparent" : isDragging ? "opacity-40 bg-white border-gray-400" : isDropNest ? "bg-blue-50 border-blue-300" : "bg-white hover:bg-gray-50 border-gray-400"}`}
+                    className={`border-b last:border-b-0 cursor-pointer relative ${isResolving ? "bg-green-100 opacity-0 border-transparent" : isDragging ? "opacity-40 bg-white border-gray-400" : isDropNest ? "bg-blue-50 border-blue-300" : isClosed ? "bg-gray-50 hover:bg-gray-100 border-gray-400" : "bg-white hover:bg-gray-50 border-gray-400"}`}
                     style={{ transition: isResolving ? "all 350ms ease-out" : undefined, paddingLeft: isChild ? "2rem" : "0.75rem", paddingRight: "0.75rem", ...(isResolving ? { maxHeight: 0, paddingTop: 0, paddingBottom: 0, overflow: "hidden" } : { maxHeight: 200, paddingTop: "0.5rem", paddingBottom: "0.5rem" }) }}
                     onClick={() => toggleExpand(entry.id)}
                     draggable={entry.raid_type !== "decision"}
@@ -810,7 +817,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                     {/* Drop indicator lines */}
                     {isDropAbove && <div className="absolute top-0 left-0 right-0 h-0.5 bg-blue-500 -translate-y-px z-10" />}
                     {isDropBelow && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500 translate-y-px z-10" />}
-                    <div className="flex items-center gap-4 min-w-0">
+                    <div className={`flex items-center gap-4 min-w-0 ${isClosed ? "opacity-50" : ""}`}>
                       {isChild && (
                         <span className="text-gray-300 flex-shrink-0 -ml-2 mr--2">↳</span>
                       )}
