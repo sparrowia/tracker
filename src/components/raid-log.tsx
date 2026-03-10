@@ -36,7 +36,7 @@ const decisionStatusOptions: ItemStatus[] = ["pending", "complete"];
 
 const typePrefix: Record<RaidType, string> = { risk: "R", assumption: "A", issue: "I", decision: "D" };
 
-type RaidColumnKey = "priority" | "status" | "owner" | "reporter" | "vendor" | "age" | "escalations" | "first_flagged";
+type RaidColumnKey = "priority" | "status" | "owner" | "reporter" | "vendor" | "stage" | "age" | "escalations" | "first_flagged";
 
 const RAID_COLUMNS: { key: RaidColumnKey; label: string; width: string }[] = [
   { key: "priority", label: "Priority", width: "w-[68px]" },
@@ -44,6 +44,7 @@ const RAID_COLUMNS: { key: RaidColumnKey; label: string; width: string }[] = [
   { key: "owner", label: "Owner", width: "w-[150px]" },
   { key: "reporter", label: "Reporter", width: "w-[150px]" },
   { key: "vendor", label: "Vendor", width: "w-[100px]" },
+  { key: "stage", label: "Stage", width: "w-[88px]" },
   { key: "age", label: "Age", width: "w-12" },
   { key: "escalations", label: "Escalations", width: "w-[72px]" },
   { key: "first_flagged", label: "Flagged", width: "w-[80px]" },
@@ -294,6 +295,10 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
             <span className="text-xs text-gray-600 truncate block">{entry.vendor?.name || "—"}</span>
           </div>
         );
+      case "stage": {
+        const stageLabel = entry.stage === "pre_launch" ? "Pre-Launch" : entry.stage === "post_launch" ? "Post-Launch" : "—";
+        return <span className="text-xs text-gray-600 flex-shrink-0 w-[88px] text-right">{stageLabel}</span>;
+      }
       case "age":
         return <span className="text-xs text-gray-500 font-medium flex-shrink-0 w-12 text-right">{formatAge(age)}</span>;
       case "escalations":
@@ -1055,6 +1060,24 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                               ))}
                             </select>
                           </div>
+
+                          {/* Row: Stage */}
+                          {(entry.raid_type === "issue") && (
+                            <>
+                              <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-200">Stage</span>
+                              <div className="px-3 py-2.5 border-b border-gray-200 col-span-3">
+                                <select
+                                  value={entry.stage || ""}
+                                  onChange={(e) => saveField(entry.id, "stage", e.target.value)}
+                                  className="text-sm rounded border border-transparent hover:border-gray-300 bg-transparent py-0 focus:border-blue-500 focus:outline-none cursor-pointer -ml-0.5"
+                                >
+                                  <option value="">None</option>
+                                  <option value="pre_launch">Pre-Launch</option>
+                                  <option value="post_launch">Post-Launch</option>
+                                </select>
+                              </div>
+                            </>
+                          )}
 
                           {entry.resolved_at && (
                             <>

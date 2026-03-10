@@ -1183,13 +1183,14 @@ const actionStatusOptions: ItemStatus[] = ["pending", "in_progress", "complete",
 
 type ActionRow = ActionItem & { owner: Person | null; vendor: Vendor | null };
 
-type ActionColumnKey = "priority" | "status" | "owner" | "vendor" | "due_date" | "age" | "escalations" | "first_flagged";
+type ActionColumnKey = "priority" | "status" | "owner" | "vendor" | "stage" | "due_date" | "age" | "escalations" | "first_flagged";
 
 const ACTION_COLUMNS: { key: ActionColumnKey; label: string; width: string }[] = [
   { key: "priority", label: "Priority", width: "w-[68px]" },
   { key: "status", label: "Status", width: "w-[88px]" },
   { key: "owner", label: "Owner", width: "w-[150px]" },
   { key: "vendor", label: "Vendor", width: "w-[100px]" },
+  { key: "stage", label: "Stage", width: "w-[88px]" },
   { key: "due_date", label: "Due Date", width: "w-[80px]" },
   { key: "age", label: "Age", width: "w-12" },
   { key: "escalations", label: "Escalations", width: "w-[72px]" },
@@ -1339,6 +1340,10 @@ function ActionItemsPanel({
             <span className="text-xs text-gray-600 truncate block">{a.vendor?.name || "—"}</span>
           </div>
         );
+      case "stage": {
+        const stageLabel = a.stage === "pre_launch" ? "Pre-Launch" : a.stage === "post_launch" ? "Post-Launch" : "—";
+        return <span className="text-xs text-gray-600 flex-shrink-0 w-[88px] text-right">{stageLabel}</span>;
+      }
       case "due_date":
         return <span className="text-xs text-gray-600 flex-shrink-0 w-[80px] text-right">{formatDateShort(a.due_date)}</span>;
       case "age":
@@ -1712,6 +1717,20 @@ function ActionItemsPanel({
                       <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-100">Escalations</span>
                       <div className="px-3 py-2.5 border-b border-gray-100">
                         <span className="text-sm text-gray-700">{a.escalation_count > 0 ? `${a.escalation_count}x` : "None"}</span>
+                      </div>
+
+                      {/* Row: Stage */}
+                      <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-100">Stage</span>
+                      <div className="px-3 py-2.5 border-b border-gray-100 col-span-3">
+                        <select
+                          value={a.stage || ""}
+                          onChange={(e) => saveField(a.id, "stage", e.target.value)}
+                          className="text-sm rounded border border-transparent hover:border-gray-300 bg-transparent py-0 focus:border-blue-500 focus:outline-none cursor-pointer -ml-0.5"
+                        >
+                          <option value="">None</option>
+                          <option value="pre_launch">Pre-Launch</option>
+                          <option value="post_launch">Post-Launch</option>
+                        </select>
                       </div>
                     </div>
                   </div>

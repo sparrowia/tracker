@@ -146,6 +146,7 @@ export interface ActionItem {
   escalation_count: number;
   resolved_at: string | null;
   notes: string | null;
+  stage: string | null;
   include_in_meeting: boolean;
   created_by: string | null;
   created_at: string;
@@ -174,6 +175,7 @@ export interface RaidEntry {
   reporter_id: string | null;
   vendor_id: string | null;
   decision_date: string | null;
+  stage: string | null;
   include_in_meeting: boolean;
   parent_id: string | null;
   sort_order: number;
