@@ -386,6 +386,19 @@ function InlineText({ value, onSave, placeholder, multiline }: { value: string; 
   }
 
   if (!editing) {
+    if (multiline && value) {
+      const html = value
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+        .replace(/\n/g, "<br />");
+      return (
+        <div
+          className="text-gray-900 text-sm mt-0.5 hover:bg-gray-100 rounded cursor-pointer px-1 -mx-1 py-0.5"
+          onClick={(e) => { e.stopPropagation(); setEditing(true); }}
+          dangerouslySetInnerHTML={{ __html: html }}
+        />
+      );
+    }
     return (
       <p
         className="text-gray-900 mt-0.5 hover:bg-gray-100 rounded cursor-pointer px-1 -mx-1 py-0.5"
