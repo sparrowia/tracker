@@ -900,6 +900,10 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                   {/* Expanded detail — inline editable */}
                   {isExpanded && (
                     <div className="bg-white border-b border-gray-200" onClick={(e) => e.stopPropagation()}>
+                      {/* Editable title */}
+                      <div className="px-5 pt-4 pb-3 text-base font-semibold text-gray-900">
+                        <InlineText value={entry.title} onSave={(v) => { if (v.trim()) saveField(entry.id, "title", v.trim()); }} placeholder="Title..." />
+                      </div>
                       {/* Properties grid */}
                       <div className="border-t border-gray-200">
                         {entry.raid_type === "decision" ? (
