@@ -75,6 +75,7 @@ export interface Vendor {
   slug: string;
   website: string | null;
   notes: string | null;
+  created_by: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -90,6 +91,7 @@ export interface Person {
   is_internal: boolean;
   profile_id: string | null;
   notes: string | null;
+  created_by: string | null;
   created_at: string;
   updated_at: string;
   vendor?: Vendor;
@@ -122,6 +124,7 @@ export interface Project {
   target_completion: string | null;
   notes: string | null;
   initiative_id: string | null;
+  created_by: string | null;
   created_at: string;
   updated_at: string;
   vendors?: Vendor[];
@@ -144,6 +147,7 @@ export interface ActionItem {
   resolved_at: string | null;
   notes: string | null;
   include_in_meeting: boolean;
+  created_by: string | null;
   created_at: string;
   updated_at: string;
   owner?: Person;
@@ -176,6 +180,7 @@ export interface RaidEntry {
   first_flagged_at: string;
   escalation_count: number;
   resolved_at: string | null;
+  created_by: string | null;
   created_at: string;
   updated_at: string;
   owner?: Person;
@@ -199,6 +204,7 @@ export interface Blocker {
   resolved_at: string | null;
   due_date: string | null;
   include_in_meeting: boolean;
+  created_by: string | null;
   created_at: string;
   updated_at: string;
   owner?: Person;
@@ -223,6 +229,7 @@ export interface SupportTicket {
   opened_at: string | null;
   resolved_at: string | null;
   external_url: string | null;
+  created_by: string | null;
   created_at: string;
   updated_at: string;
   vendor?: Vendor;
@@ -259,6 +266,7 @@ export interface AgendaItem {
   blocker_id: string | null;
   raid_entry_id: string | null;
   support_ticket_id: string | null;
+  created_by: string | null;
   created_at: string;
   updated_at: string;
   vendor?: Vendor;

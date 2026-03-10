@@ -48,9 +48,18 @@ src/
 │   │   ├── people/               # Internal team + vendor contacts
 │   │   ├── intake/               # Raw text/image intake with OCR
 │   │   │   └── [id]/review/      # Review extracted items
-│   │   └── settings/             # Term corrections for AI extraction
-│   ├── (auth)/login/             # Auth page
-│   └── api/extract/              # DeepSeek extraction endpoint
+│   │   └── settings/
+│   │       ├── page.tsx          # Term corrections for AI extraction
+│   │       └── team/page.tsx     # Team management (invites, roles, deactivation)
+│   ├── (auth)/login/             # Auth page (shows deactivation error)
+│   ├── auth/callback/            # Auth callback (marks invites accepted)
+│   └── api/
+│       ├── extract/              # DeepSeek extraction endpoint
+│       ├── invite/               # POST: send invitation email
+│       │   └── resend/           # POST: resend expired invitation
+│       └── users/
+│           ├── deactivate/       # POST: deactivate user (admin+)
+│           └── reactivate/       # POST: reactivate user (super_admin)
 ├── components/
 │   ├── agenda-view.tsx           # Project meeting agenda — RAID-style layout with resolve, undo, detail panels
 │   ├── vendor-agenda-view.tsx    # Vendor meeting agenda — same layout as agenda-view for vendor detail pages
@@ -59,15 +68,21 @@ src/
 │   ├── comment-thread.tsx        # Threaded comments with file attachments
 │   ├── owner-picker.tsx          # Person selection dropdown with inline creation
 │   ├── vendor-picker.tsx         # Vendor selection dropdown with inline creation
-│   ├── sidebar.tsx               # App navigation sidebar
+│   ├── role-context.tsx          # React context providing role, profileId, vendorId, userPersonId
+│   ├── sidebar.tsx               # App navigation sidebar (role-aware)
 │   └── topbar.tsx                # Top bar
 └── lib/
     ├── types.ts                  # All TypeScript interfaces
     ├── utils.ts                  # Formatting helpers (priorityColor, formatAge, etc.)
+    ├── permissions.ts            # Role-based permission helpers (canCreate, canDelete, canEditItem, etc.)
     ├── pdf.ts                    # Client-side PDF text extraction
     ├── ai/                       # DeepSeek client, context builder, prompts
     ├── parsers/asana.ts          # Deterministic Asana PDF export parser
-    └── supabase/                 # Supabase client/server/middleware setup
+    └── supabase/
+        ├── client.ts             # Browser Supabase client
+        ├── server.ts             # Server Supabase client
+        ├── admin.ts              # Service-role client (bypasses RLS, for admin operations)
+        └── middleware.ts          # Auth middleware (deactivation check + redirect)
 ```
 
 ## UI Design System
@@ -118,6 +133,71 @@ Defined in `src/lib/types.ts`:
 - **ProjectAgendaRow** — RPC output for project agenda (includes status, due_date, owner_id, vendor_id)
 - **VendorAgendaRow** — RPC output for vendor agenda (includes status, due_date, project_slug, owner_id, vendor_id)
 - **VendorAccountabilityRow** — combined view of vendor action items + blockers
+- **Profile** — user profile with role, deactivated_at, vendor_id
+- **Invitation** — email-based invitations with role, token, expiry
+
+All data tables (ActionItem, RaidEntry, Blocker, AgendaItem, SupportTicket, Project, Vendor, Person) include a `created_by` field linking to the profile that created the record, used for RLS permission checks.
+
+## Roles, Invitations & Access Control (RBAC)
+
+### Roles
+
+Four roles defined as `user_role` enum in Supabase, stored on `profiles.role`:
+
+| Role | Data Access | Create | Edit | Delete | Invite | Admin Pages |
+|------|------------|--------|------|--------|--------|-------------|
+| **super_admin** | All org data | Yes | All items | Yes | Yes | Yes |
+| **admin** | All org data | Yes | All items | Yes | Yes (not super_admin) | Yes |
+| **user** | All org data | Yes | Items they created or own | No | No | No |
+| **vendor** | Only their vendor's items | No | Status only | No | No | No |
+
+### Database Enforcement (RLS)
+
+All access control is enforced at the Supabase RLS layer via helper functions:
+- `user_role()` — returns current user's role from profiles
+- `user_vendor_id()` — returns vendor_id for vendor-role users
+- `user_is_active()` — checks deactivated_at is null
+- `user_can_edit(created_by, owner_id)` — admin+ always true; user if creator or owner
+
+Separate SELECT/INSERT/UPDATE/DELETE policies on every data table. Vendor-scoped reads filter by `vendor_id`. Migration: `20260310000001_rbac_and_invitations.sql`.
+
+### UI Enforcement
+
+- **`src/lib/permissions.ts`**: `canCreate(role)`, `canDelete(role)`, `canEditItem(role, profileId, item, userPersonId)`, `canUpdateStatus(role)`, `canInvite(role)`
+- **`src/components/role-context.tsx`**: React context (`useRole()` hook) provides role, profileId, orgId, vendorId, userPersonId to all client components
+- **`src/app/(app)/layout.tsx`**: Wraps app in `<RoleProvider>`
+- **`src/components/sidebar.tsx`**: Hides admin pages from users/vendors; hides Intake/Ask from vendors
+- Components (raid-log, agenda-view, comment-thread, pickers) check permissions to show/hide create, delete, edit controls
+
+### Invitation Flow
+
+1. Admin sends invite from Settings → Team (`POST /api/invite`)
+2. Supabase sends email via `auth.admin.inviteUserByEmail()` with `{ org_id, role, vendor_id }` in metadata
+3. User clicks link → sets password → `auth/callback` marks invitation `accepted_at`
+4. `handle_new_user` trigger reads metadata to set org_id, role, vendor_id on new profile
+
+### Deactivation
+
+- Admin deactivates user → `POST /api/users/deactivate` sets `profiles.deactivated_at` and bans auth user
+- Middleware checks `deactivated_at` on every request → signs out and redirects to `/login?error=account_deactivated`
+- Super_admin can reactivate via `POST /api/users/reactivate`
+
+### Team Management UI
+
+`/settings/team` (admin/super_admin only):
+- Active members table with role badges, deactivate buttons
+- Pending invitations table with resend/cancel
+- Deactivated users (collapsible) with reactivate button (super_admin only)
+- Invite form: email, role dropdown, vendor picker (for vendor role)
+
+## RAID Log — Decisions
+
+Decisions have a distinct UX from other RAID types (risks, assumptions, issues):
+- **No complete circle** — decisions are not "resolved" like other items
+- **No parent-child nesting** — no subtask toggle, no drag-and-drop reordering
+- **Simplified detail panel** — only Status, Owner, Decision Date, Description, Comments
+- **Two statuses only** — Pending and Final (Final maps to `complete` in DB, displayed as "Final")
+- **Inline-editable title** — clicking the title in the row allows direct editing
 
 ## Development
 
