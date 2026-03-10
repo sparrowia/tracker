@@ -48,14 +48,13 @@ export async function POST(request: Request) {
 
     const orgId = profile.org_id;
 
-    // Fetch all project data in parallel
-    const [projectRes, actionsRes, blockersRes, raidRes, peopleRes, vendorsRes] = await Promise.all([
+    // Fetch project data in parallel
+    const [projectRes, actionsRes, blockersRes, raidRes, pvRes] = await Promise.all([
       supabase.from("projects").select("*, initiative:initiatives(name)").eq("id", project_id).single(),
       supabase.from("action_item_ages").select("*").eq("project_id", project_id),
       supabase.from("blocker_ages").select("*").eq("project_id", project_id),
-      supabase.from("raid_entries").select("*, owner:people!raid_entries_owner_id_fkey(full_name), reporter:people!raid_entries_reporter_id_fkey(full_name), vendor:vendors(name)").eq("project_id", project_id),
-      supabase.from("people").select("full_name, title, is_internal, vendor:vendors(name)").eq("org_id", orgId),
-      supabase.from("vendors").select("name").eq("org_id", orgId).order("name"),
+      supabase.from("raid_entries").select("*, owner:people!raid_entries_owner_id_fkey(id, full_name, title, is_internal, vendor_id), reporter:people!raid_entries_reporter_id_fkey(id, full_name, title, is_internal, vendor_id), vendor:vendors(id, name)").eq("project_id", project_id),
+      supabase.from("project_vendors").select("vendor:vendors(id, name)").eq("project_id", project_id),
     ]);
 
     const project = projectRes.data;
@@ -64,8 +63,46 @@ export async function POST(request: Request) {
     const actions = (actionsRes.data || []) as Row[];
     const blockers = (blockersRes.data || []) as Row[];
     const raidEntries = (raidRes.data || []) as Row[];
-    const people = (peopleRes.data || []) as Row[];
-    const vendors = (vendorsRes.data || []) as Row[];
+
+    // Collect people and vendor IDs actually referenced in this project's data
+    const referencedPersonIds = new Set<string>();
+    const referencedVendorIds = new Set<string>();
+
+    // From project's linked vendors
+    const projectVendors = ((pvRes.data || []) as Row[]).map((pv: Row) => pv.vendor).filter(Boolean);
+    projectVendors.forEach((v: Row) => referencedVendorIds.add(v.id));
+
+    // From action items
+    actions.forEach((a: Row) => {
+      if (a.owner_id) referencedPersonIds.add(a.owner_id);
+      if (a.vendor_id) referencedVendorIds.add(a.vendor_id);
+    });
+
+    // From blockers
+    blockers.forEach((b: Row) => {
+      if (b.owner_id) referencedPersonIds.add(b.owner_id);
+      if (b.vendor_id) referencedVendorIds.add(b.vendor_id);
+    });
+
+    // From RAID entries
+    raidEntries.forEach((r: Row) => {
+      const owner = r.owner as Row | null;
+      const reporter = r.reporter as Row | null;
+      const vendor = r.vendor as Row | null;
+      if (owner?.id) referencedPersonIds.add(owner.id);
+      if (reporter?.id) referencedPersonIds.add(reporter.id);
+      if (vendor?.id) referencedVendorIds.add(vendor.id);
+    });
+
+    // Fetch only referenced people
+    let people: Row[] = [];
+    if (referencedPersonIds.size > 0) {
+      const { data } = await supabase
+        .from("people")
+        .select("full_name, title, is_internal, vendor:vendors(name)")
+        .in("id", Array.from(referencedPersonIds));
+      people = (data || []) as Row[];
+    }
 
     // Build context string
     const sections: string[] = [];
@@ -76,12 +113,13 @@ Description: ${project.description || "none"}
 Notes: ${project.notes || "none"}
 Initiative: ${(project.initiative as Row)?.name || "none"}`);
 
-    if (vendors.length > 0) {
-      sections.push(`VENDORS (${vendors.length}): ${vendors.map((v: Row) => v.name).join(", ")}`);
+    // Only list vendors linked to this project
+    if (projectVendors.length > 0) {
+      sections.push(`VENDORS (${projectVendors.length}): ${projectVendors.map((v: Row) => v.name).join(", ")}`);
     }
 
     if (people.length > 0) {
-      sections.push(`PEOPLE (${people.length}):\n${people.map((p: Row) => {
+      sections.push(`PEOPLE INVOLVED IN THIS PROJECT (${people.length}):\n${people.map((p: Row) => {
         const vendor = (p.vendor as Row)?.name;
         return `- ${p.full_name}${p.title ? ` (${p.title})` : ""} — ${p.is_internal ? "internal" : `vendor: ${vendor || "unknown"}`}`;
       }).join("\n")}`);

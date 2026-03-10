@@ -2428,91 +2428,92 @@ function DocsPanel({ projectId }: { projectId: string }) {
           </div>
         </div>
       ) : (
-        <div className="border border-t-0 border-gray-300 rounded-b flex" style={{ minHeight: 400 }}>
-          {/* Index sidebar */}
-          <div className="w-56 border-r border-gray-200 bg-gray-50 flex-shrink-0">
-            <div className="px-3 py-2 border-b border-gray-200">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Index</span>
+        <div className="border border-t-0 border-gray-300 rounded-b">
+          {/* Ask bar — top */}
+          <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={question}
+                onChange={(e) => setQuestion(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleAsk(); } }}
+                placeholder="Ask a question about this project..."
+                className="flex-1 rounded border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+                disabled={asking}
+              />
+              <button
+                onClick={handleAsk}
+                disabled={asking || !question.trim()}
+                className="bg-blue-600 hover:bg-blue-500 disabled:bg-gray-300 text-white text-sm px-4 py-1.5 rounded transition-colors font-medium"
+              >
+                Ask
+              </button>
             </div>
-            <nav className="py-1">
-              {sections.map((s) => (
-                <button
-                  key={s.section_key}
-                  onClick={() => setActiveSection(s.section_key)}
-                  className={`w-full text-left px-3 py-1.5 text-sm transition-colors ${
-                    activeSection === s.section_key
-                      ? "bg-blue-50 text-blue-700 font-medium border-l-2 border-blue-600"
-                      : "text-gray-600 hover:bg-gray-100 border-l-2 border-transparent"
-                  }`}
-                >
-                  {s.section_title}
-                </button>
-              ))}
-            </nav>
-            {/* Generated timestamp */}
-            {sections[0] && (
-              <div className="px-3 py-2 border-t border-gray-200 mt-auto">
-                <span className="text-[10px] text-gray-400">Generated {new Date(sections[0].generated_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}</span>
+            {(chatHistory.length > 0 || asking) && (
+              <div className="mt-3 space-y-2 max-h-48 overflow-y-auto">
+                {chatHistory.map((msg, i) => (
+                  <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                    <div className={`max-w-[80%] rounded px-3 py-1.5 text-sm ${msg.role === "user" ? "bg-blue-600 text-white" : "bg-white border border-gray-200 text-gray-700"}`}>
+                      {msg.role === "assistant" ? <MarkdownRenderer content={msg.text} /> : msg.text}
+                      {msg.sources && msg.sources.length > 0 && (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {msg.sources.map((s, j) => (
+                            <span key={j} className="text-[10px] bg-gray-100 text-gray-500 rounded px-1.5 py-0.5">{s}</span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {asking && (
+                  <div className="flex justify-start">
+                    <div className="bg-white border border-gray-200 rounded px-3 py-1.5 text-sm text-gray-400">Thinking...</div>
+                  </div>
+                )}
               </div>
             )}
           </div>
 
-          {/* Content area */}
-          <div className="flex-1 flex flex-col min-w-0">
-            {current ? (
-              <div className="flex-1 overflow-auto px-6 py-4">
-                <div className="prose prose-sm max-w-none prose-headings:text-gray-900 prose-p:text-gray-700 prose-li:text-gray-700 prose-strong:text-gray-900">
-                  <MarkdownRenderer content={current.content} />
-                </div>
+          {/* Index + Content */}
+          <div className="flex" style={{ minHeight: 400 }}>
+            {/* Index sidebar */}
+            <div className="w-56 border-r border-gray-200 bg-gray-50 flex-shrink-0">
+              <div className="px-3 py-2 border-b border-gray-200">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Index</span>
               </div>
-            ) : (
-              <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">Select a section from the index</div>
-            )}
-
-            {/* Ask bar */}
-            <div className="border-t border-gray-200 bg-gray-50 px-4 py-3">
-              <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-2">Ask about this project</div>
-              {chatHistory.length > 0 && (
-                <div className="mb-3 space-y-2 max-h-48 overflow-y-auto">
-                  {chatHistory.map((msg, i) => (
-                    <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-                      <div className={`max-w-[80%] rounded px-3 py-1.5 text-sm ${msg.role === "user" ? "bg-blue-600 text-white" : "bg-white border border-gray-200 text-gray-700"}`}>
-                        {msg.role === "assistant" ? <MarkdownRenderer content={msg.text} /> : msg.text}
-                        {msg.sources && msg.sources.length > 0 && (
-                          <div className="mt-1 flex flex-wrap gap-1">
-                            {msg.sources.map((s, j) => (
-                              <span key={j} className="text-[10px] bg-gray-100 text-gray-500 rounded px-1.5 py-0.5">{s}</span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                  {asking && (
-                    <div className="flex justify-start">
-                      <div className="bg-white border border-gray-200 rounded px-3 py-1.5 text-sm text-gray-400">Thinking...</div>
-                    </div>
-                  )}
+              <nav className="py-1">
+                {sections.map((s) => (
+                  <button
+                    key={s.section_key}
+                    onClick={() => setActiveSection(s.section_key)}
+                    className={`w-full text-left px-3 py-1.5 text-sm transition-colors ${
+                      activeSection === s.section_key
+                        ? "bg-blue-50 text-blue-700 font-medium border-l-2 border-blue-600"
+                        : "text-gray-600 hover:bg-gray-100 border-l-2 border-transparent"
+                    }`}
+                  >
+                    {s.section_title}
+                  </button>
+                ))}
+              </nav>
+              {sections[0] && (
+                <div className="px-3 py-2 border-t border-gray-200 mt-auto">
+                  <span className="text-[10px] text-gray-400">Generated {new Date(sections[0].generated_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}</span>
                 </div>
               )}
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={question}
-                  onChange={(e) => setQuestion(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleAsk(); } }}
-                  placeholder="Ask a question about this project's documentation..."
-                  className="flex-1 rounded border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
-                  disabled={asking}
-                />
-                <button
-                  onClick={handleAsk}
-                  disabled={asking || !question.trim()}
-                  className="bg-blue-600 hover:bg-blue-500 disabled:bg-gray-300 text-white text-sm px-4 py-1.5 rounded transition-colors font-medium"
-                >
-                  Ask
-                </button>
-              </div>
+            </div>
+
+            {/* Content area */}
+            <div className="flex-1 min-w-0">
+              {current ? (
+                <div className="overflow-auto px-6 py-4">
+                  <div className="prose prose-sm max-w-none prose-headings:text-gray-900 prose-p:text-gray-700 prose-li:text-gray-700 prose-strong:text-gray-900">
+                    <MarkdownRenderer content={current.content} />
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-center text-gray-400 text-sm h-full">Select a section from the index</div>
+              )}
             </div>
           </div>
         </div>
