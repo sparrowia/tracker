@@ -889,17 +889,15 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                       </button>
                       {/* Title — inline editable for decisions */}
                       {entry.raid_type === "decision" ? (
-                        <span className="text-sm font-semibold min-w-0 flex-1" onClick={(e) => e.stopPropagation()}>
+                        <span className="text-sm font-semibold min-w-0 flex-1 truncate" onClick={(e) => e.stopPropagation()}>
                           <InlineText value={entry.title} onSave={(v) => { if (v.trim()) saveField(entry.id, "title", v.trim()); }} placeholder="Decision title..." />
                         </span>
                       ) : (
-                        <span className={`text-sm font-semibold truncate min-w-0 ${isChild ? "text-gray-700" : "text-gray-900"}`}>{entry.title}</span>
+                        <span className={`text-sm font-semibold truncate min-w-0 flex-1 ${isChild ? "text-gray-700" : "text-gray-900"}`}>{entry.title}</span>
                       )}
                       {childCount > 0 && (
                         <span className="text-[10px] text-[#000000] bg-gray-200 rounded px-1.5 py-0.5 flex-shrink-0">{childCount}</span>
                       )}
-                      {/* Spacer */}
-                      <div className="flex-1" />
                       {/* Metadata — dynamic columns */}
                       {visibleCols.map((col) => (
                         <Fragment key={col}>{renderColumnCell(entry, col)}</Fragment>
