@@ -823,7 +823,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                 <Fragment key={entry.id}>
                   {/* Collapsed row */}
                   <div
-                    className={`border-b last:border-b-0 cursor-pointer relative ${isResolving ? "bg-green-100 opacity-0 border-transparent" : isDragging ? "opacity-40 bg-white border-gray-400" : isDropNest ? "bg-blue-50 border-blue-300" : isClosed ? "bg-gray-50 hover:bg-gray-100 border-gray-400" : "bg-white hover:bg-gray-50 border-gray-400"}`}
+                    className={`border-b last:border-b-0 cursor-pointer relative overflow-hidden ${isResolving ? "bg-green-100 opacity-0 border-transparent" : isDragging ? "opacity-40 bg-white border-gray-400" : isDropNest ? "bg-blue-50 border-blue-300" : isClosed ? "bg-gray-50 hover:bg-gray-100 border-gray-400" : "bg-white hover:bg-gray-50 border-gray-400"}`}
                     style={{ transition: isResolving ? "all 350ms ease-out" : undefined, paddingLeft: isChild ? "2rem" : "0.75rem", paddingRight: "0.75rem", ...(isResolving ? { maxHeight: 0, paddingTop: 0, paddingBottom: 0, overflow: "hidden" } : { maxHeight: 200, paddingTop: "0.5rem", paddingBottom: "0.5rem" }) }}
                     onClick={() => toggleExpand(entry.id)}
                     draggable={entry.raid_type !== "decision"}
