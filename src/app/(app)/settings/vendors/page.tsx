@@ -22,7 +22,8 @@ export default function VendorsPage() {
   const [editForm, setEditForm] = useState({ name: "", slug: "", website: "", notes: "" });
   const supabase = createClient();
   const router = useRouter();
-  const { profileId, orgId } = useRole();
+  const { role, profileId, orgId } = useRole();
+  const canManage = role === "super_admin" || role === "admin";
 
   useEffect(() => {
     async function load() {
@@ -163,12 +164,14 @@ export default function VendorsPage() {
     <div className="max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Vendors</h1>
-        <button
-          onClick={openCreate}
-          className="px-4 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
-        >
-          + Add Vendor
-        </button>
+        {canManage && (
+          <button
+            onClick={openCreate}
+            className="px-4 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+          >
+            + Add Vendor
+          </button>
+        )}
       </div>
 
       {vendors.length === 0 ? (
@@ -181,8 +184,8 @@ export default function VendorsPage() {
               href={`/settings/vendors/${v.id}`}
               className="relative bg-white rounded-lg border border-gray-300 p-5 hover:border-blue-400 transition-colors"
             >
-              {/* View icon */}
-              <button
+              {/* View icon — admin only */}
+              {canManage && <button
                 onClick={(e) => openModal(v, e)}
                 className="absolute top-3 right-3 text-gray-300 hover:text-blue-600 transition-colors"
                 title="View details"
@@ -192,7 +195,7 @@ export default function VendorsPage() {
                   <circle cx="19" cy="12" r="1"/>
                   <circle cx="5" cy="12" r="1"/>
                 </svg>
-              </button>
+              </button>}
               <h3 className={`font-semibold pr-6 ${v.blockerCount > 0 ? "text-red-600" : "text-gray-900"}`}>{v.name}</h3>
               <div className="mt-3 space-y-1 text-sm">
                 <div className="flex justify-between">

@@ -37,18 +37,18 @@ interface SidebarInitiative {
 }
 
 function getSettingsItems(role: UserRole) {
-  const items = [
+  const items: { name: string; href: string; icon: typeof Users }[] = [
     { name: "People", href: "/settings/people", icon: Users },
     { name: "Vendors", href: "/settings/vendors", icon: Building2 },
-    { name: "Term Corrections", href: "/settings", icon: BookType },
   ];
   if (role === "super_admin" || role === "admin") {
+    items.push({ name: "Term Corrections", href: "/settings", icon: BookType });
     items.push({ name: "Team", href: "/settings/team", icon: Users });
   }
   return items;
 }
 
-export function Sidebar({ role = "user" as UserRole }: { role?: UserRole }) {
+export function Sidebar({ role = "user" as UserRole, profileId, userPersonId }: { role?: UserRole; profileId?: string; userPersonId?: string | null }) {
   const pathname = usePathname();
   const isOnSettings = pathname.startsWith("/settings");
   const isOnInitiatives = pathname.startsWith("/initiatives") || pathname.startsWith("/projects");
@@ -84,16 +84,27 @@ export function Sidebar({ role = "user" as UserRole }: { role?: UserRole }) {
         supabase.from("projects").select("id, name, slug, initiative_id").order("name"),
         supabase.from("blockers").select("project_id").eq("status", "pending"),
       ]);
+
       const inits = (initData || []) as { id: string; name: string; slug: string }[];
-      const projs = (projData || []) as { id: string; name: string; slug: string; initiative_id: string | null }[];
+      let projs = (projData || []) as { id: string; name: string; slug: string; initiative_id: string | null }[];
       const blockedProjectIds = new Set((blockerData || []).map((b: { project_id: string }) => b.project_id));
 
-      const result: SidebarInitiative[] = inits.map((init) => ({
-        ...init,
-        projects: projs
-          .filter((p) => p.initiative_id === init.id)
-          .map((p) => ({ ...p, hasBlockers: blockedProjectIds.has(p.id) })),
-      }));
+      // For regular users, only show projects they are part of
+      if (role === "user" && userPersonId && profileId) {
+        const { data: visibleIds } = await supabase.rpc("user_visible_project_ids", { p_person_id: userPersonId, p_profile_id: profileId });
+        const idSet = new Set((visibleIds || []).map(String));
+        projs = projs.filter((p) => idSet.has(p.id));
+      }
+
+      const result: SidebarInitiative[] = inits
+        .map((init) => ({
+          ...init,
+          projects: projs
+            .filter((p) => p.initiative_id === init.id)
+            .map((p) => ({ ...p, hasBlockers: blockedProjectIds.has(p.id) })),
+        }))
+        // For regular users, only show initiatives that have visible projects
+        .filter((init) => role !== "user" || init.projects.length > 0);
 
       setInitiatives(result);
       setLoaded(true);
@@ -101,7 +112,7 @@ export function Sidebar({ role = "user" as UserRole }: { role?: UserRole }) {
     load();
     window.addEventListener("sidebar:refresh", load);
     return () => window.removeEventListener("sidebar:refresh", load);
-  }, []);
+  }, [role, profileId, userPersonId]);
 
   // Auto-expand based on current path (no re-fetch)
   useEffect(() => {

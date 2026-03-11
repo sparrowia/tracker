@@ -6,6 +6,7 @@ import Link from "next/link";
 import { healthColor, healthLabel, formatDateShort } from "@/lib/utils";
 import type { Initiative, Project } from "@/lib/types";
 import AddInitiativeButton from "@/components/add-initiative-button";
+import { useRole } from "@/components/role-context";
 
 const UNASSIGNED = "__unassigned__";
 
@@ -16,16 +17,26 @@ export default function InitiativesPage() {
   const [dragProjectId, setDragProjectId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const supabase = createClient();
+  const { role, profileId, userPersonId } = useRole();
 
   const reload = useCallback(async () => {
     const [{ data: initData }, { data: projData }] = await Promise.all([
       supabase.from("initiatives").select("*").order("name"),
       supabase.from("projects").select("*").order("name"),
     ]);
+    let filteredProjects = (projData || []) as Project[];
+
+    // For regular users, only show projects they are part of
+    if (role === "user" && userPersonId && profileId) {
+      const { data: visibleIds } = await supabase.rpc("user_visible_project_ids", { p_person_id: userPersonId, p_profile_id: profileId });
+      const idSet = new Set((visibleIds || []).map(String));
+      filteredProjects = filteredProjects.filter((p) => idSet.has(p.id));
+    }
+
     setInitiatives((initData || []) as Initiative[]);
-    setProjects((projData || []) as Project[]);
+    setProjects(filteredProjects);
     setLoading(false);
-  }, []);
+  }, [role, profileId, userPersonId]);
 
   useEffect(() => { reload(); }, [reload]);
 
@@ -119,7 +130,7 @@ export default function InitiativesPage() {
         <p className="text-sm text-gray-500">No initiatives or projects yet.</p>
       ) : (
         <div className="space-y-6">
-          {initiatives.map((init) => {
+          {initiatives.filter((init) => role !== "user" || (projectsByInitiative.get(init.id) || []).length > 0).map((init) => {
             const initProjects = projectsByInitiative.get(init.id) || [];
             const isOver = dropTarget === init.id;
             return (

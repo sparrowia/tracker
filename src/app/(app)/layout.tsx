@@ -45,7 +45,7 @@ export default async function AppLayout({
       }}
     >
       <div className="flex h-screen bg-gray-50">
-        <Sidebar role={role} />
+        <Sidebar role={role} profileId={user.id} userPersonId={personRecord?.id || null} />
         <div className="flex-1 flex flex-col overflow-hidden">
           <Topbar profile={profile} />
           <main className="flex-1 overflow-y-auto p-6">{children}</main>
