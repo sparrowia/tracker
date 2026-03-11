@@ -27,6 +27,7 @@ export default function PeopleList({ initialPeople, vendors, profiles, initialIn
   const [addingExternal, setAddingExternal] = useState(false);
   const [addName, setAddName] = useState("");
   const [invitingId, setInvitingId] = useState<string | null>(null);
+  const [expandedVendors, setExpandedVendors] = useState<Set<string>>(new Set());
   const supabase = createClient();
 
   const [activeTab, setActiveTab] = useState<"internal" | "vendors">("internal");
@@ -398,41 +399,48 @@ export default function PeopleList({ initialPeople, vendors, profiles, initialIn
               {external.length === 0 && !addingExternal ? (
                 <p className="text-sm text-gray-500 p-4">No vendor contacts.</p>
               ) : (
-                vendorGroups.map(([vendorName, group]) => (
-                  <div key={vendorName}>
-                    <div className="bg-gray-700 px-4 py-1.5 flex items-center justify-between">
-                      {group.vendor ? (
-                        <Link href={`/settings/vendors/${group.vendor.id}`} className="text-xs font-semibold text-white uppercase tracking-wide hover:text-blue-300">
-                          {vendorName} ({group.people.length})
-                        </Link>
-                      ) : (
-                        <span className="text-xs font-semibold text-white uppercase tracking-wide">
-                          {vendorName} ({group.people.length})
-                        </span>
-                      )}
-                    </div>
-                    {group.people.map((p) => {
-                      const status = getContactStatus(p);
-                      const badge = statusBadge(status);
-                      return (
-                        <Fragment key={p.id}>
-                          <div
-                            className={`px-4 py-3 border-b border-gray-200 last:border-b-0 hover:bg-gray-50 cursor-pointer flex items-center gap-4 ${expandedId === p.id ? "bg-gray-50" : ""}`}
-                            onClick={() => canEdit && setExpandedId(expandedId === p.id ? null : p.id)}
-                          >
-                            <div className="flex-1 min-w-0">
-                              <p className="font-semibold text-sm text-gray-900">{p.full_name}</p>
-                              {p.title && <p className="text-xs text-gray-500">{p.title}</p>}
+                vendorGroups.map(([vendorName, group]) => {
+                  const isVendorExpanded = expandedVendors.has(vendorName);
+                  return (
+                    <div key={vendorName} className="border-b border-gray-200 last:border-b-0">
+                      <div
+                        className="px-4 py-2.5 flex items-center gap-2 hover:bg-gray-50 cursor-pointer"
+                        onClick={() => setExpandedVendors((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(vendorName)) next.delete(vendorName);
+                          else next.add(vendorName);
+                          return next;
+                        })}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="currentColor" stroke="none" className={`transition-transform flex-shrink-0 ${isVendorExpanded ? "rotate-90" : ""}`}>
+                          <polygon points="6,4 20,12 6,20" />
+                        </svg>
+                        <span className="text-sm font-semibold text-gray-900">{vendorName}</span>
+                        <span className="text-xs text-gray-400">({group.people.length})</span>
+                      </div>
+                      {isVendorExpanded && group.people.map((p) => {
+                        const status = getContactStatus(p);
+                        const badge = statusBadge(status);
+                        return (
+                          <Fragment key={p.id}>
+                            <div
+                              className={`pl-10 pr-4 py-2.5 border-t border-gray-200 hover:bg-gray-50 cursor-pointer flex items-center gap-4 ${expandedId === p.id ? "bg-gray-50" : ""}`}
+                              onClick={() => canEdit && setExpandedId(expandedId === p.id ? null : p.id)}
+                            >
+                              <div className="flex-1 min-w-0">
+                                <p className="font-semibold text-sm text-gray-900">{p.full_name}</p>
+                                {p.title && <p className="text-xs text-gray-500">{p.title}</p>}
+                              </div>
+                              {p.email && <span className="text-xs text-gray-500 truncate">{p.email}</span>}
+                              <span className={`inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded ${badge.className}`}>{badge.label}</span>
                             </div>
-                            {p.email && <span className="text-xs text-gray-500 truncate">{p.email}</span>}
-                            <span className={`inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded ${badge.className}`}>{badge.label}</span>
-                          </div>
-                          {expandedId === p.id && canEdit && renderEditPanel(p)}
-                        </Fragment>
-                      );
-                    })}
-                  </div>
-                ))
+                            {expandedId === p.id && canEdit && renderEditPanel(p)}
+                          </Fragment>
+                        );
+                      })}
+                    </div>
+                  );
+                }))
               )}
             </div>
           </section>
