@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/client";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 
 function LoginForm() {
   const searchParams = useSearchParams();
@@ -13,13 +13,64 @@ function LoginForm() {
     deactivated ? "Your account has been deactivated. Contact your administrator." : null
   );
   const [loading, setLoading] = useState(false);
+  const [checking, setChecking] = useState(true);
+  const loginSubmittedRef = useRef(false);
   const router = useRouter();
   const supabase = createClient();
+
+  // Detect invite tokens: Supabase may redirect here with auth tokens in the
+  // URL hash (#access_token=...) or as a ?code= param. The Supabase client
+  // auto-parses hash tokens. We listen for SIGNED_IN to catch both cases and
+  // redirect invited users to /set-password instead of showing a useless login form.
+  useEffect(() => {
+    // Handle ?code= (PKCE flow) — exchange it immediately
+    const code = searchParams.get("code");
+    if (code) {
+      supabase.auth.exchangeCodeForSession(code).then(({ data, error: err }) => {
+        if (!err && data?.session) {
+          router.replace("/set-password");
+        } else {
+          setChecking(false);
+        }
+      });
+      return;
+    }
+
+    // Check for existing session (from hash fragment auto-parse or prior login)
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        // User already has a session — check if they need to set a password
+        // Invited users have role in user_metadata set by inviteUserByEmail
+        const meta = session.user.user_metadata;
+        if (meta?.role && !deactivated) {
+          router.replace("/set-password");
+          return;
+        }
+        // Already logged in with a password — go to dashboard
+        if (!deactivated) {
+          router.replace("/dashboard");
+          return;
+        }
+      }
+      setChecking(false);
+    });
+
+    // Listen for auth state change from hash fragment processing
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_IN" && session && !loginSubmittedRef.current) {
+        // Authenticated via invite link tokens — redirect to set password
+        router.replace("/set-password");
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setLoading(true);
+    loginSubmittedRef.current = true;
 
     const { error } = await supabase.auth.signInWithPassword({
       email,
@@ -29,10 +80,19 @@ function LoginForm() {
     if (error) {
       setError(error.message);
       setLoading(false);
+      loginSubmittedRef.current = false;
     } else {
       router.push("/dashboard");
       router.refresh();
     }
+  }
+
+  if (checking) {
+    return (
+      <div className="mt-8 text-center text-sm text-gray-500">
+        Checking authentication...
+      </div>
+    );
   }
 
   return (

@@ -38,6 +38,18 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
+  // If a ?code= param arrives on any path other than /auth/callback,
+  // redirect to the callback so the code exchange happens properly.
+  // This catches cases where Supabase redirects to root or login with a code.
+  const code = request.nextUrl.searchParams.get("code");
+  if (code && !request.nextUrl.pathname.startsWith("/auth/callback")) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/auth/callback";
+    // Preserve the code param, drop everything else
+    url.search = `?code=${encodeURIComponent(code)}`;
+    return NextResponse.redirect(url);
+  }
+
   const {
     data: { user },
   } = await supabase.auth.getUser();
