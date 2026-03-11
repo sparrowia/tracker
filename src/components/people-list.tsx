@@ -30,8 +30,8 @@ export default function PeopleList({ initialPeople, vendors, profiles, initialIn
   const supabase = createClient();
 
   const [activeTab, setActiveTab] = useState<"internal" | "vendors">("internal");
-  const internal = people.filter((p) => p.is_internal);
-  const external = people.filter((p) => !p.is_internal);
+  const internal = people.filter((p) => p.is_internal).sort((a, b) => a.full_name.localeCompare(b.full_name));
+  const external = people.filter((p) => !p.is_internal).sort((a, b) => a.full_name.localeCompare(b.full_name));
   const canEdit = isAdmin(role);
 
   function getContactStatus(person: PersonRow): ContactStatus {
