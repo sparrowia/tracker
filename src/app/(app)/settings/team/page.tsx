@@ -146,8 +146,18 @@ export default function TeamPage() {
 
   async function handleCancelInvite(invitationId: string) {
     setActionLoading(invitationId);
-    await supabase.from("invitations").delete().eq("id", invitationId);
+    const res = await fetch("/api/invite/cancel", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ invitation_id: invitationId }),
+    });
     setActionLoading(null);
+    if (!res.ok) {
+      const data = await res.json();
+      showError(data.error || "Failed to cancel invitation");
+      return;
+    }
+    showSuccess("Invitation cancelled");
     loadData();
   }
 
