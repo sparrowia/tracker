@@ -56,7 +56,9 @@ src/
 │   └── api/
 │       ├── extract/              # DeepSeek extraction endpoint
 │       ├── invite/               # POST: send invitation email
-│       │   └── resend/           # POST: resend expired invitation
+│       │   ├── resend/           # POST: resend expired invitation
+│       │   ├── cancel/           # POST: cancel invite (deletes auth user + profile + invitation)
+│       │   └── accept/           # POST: mark invitation accepted
 │       └── users/
 │           ├── deactivate/       # POST: deactivate user (admin+)
 │           └── reactivate/       # POST: reactivate user (super_admin)
@@ -167,7 +169,7 @@ Separate SELECT/INSERT/UPDATE/DELETE policies on every data table. Vendor-scoped
 - **`src/lib/permissions.ts`**: `canCreate(role)`, `canDelete(role)`, `canEditItem(role, profileId, item, userPersonId)`, `canUpdateStatus(role)`, `canInvite(role)`
 - **`src/components/role-context.tsx`**: React context (`useRole()` hook) provides role, profileId, orgId, vendorId, userPersonId, impersonation, stopImpersonation to all client components
 - **`src/app/(app)/layout.tsx`**: Wraps app in `<RoleProvider>`
-- **`src/components/sidebar.tsx`**: Hides admin pages from users/vendors; hides Intake/Ask from vendors
+- **`src/components/sidebar.tsx`**: Hides admin pages from users/vendors; hides Intake/Ask from vendors. Uses `useRole()` context (not props) so impersonation is reflected in sidebar visibility and project filtering.
 - Components (raid-log, agenda-view, comment-thread, pickers) check permissions to show/hide create, delete, edit controls
 
 ### Invitation Flow
@@ -180,7 +182,7 @@ Separate SELECT/INSERT/UPDATE/DELETE policies on every data table. Vendor-scoped
 ### Deactivation
 
 - Admin deactivates user → `POST /api/users/deactivate` sets `profiles.deactivated_at` and bans auth user
-- Middleware checks `deactivated_at` on every request → signs out and redirects to `/login?error=account_deactivated`
+- Middleware checks `deactivated_at` on full page loads (skips RSC fetch requests for performance) → signs out and redirects to `/login?error=account_deactivated`
 - Super_admin can reactivate via `POST /api/users/reactivate`
 
 ### Team Management UI
@@ -201,14 +203,24 @@ Super admins can impersonate any person from the People page (`/settings/people`
 
 ### People Page (`/settings/people`)
 
-Client component `people-list.tsx` with:
+Client component `people-list.tsx` with two tabs: **Internal Team** and **Vendors**.
+
+**Internal Team tab:**
+- Alphabetically sorted by first name
 - Click-to-expand inline editing for all person fields (name, title, email, phone, vendor, internal, notes)
 - Checking "Internal" clears vendor assignment and hides vendor field
 - Contact status badges: **Joined** (has profile_id), **Invited** (pending invitation by email match), **Added** (manually created)
 - Invite button on "Added" contacts with email — calls `POST /api/invite` with role inferred from vendor_id
-- "+ Add Person" / "+ Add Contact" buttons on section headers
+- "+ Add Person" button in dark header
 - Delete via trash icon in full-width action bar (matching RAID log pattern)
 - Impersonate button for super_admin
+
+**Vendors tab:**
+- Contacts grouped by vendor name using disclosure triangles (▶) matching RAID log parent/child pattern
+- Vendor groups sorted alphabetically, "Unassigned" at bottom
+- Click arrow to expand/collapse; contacts indented underneath
+- Same click-to-expand inline editing as Internal Team tab
+- "+ Add Contact" button in dark header
 
 ## Inline Add Pattern
 
@@ -226,6 +238,40 @@ Decisions have a distinct UX from other RAID types (risks, assumptions, issues):
 - **Simplified detail panel** — only Status, Owner, Decision Date, Description, Comments
 - **Two statuses only** — Pending and Final (Final maps to `complete` in DB, displayed as "Final")
 - **Inline-editable title** — clicking the title in the row allows direct editing
+
+## AI Contact Extraction
+
+The `/api/extract` route includes a `contacts` array in the AI extraction schema. When intake text mentions people with titles, emails, or phone numbers, the AI extracts them. On confirm in the review page, the app:
+1. Fuzzy-matches extracted contacts to existing `people` records (exact, substring, first/last name, Levenshtein)
+2. Updates any missing title/email/phone fields on matched records (never overwrites existing data)
+3. No user review needed — happens automatically during `handleConfirm`
+
+Stored in `extractedContactsRef` (a ref, not part of `extracted` state which is typed as `Record<EntityCategory, ExtractedItem[]>`).
+
+## Performance Optimizations
+
+### Database Indexes
+Migration `20260311000002_performance_indexes.sql` adds indexes on:
+- `raid_entries`: reporter_id, owner_id, status, resolved_at
+- `action_items`: due_date, priority+status (composite)
+- `blockers`: project_id, owner_id, resolved_at
+- `projects`: initiative_id
+- `people`: profile_id
+
+### Vendor Item Counts RPC
+`vendor_item_counts()` — single SQL query with GROUP BY joins that returns action/blocker/people counts per vendor. Replaces full-table scans with client-side aggregation on dashboard and vendors page.
+
+### Slim SELECT Joins
+Dashboard queries use `select("*, owner:people(id, full_name), ...")` instead of `select("*, owner:people(*)")` to reduce payload size. Same for comment thread author joins.
+
+### Middleware Optimization
+Deactivation DB check skipped on RSC fetch requests (`rsc` or `next-router-state-tree` headers). Full check still runs on initial page loads and hard navigations.
+
+### Layout Parallelization
+`layout.tsx` runs profile + person queries in parallel with `Promise.all` instead of sequential awaits.
+
+### Client-Side Pages for Fast Navigation
+Initiative detail (`/initiatives/[slug]`) is a client component — fetches directly from browser Supabase client, avoiding server round-trip overhead (middleware + layout re-render). Shows inline loading skeleton while data loads.
 
 ## Development
 
