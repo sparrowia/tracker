@@ -1,125 +1,265 @@
-import { createClient } from "@/lib/supabase/server";
-import { formatAge, priorityColor, priorityLabel, statusBadge, healthColor, healthLabel, formatDateShort } from "@/lib/utils";
+"use client";
+
+import { useState, useEffect } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { useRole } from "@/components/role-context";
 import Link from "next/link";
-import type { ActionItem, Blocker, SupportTicket, RaidEntry, Project, Vendor, Person } from "@/lib/types";
+import { formatAge, priorityColor, priorityLabel, statusBadge, healthColor, healthLabel, formatDateShort } from "@/lib/utils";
+import type { ActionItem, Blocker, RaidEntry, Project, Initiative, Person, Vendor } from "@/lib/types";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type SupabaseClient = any;
+type ActionRow = ActionItem & { owner: Pick<Person, "id" | "full_name"> | null; project: Pick<Project, "id" | "name" | "slug"> | null };
+type BlockerRow = Blocker & { owner: Pick<Person, "id" | "full_name"> | null; vendor: Pick<Vendor, "id" | "name"> | null; project: Pick<Project, "id" | "name" | "slug"> | null };
+type RaidRow = RaidEntry & { owner: Pick<Person, "id" | "full_name"> | null; project: Pick<Project, "id" | "name" | "slug"> | null };
+type ProjectRow = Project & { actionCount: number; blockerCount: number };
+type InitiativeGroup = Initiative & { projects: ProjectRow[] };
 
-async function getCriticalPath(supabase: SupabaseClient) {
-  const { data } = await supabase
-    .from("action_item_ages")
-    .select("*, owner:people(id, full_name), vendor:vendors(id, name), project:projects(id, name, slug)")
-    .in("priority", ["critical", "high"])
-    .in("status", ["pending", "in_progress", "at_risk", "blocked"])
-    .order("priority")
-    .order("due_date", { ascending: true, nullsFirst: false })
-    .limit(15);
-  return (data || []) as (ActionItem & { owner: Person | null; vendor: Vendor | null; project: Project | null })[];
-}
+export default function DashboardPage() {
+  const { role, profileId, userPersonId } = useRole();
+  const [loading, setLoading] = useState(true);
+  const [overdue, setOverdue] = useState<ActionRow[]>([]);
+  const [dueThisWeek, setDueThisWeek] = useState<ActionRow[]>([]);
+  const [blockers, setBlockers] = useState<BlockerRow[]>([]);
+  const [risksIssues, setRisksIssues] = useState<RaidRow[]>([]);
+  const [decisions, setDecisions] = useState<RaidRow[]>([]);
+  const [initiativeGroups, setInitiativeGroups] = useState<InitiativeGroup[]>([]);
+  const supabase = createClient();
 
-async function getBlockers(supabase: SupabaseClient) {
-  const { data } = await supabase
-    .from("blocker_ages")
-    .select("*, owner:people(id, full_name), vendor:vendors(id, name), project:projects(id, name, slug)")
-    .order("priority")
-    .order("first_flagged_at")
-    .limit(15);
-  return (data || []) as (Blocker & { owner: Person | null; vendor: Vendor | null; project: Project | null })[];
-}
+  useEffect(() => {
+    async function load() {
+      const isAdmin = role === "super_admin" || role === "admin";
 
-async function getSupportTickets(supabase: SupabaseClient) {
-  const { data } = await supabase
-    .from("support_tickets")
-    .select("*, vendor:vendors(id, name), project:projects(id, name, slug)")
-    .neq("status", "complete")
-    .order("priority")
-    .order("opened_at")
-    .limit(10);
-  return (data || []) as (SupportTicket & { vendor: Vendor | null; project: Project | null })[];
-}
+      // Get visible project IDs for regular users
+      let visibleProjectIds: Set<string> | null = null;
+      if (!isAdmin && userPersonId && profileId) {
+        const { data: ids } = await supabase.rpc("user_visible_project_ids", { p_person_id: userPersonId, p_profile_id: profileId });
+        visibleProjectIds = new Set((ids || []).map(String));
+      }
 
-async function getDecisions(supabase: SupabaseClient) {
-  const { data } = await supabase
-    .from("raid_entries")
-    .select("*, owner:people(id, full_name), project:projects(id, name, slug)")
-    .eq("raid_type", "decision")
-    .neq("status", "complete")
-    .order("priority")
-    .limit(10);
-  return (data || []) as (RaidEntry & { owner: Person | null; project: Project | null })[];
-}
+      const today = new Date().toISOString().split("T")[0];
+      const weekFromNow = new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0];
 
-async function getProjects(supabase: SupabaseClient) {
-  const { data } = await supabase
-    .from("projects")
-    .select("id, name, slug, health, platform_status, target_completion")
-    .order("name");
-  return (data || []) as Project[];
-}
+      // All queries in parallel
+      const [
+        { data: overdueData },
+        { data: dueWeekData },
+        { data: blockerData },
+        { data: riskData },
+        { data: decisionData },
+        { data: initData },
+        { data: projData },
+        { data: actionCounts },
+        { data: blockerCounts },
+      ] = await Promise.all([
+        // Overdue action items
+        supabase
+          .from("action_item_ages")
+          .select("*, owner:people(id, full_name), project:projects(id, name, slug)")
+          .lt("due_date", today)
+          .in("status", ["pending", "in_progress", "at_risk", "blocked"])
+          .order("due_date")
+          .limit(20),
+        // Due this week
+        supabase
+          .from("action_item_ages")
+          .select("*, owner:people(id, full_name), project:projects(id, name, slug)")
+          .gte("due_date", today)
+          .lte("due_date", weekFromNow)
+          .in("status", ["pending", "in_progress", "at_risk", "blocked"])
+          .order("due_date")
+          .limit(20),
+        // Active blockers
+        supabase
+          .from("blocker_ages")
+          .select("*, owner:people(id, full_name), vendor:vendors(id, name), project:projects(id, name, slug)")
+          .order("priority")
+          .order("first_flagged_at")
+          .limit(15),
+        // High/critical risks and issues
+        supabase
+          .from("raid_entries")
+          .select("*, owner:people(id, full_name), project:projects(id, name, slug)")
+          .in("raid_type", ["risk", "issue"])
+          .in("priority", ["critical", "high"])
+          .neq("status", "complete")
+          .is("resolved_at", null)
+          .order("priority")
+          .order("first_flagged_at")
+          .limit(15),
+        // Pending decisions
+        supabase
+          .from("raid_entries")
+          .select("*, owner:people(id, full_name), project:projects(id, name, slug)")
+          .eq("raid_type", "decision")
+          .neq("status", "complete")
+          .order("priority")
+          .limit(10),
+        // Initiatives
+        supabase.from("initiatives").select("*").order("name"),
+        // Projects
+        supabase.from("projects").select("*").order("name"),
+        // Action counts per project (open items)
+        supabase.from("action_items").select("project_id").neq("status", "complete").not("project_id", "is", null),
+        // Blocker counts per project (unresolved)
+        supabase.from("blockers").select("project_id").is("resolved_at", null).not("project_id", "is", null),
+      ]);
 
-async function getVendorSummary(supabase: SupabaseClient) {
-  const [{ data: vendors }, { data: counts }] = await Promise.all([
-    supabase.from("vendors").select("id, name, slug").order("name"),
-    supabase.rpc("vendor_item_counts"),
-  ]);
+      // Scope to visible projects for regular users
+      function scopeByProject<T extends { project_id?: string | null; project?: { id: string } | null }>(items: T[]): T[] {
+        if (!visibleProjectIds) return items;
+        return items.filter((i) => {
+          const pid = i.project?.id || i.project_id;
+          return pid && visibleProjectIds!.has(pid);
+        });
+      }
 
-  if (!vendors) return [];
+      setOverdue(scopeByProject((overdueData || []) as ActionRow[]));
+      setDueThisWeek(scopeByProject((dueWeekData || []) as ActionRow[]));
+      setBlockers(scopeByProject((blockerData || []) as BlockerRow[]));
+      setRisksIssues(scopeByProject((riskData || []) as RaidRow[]));
+      setDecisions(scopeByProject((decisionData || []) as RaidRow[]));
 
-  const countMap = new Map(
-    ((counts || []) as { vendor_id: string; action_count: number; blocker_count: number; people_count: number }[])
-      .map((c) => [c.vendor_id, c])
-  );
+      // Build initiative-grouped project view with counts
+      const actionCountMap = new Map<string, number>();
+      const blockerCountMap = new Map<string, number>();
+      for (const a of actionCounts || []) actionCountMap.set(a.project_id, (actionCountMap.get(a.project_id) || 0) + 1);
+      for (const b of blockerCounts || []) blockerCountMap.set(b.project_id, (blockerCountMap.get(b.project_id) || 0) + 1);
 
-  return (vendors as Vendor[])
-    .map((vendor) => {
-      const c = countMap.get(vendor.id);
-      const actionCount = c?.action_count || 0;
-      const blockerCount = c?.blocker_count || 0;
-      return { vendor, actionCount, blockerCount, totalOpen: actionCount + blockerCount };
-    })
-    .filter((s) => s.totalOpen > 0)
-    .sort((a, b) => b.totalOpen - a.totalOpen);
-}
+      let projects = ((projData || []) as Project[]).map((p) => ({
+        ...p,
+        actionCount: actionCountMap.get(p.id) || 0,
+        blockerCount: blockerCountMap.get(p.id) || 0,
+      }));
 
-export default async function DashboardPage() {
-  const supabase = await createClient();
+      if (visibleProjectIds) {
+        projects = projects.filter((p) => visibleProjectIds!.has(p.id));
+      }
 
-  const [criticalPath, blockers, supportTickets, decisions, projects, vendorSummary] =
-    await Promise.all([
-      getCriticalPath(supabase),
-      getBlockers(supabase),
-      getSupportTickets(supabase),
-      getDecisions(supabase),
-      getProjects(supabase),
-      getVendorSummary(supabase),
-    ]);
+      const inits = (initData || []) as Initiative[];
+      const groups: InitiativeGroup[] = inits
+        .map((init) => ({
+          ...init,
+          projects: projects.filter((p) => p.initiative_id === init.id),
+        }))
+        .filter((g) => g.projects.length > 0);
+
+      // Add unassigned projects as a pseudo-initiative
+      const unassigned = projects.filter((p) => !p.initiative_id);
+      if (unassigned.length > 0) {
+        groups.push({
+          id: "__unassigned__",
+          org_id: "",
+          name: "Unassigned Projects",
+          slug: "",
+          description: null,
+          health: "on_track" as Project["health"],
+          owner_id: null,
+          target_completion: null,
+          notes: null,
+          created_at: "",
+          updated_at: "",
+          projects: unassigned,
+        });
+      }
+
+      setInitiativeGroups(groups);
+      setLoading(false);
+    }
+    load();
+  }, [role, profileId, userPersonId]);
+
+  if (loading) {
+    return (
+      <div className="max-w-7xl mx-auto space-y-8 animate-pulse">
+        <div>
+          <div className="h-8 w-48 bg-gray-200 rounded" />
+          <div className="h-4 w-64 bg-gray-200 rounded mt-2" />
+        </div>
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="bg-white rounded-lg border border-gray-300 overflow-hidden">
+            <div className="bg-gray-800 px-4 py-2.5"><div className="h-4 w-32 bg-gray-600 rounded" /></div>
+            {[1, 2, 3].map((j) => (
+              <div key={j} className="px-4 py-3 border-b border-gray-200 flex items-center gap-6">
+                <div className="h-4 flex-1 bg-gray-200 rounded" />
+                <div className="h-4 w-20 bg-gray-200 rounded" />
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  const today = new Date();
+  const dateStr = today.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
 
   return (
     <div className="max-w-7xl mx-auto space-y-8">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Weekly Command Center</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          {new Date().toLocaleDateString("en-US", {
-            weekday: "long",
-            month: "long",
-            day: "numeric",
-            year: "numeric",
-          })}
-        </p>
+        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+        <p className="text-sm text-gray-500 mt-1">{dateStr}</p>
       </div>
 
-      {/* Critical Path This Week */}
-      <section>
-        {criticalPath.length === 0 ? (
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900 mb-3">Critical Path This Week</h2>
-            <p className="text-sm text-gray-500">No critical items this week.</p>
+      {/* Overdue Items */}
+      {overdue.length > 0 && (
+        <section>
+          <div className="bg-white rounded-lg border border-gray-300 overflow-hidden">
+            <div className="bg-red-800 px-4 py-2.5">
+              <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Overdue ({overdue.length})</h2>
+            </div>
+            <table className="min-w-full">
+              <thead className="bg-gray-50 border-b border-gray-300">
+                <tr>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Item</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Responsible</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Project</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Due</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Overdue</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {overdue.map((item) => {
+                  const badge = statusBadge(item.status);
+                  return (
+                    <tr key={item.id} className="border-b border-gray-200 hover:bg-red-50/60 relative group">
+                      <td className="px-4 py-3 text-sm text-gray-900 font-semibold">
+                        {item.project ? (
+                          <Link href={`/projects/${item.project.slug}?tab=actions`} className="before:absolute before:inset-0">{item.title}</Link>
+                        ) : item.title}
+                      </td>
+                      <td className="px-4 py-3 text-sm">
+                        {item.owner ? (
+                          <div className="flex items-center gap-1.5">
+                            <span className="w-5 h-5 rounded-full bg-blue-100 text-[10px] font-medium text-blue-700 flex items-center justify-center flex-shrink-0">
+                              {item.owner.full_name.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
+                            </span>
+                            <span className="text-gray-700">{item.owner.full_name}</span>
+                          </div>
+                        ) : <span className="text-gray-400 italic">Unassigned</span>}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-blue-600">{item.project?.name || "—"}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600">{formatDateShort(item.due_date)}</td>
+                      <td className="px-4 py-3 text-sm text-red-600 font-medium">
+                        {item.days_overdue != null ? `${item.days_overdue}d` : "—"}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${badge.className}`}>{badge.label}</span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-        ) : (
+        </section>
+      )}
+
+      {/* Due This Week */}
+      {dueThisWeek.length > 0 && (
+        <section>
           <div className="bg-white rounded-lg border border-gray-300 overflow-hidden">
             <div className="bg-gray-800 px-4 py-2.5">
-              <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Critical Path This Week</h2>
+              <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Due This Week ({dueThisWeek.length})</h2>
             </div>
             <table className="min-w-full">
               <thead className="bg-gray-50 border-b border-gray-300">
@@ -129,12 +269,11 @@ export default async function DashboardPage() {
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Project</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Priority</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Due</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Age</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                 </tr>
               </thead>
               <tbody>
-                {criticalPath.map((item) => {
+                {dueThisWeek.map((item) => {
                   const badge = statusBadge(item.status);
                   return (
                     <tr key={item.id} className="border-b border-gray-200 hover:bg-blue-50/60 relative group">
@@ -151,22 +290,15 @@ export default async function DashboardPage() {
                             </span>
                             <span className="text-gray-700">{item.owner.full_name}</span>
                           </div>
-                        ) : (
-                          <span className="text-gray-400 italic">Unassigned</span>
-                        )}
+                        ) : <span className="text-gray-400 italic">Unassigned</span>}
                       </td>
                       <td className="px-4 py-3 text-sm text-blue-600">{item.project?.name || "—"}</td>
                       <td className="px-4 py-3">
-                        <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full border ${priorityColor(item.priority)}`}>
-                          {priorityLabel(item.priority)}
-                        </span>
+                        <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full border ${priorityColor(item.priority)}`}>{priorityLabel(item.priority)}</span>
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-600">{formatDateShort(item.due_date)}</td>
-                      <td className="px-4 py-3 text-sm text-gray-600">{item.age_days != null ? formatAge(item.age_days) : "—"}</td>
                       <td className="px-4 py-3">
-                        <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${badge.className}`}>
-                          {badge.label}
-                        </span>
+                        <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${badge.className}`}>{badge.label}</span>
                       </td>
                     </tr>
                   );
@@ -174,20 +306,22 @@ export default async function DashboardPage() {
               </tbody>
             </table>
           </div>
-        )}
-      </section>
+        </section>
+      )}
+
+      {/* No overdue or due items */}
+      {overdue.length === 0 && dueThisWeek.length === 0 && (
+        <div className="bg-white rounded-lg border border-gray-300 p-6 text-center">
+          <p className="text-sm text-gray-500">No overdue or upcoming items this week.</p>
+        </div>
+      )}
 
       {/* Active Blockers */}
-      <section>
-        {blockers.length === 0 ? (
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900 mb-3">Active Blockers</h2>
-            <p className="text-sm text-gray-500">No active blockers.</p>
-          </div>
-        ) : (
+      {blockers.length > 0 && (
+        <section>
           <div className="bg-white rounded-lg border border-gray-300 overflow-hidden">
             <div className="bg-gray-800 px-4 py-2.5">
-              <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Active Blockers</h2>
+              <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Active Blockers ({blockers.length})</h2>
             </div>
             <table className="min-w-full">
               <thead className="bg-gray-50 border-b border-gray-300">
@@ -223,159 +357,136 @@ export default async function DashboardPage() {
               </tbody>
             </table>
           </div>
-        )}
-      </section>
-
-      {/* Two-column: Support Tickets + Decisions Needed */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <section>
-          {supportTickets.length === 0 ? (
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900 mb-3">Open Support Requests</h2>
-              <p className="text-sm text-gray-500">No open tickets.</p>
-            </div>
-          ) : (
-            <div className="bg-white rounded-lg border border-gray-300 overflow-hidden">
-              <div className="bg-gray-800 px-4 py-2.5">
-                <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Open Support Requests</h2>
-              </div>
-              {supportTickets.map((t) => {
-                const href = t.project ? `/projects/${t.project.slug}` : null;
-                const inner = (
-                  <>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-mono text-gray-500">{t.ticket_number}</span>
-                      <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full border ${priorityColor(t.priority)}`}>
-                        {priorityLabel(t.priority)}
-                      </span>
-                    </div>
-                    <p className="text-sm text-gray-900 font-semibold mt-1">{t.title || t.description}</p>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {t.vendor?.name} {t.opened_at ? `· Opened ${formatDateShort(t.opened_at)}` : ""}
-                    </p>
-                  </>
-                );
-                return href ? (
-                  <Link key={t.id} href={href} className="block px-4 py-3 border-b border-gray-200 last:border-b-0 hover:bg-blue-50/60">
-                    {inner}
-                  </Link>
-                ) : (
-                  <div key={t.id} className="px-4 py-3 border-b border-gray-200 last:border-b-0">
-                    {inner}
-                  </div>
-                );
-              })}
-            </div>
-          )}
         </section>
+      )}
 
-        <section>
-          {decisions.length === 0 ? (
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900 mb-3">Decisions Needed</h2>
-              <p className="text-sm text-gray-500">No pending decisions.</p>
-            </div>
-          ) : (
-            <div className="bg-white rounded-lg border border-gray-300 overflow-hidden">
-              <div className="bg-gray-800 px-4 py-2.5">
-                <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Decisions Needed</h2>
+      {/* Two-column: Risks & Issues + Decisions */}
+      {(risksIssues.length > 0 || decisions.length > 0) && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Risks & Issues */}
+          <section>
+            {risksIssues.length === 0 ? (
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900 mb-3">Risks & Issues</h2>
+                <p className="text-sm text-gray-500">No high-priority risks or issues.</p>
               </div>
-              {decisions.map((d) => {
-                const href = d.project ? `/projects/${(d.project as Project).slug}?tab=raid` : null;
-                const inner = (
-                  <>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-mono text-gray-400">{d.display_id}</span>
-                      <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full border ${priorityColor(d.priority)}`}>
-                        {priorityLabel(d.priority)}
-                      </span>
-                    </div>
-                    <p className="text-sm text-gray-900 font-semibold mt-1">{d.title}</p>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {d.owner?.full_name || "Unassigned"} · {d.project?.name || "General"}
-                    </p>
-                  </>
-                );
-                return href ? (
-                  <Link key={d.id} href={href} className="block px-4 py-3 border-b border-gray-200 last:border-b-0 hover:bg-blue-50/60">
-                    {inner}
-                  </Link>
-                ) : (
-                  <div key={d.id} className="px-4 py-3 border-b border-gray-200 last:border-b-0">
-                    {inner}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </section>
-      </div>
+            ) : (
+              <div className="bg-white rounded-lg border border-gray-300 overflow-hidden">
+                <div className="bg-gray-800 px-4 py-2.5">
+                  <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Risks & Issues ({risksIssues.length})</h2>
+                </div>
+                {risksIssues.map((r) => {
+                  const href = r.project ? `/projects/${(r.project as Pick<Project, "id" | "name" | "slug">).slug}?tab=raid` : null;
+                  const typeLabel = r.raid_type === "risk" ? "R" : "I";
+                  const typeBg = r.raid_type === "risk" ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700";
+                  const inner = (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <span className={`inline-flex w-5 h-5 items-center justify-center text-[10px] font-bold rounded ${typeBg}`}>{typeLabel}</span>
+                        <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full border ${priorityColor(r.priority)}`}>{priorityLabel(r.priority)}</span>
+                        {r.first_flagged_at && <span className="text-xs text-gray-400">{formatAge(Math.floor((Date.now() - new Date(r.first_flagged_at).getTime()) / 86400000))}</span>}
+                      </div>
+                      <p className="text-sm text-gray-900 font-semibold mt-1">{r.title}</p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {r.owner?.full_name || "Unassigned"} · {r.project?.name || "General"}
+                      </p>
+                    </>
+                  );
+                  return href ? (
+                    <Link key={r.id} href={href} className="block px-4 py-3 border-b border-gray-200 last:border-b-0 hover:bg-blue-50/60">{inner}</Link>
+                  ) : (
+                    <div key={r.id} className="px-4 py-3 border-b border-gray-200 last:border-b-0">{inner}</div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
 
-      {/* Vendor Accountability Summary */}
-      <section>
-        <div className="bg-gray-800 px-4 py-2.5 rounded-t-lg">
-          <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Vendor Accountability</h2>
+          {/* Decisions */}
+          <section>
+            {decisions.length === 0 ? (
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900 mb-3">Decisions Needed</h2>
+                <p className="text-sm text-gray-500">No pending decisions.</p>
+              </div>
+            ) : (
+              <div className="bg-white rounded-lg border border-gray-300 overflow-hidden">
+                <div className="bg-gray-800 px-4 py-2.5">
+                  <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Decisions Needed ({decisions.length})</h2>
+                </div>
+                {decisions.map((d) => {
+                  const href = d.project ? `/projects/${(d.project as Pick<Project, "id" | "name" | "slug">).slug}?tab=raid` : null;
+                  const inner = (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-mono text-gray-400">{d.display_id}</span>
+                        <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full border ${priorityColor(d.priority)}`}>{priorityLabel(d.priority)}</span>
+                      </div>
+                      <p className="text-sm text-gray-900 font-semibold mt-1">{d.title}</p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {d.owner?.full_name || "Unassigned"} · {d.project?.name || "General"}
+                      </p>
+                    </>
+                  );
+                  return href ? (
+                    <Link key={d.id} href={href} className="block px-4 py-3 border-b border-gray-200 last:border-b-0 hover:bg-blue-50/60">{inner}</Link>
+                  ) : (
+                    <div key={d.id} className="px-4 py-3 border-b border-gray-200 last:border-b-0">{inner}</div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
         </div>
-        {vendorSummary.length === 0 ? (
-          <div className="bg-white rounded-b-lg border border-t-0 border-gray-300 p-4">
-            <p className="text-sm text-gray-500">No open vendor items.</p>
+      )}
+
+      {/* My Initiatives & Projects */}
+      {initiativeGroups.length > 0 && (
+        <section>
+          <div className="bg-gray-800 px-4 py-2.5 rounded-t-lg">
+            <h2 className="text-xs font-semibold text-white uppercase tracking-wide">My Initiatives</h2>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-3">
-            {vendorSummary.map(({ vendor, actionCount, blockerCount, totalOpen }) => (
-              <Link
-                key={vendor.id}
-                href={`/settings/vendors/${vendor.id}`}
-                className="bg-white rounded-lg border border-gray-300 p-4 hover:border-blue-400 transition-colors"
-              >
-                <h3 className="font-semibold text-gray-900">{vendor.name}</h3>
-                <div className="mt-2 flex gap-4 text-sm">
-                  <span className="text-gray-600">{actionCount} actions</span>
-                  {blockerCount > 0 && (
-                    <span className="text-red-600 font-medium">{blockerCount} blockers</span>
+          <div className="bg-white rounded-b-lg border border-t-0 border-gray-300 divide-y divide-gray-200">
+            {initiativeGroups.map((init) => (
+              <div key={init.id} className="px-4 py-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-3">
+                    {init.id !== "__unassigned__" ? (
+                      <Link href={`/initiatives/${init.slug}`} className="text-sm font-semibold text-gray-900 hover:text-blue-600">{init.name}</Link>
+                    ) : (
+                      <span className="text-sm font-semibold text-gray-500">{init.name}</span>
+                    )}
+                    {init.id !== "__unassigned__" && (
+                      <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full border ${healthColor(init.health)}`}>{healthLabel(init.health)}</span>
+                    )}
+                  </div>
+                  {init.target_completion && (
+                    <span className="text-xs text-gray-400">Target: {formatDateShort(init.target_completion)}</span>
                   )}
                 </div>
-                <div className="mt-1 text-xs text-gray-500">{totalOpen} total open items</div>
-              </Link>
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* Project Health */}
-      <section>
-        <div className="bg-gray-800 px-4 py-2.5 rounded-t-lg">
-          <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Project Health</h2>
-        </div>
-        {projects.length === 0 ? (
-          <div className="bg-white rounded-b-lg border border-t-0 border-gray-300 p-4">
-            <p className="text-sm text-gray-500">No projects yet.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-3">
-            {projects.map((p) => (
-              <Link
-                key={p.id}
-                href={`/projects/${p.slug}`}
-                className="bg-white rounded-lg border border-gray-300 p-4 hover:border-blue-400 transition-colors"
-              >
-                <div className="flex items-center justify-between">
-                  <h3 className="font-medium text-gray-900">{p.name}</h3>
-                  <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full border ${healthColor(p.health)}`}>
-                    {healthLabel(p.health)}
-                  </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {init.projects.map((p) => (
+                    <Link
+                      key={p.id}
+                      href={`/projects/${p.slug}`}
+                      className="bg-gray-50 rounded-lg border border-gray-200 p-3 hover:border-blue-400 transition-colors"
+                    >
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-medium text-gray-900 truncate mr-2">{p.name}</h3>
+                        <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full border flex-shrink-0 ${healthColor(p.health)}`}>{healthLabel(p.health)}</span>
+                      </div>
+                      <div className="mt-2 flex gap-3 text-xs">
+                        <span className="text-gray-500">{p.actionCount} actions</span>
+                        {p.blockerCount > 0 && <span className="text-red-600 font-medium">{p.blockerCount} blockers</span>}
+                      </div>
+                    </Link>
+                  ))}
                 </div>
-                {p.platform_status && (
-                  <p className="text-xs text-gray-500 mt-1">{p.platform_status}</p>
-                )}
-                {p.target_completion && (
-                  <p className="text-xs text-gray-500 mt-1">Target: {formatDateShort(p.target_completion)}</p>
-                )}
-              </Link>
+              </div>
             ))}
           </div>
-        )}
-      </section>
+        </section>
+      )}
     </div>
   );
 }
