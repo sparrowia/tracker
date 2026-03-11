@@ -65,9 +65,11 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Check if user is deactivated
+  // Check if user is deactivated (skip on RSC fetch requests to reduce latency)
+  const isRscFetch = request.headers.get("rsc") === "1" || request.headers.get("next-router-state-tree") !== null;
   if (
     user &&
+    !isRscFetch &&
     !request.nextUrl.pathname.startsWith("/login") &&
     !request.nextUrl.pathname.startsWith("/auth") &&
     !request.nextUrl.pathname.startsWith("/set-password")

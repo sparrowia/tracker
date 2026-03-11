@@ -19,18 +19,10 @@ export default async function AppLayout({
     redirect("/login");
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", user.id)
-    .single();
-
-  // Get the person record linked to this profile (for owner matching)
-  const { data: personRecord } = await supabase
-    .from("people")
-    .select("id")
-    .eq("profile_id", user.id)
-    .maybeSingle();
+  const [{ data: profile }, { data: personRecord }] = await Promise.all([
+    supabase.from("profiles").select("*").eq("id", user.id).single(),
+    supabase.from("people").select("id").eq("profile_id", user.id).maybeSingle(),
+  ]);
 
   const role = (profile?.role || "user") as UserRole;
 
