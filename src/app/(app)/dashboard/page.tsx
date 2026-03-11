@@ -443,48 +443,55 @@ export default function DashboardPage() {
       {/* My Initiatives & Projects */}
       {initiativeGroups.length > 0 && (
         <section>
-          <div className="bg-gray-800 px-4 py-2.5 rounded-t-lg">
-            <h2 className="text-xs font-semibold text-white uppercase tracking-wide">My Initiatives</h2>
-          </div>
-          <div className="bg-white rounded-b-lg border border-t-0 border-gray-300 divide-y divide-gray-200">
-            {initiativeGroups.map((init) => (
-              <div key={init.id} className="px-4 py-4">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-3">
-                    {init.id !== "__unassigned__" ? (
-                      <Link href={`/initiatives/${init.slug}`} className="text-sm font-semibold text-gray-900 hover:text-blue-600">{init.name}</Link>
-                    ) : (
-                      <span className="text-sm font-semibold text-gray-500">{init.name}</span>
-                    )}
-                    {init.id !== "__unassigned__" && (
-                      <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full border ${healthColor(init.health)}`}>{healthLabel(init.health)}</span>
-                    )}
-                  </div>
-                  {init.target_completion && (
-                    <span className="text-xs text-gray-400">Target: {formatDateShort(init.target_completion)}</span>
+          {initiativeGroups.map((init) => (
+            <div key={init.id} className="bg-white rounded-lg border border-gray-300 overflow-hidden mb-6 last:mb-0">
+              <div className="bg-gray-800 px-4 py-2.5 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  {init.id !== "__unassigned__" ? (
+                    <Link href={`/initiatives/${init.slug}`} className="text-xs font-semibold text-white uppercase tracking-wide hover:text-blue-300">{init.name}</Link>
+                  ) : (
+                    <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{init.name}</span>
+                  )}
+                  {init.id !== "__unassigned__" && (
+                    <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full border ${healthColor(init.health)}`}>{healthLabel(init.health)}</span>
                   )}
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {init.projects.map((p) => (
-                    <Link
-                      key={p.id}
-                      href={`/projects/${p.slug}`}
-                      className="bg-gray-50 rounded-lg border border-gray-200 p-3 hover:border-blue-400 transition-colors"
-                    >
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-sm font-medium text-gray-900 truncate mr-2">{p.name}</h3>
-                        <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full border flex-shrink-0 ${healthColor(p.health)}`}>{healthLabel(p.health)}</span>
-                      </div>
-                      <div className="mt-2 flex gap-3 text-xs">
-                        <span className="text-gray-500">{p.actionCount} actions</span>
-                        {p.blockerCount > 0 && <span className="text-red-600 font-medium">{p.blockerCount} blockers</span>}
-                      </div>
-                    </Link>
-                  ))}
-                </div>
+                {init.target_completion && (
+                  <span className="text-xs text-gray-400">Target: {formatDateShort(init.target_completion)}</span>
+                )}
               </div>
-            ))}
-          </div>
+              <table className="min-w-full">
+                <thead className="bg-gray-50 border-b border-gray-300">
+                  <tr>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Project</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Health</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Blockers</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {init.projects.map((p) => (
+                    <tr key={p.id} className="border-b border-gray-200 hover:bg-blue-50/60 relative group">
+                      <td className="px-4 py-3 text-sm font-semibold">
+                        <Link href={`/projects/${p.slug}`} className="text-blue-600 hover:underline before:absolute before:inset-0">{p.name}</Link>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full border ${healthColor(p.health)}`}>{healthLabel(p.health)}</span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600">{p.actionCount}</td>
+                      <td className="px-4 py-3 text-sm">
+                        {p.blockerCount > 0 ? (
+                          <span className="text-red-600 font-medium">{p.blockerCount}</span>
+                        ) : (
+                          <span className="text-gray-400">0</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))}
         </section>
       )}
     </div>
