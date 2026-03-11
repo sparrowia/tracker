@@ -29,6 +29,7 @@ export default function PeopleList({ initialPeople, vendors, profiles, initialIn
   const [invitingId, setInvitingId] = useState<string | null>(null);
   const supabase = createClient();
 
+  const [activeTab, setActiveTab] = useState<"internal" | "vendors">("internal");
   const internal = people.filter((p) => p.is_internal);
   const external = people.filter((p) => !p.is_internal);
   const canEdit = isAdmin(role);
@@ -293,120 +294,148 @@ export default function PeopleList({ initialPeople, vendors, profiles, initialIn
   }
 
   return (
-    <div className="max-w-5xl mx-auto space-y-8">
+    <div className="max-w-5xl mx-auto space-y-6">
       <h1 className="text-2xl font-bold text-gray-900">People</h1>
 
-      {/* Internal Team */}
-      <section>
-        <div className="bg-gray-800 px-4 py-2.5 rounded-t-lg flex items-center justify-between">
-          <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Internal Team ({internal.length})</h2>
-          {canEdit && (
-            <button
-              onClick={() => { setAddingInternal(!addingInternal); setAddingExternal(false); setAddName(""); }}
-              className="text-xs text-blue-300 hover:text-white transition-colors"
-            >
-              + Add Person
-            </button>
-          )}
-        </div>
-        <div className="bg-white rounded-b-lg border border-t-0 border-gray-300 overflow-hidden">
-          {addingInternal && renderAddForm(true)}
-          {internal.length === 0 && !addingInternal ? (
-            <p className="text-sm text-gray-500 p-4">No internal contacts.</p>
-          ) : (
-            internal.map((p) => {
-              const status = getContactStatus(p);
-              const badge = statusBadge(status);
-              return (
-                <Fragment key={p.id}>
-                  <div
-                    className={`px-4 py-3 border-b border-gray-200 last:border-b-0 hover:bg-gray-50 cursor-pointer flex items-center gap-4 ${expandedId === p.id ? "bg-gray-50" : ""}`}
-                    onClick={() => canEdit && setExpandedId(expandedId === p.id ? null : p.id)}
-                  >
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-sm text-gray-900">{p.full_name}</p>
-                      {p.title && <p className="text-xs text-gray-500">{p.title}</p>}
-                    </div>
-                    {p.email && <span className="text-xs text-gray-500 truncate">{p.email}</span>}
-                    <span className={`inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded ${badge.className}`}>{badge.label}</span>
-                  </div>
-                  {expandedId === p.id && canEdit && renderEditPanel(p)}
-                </Fragment>
-              );
-            })
-          )}
-        </div>
-      </section>
+      {/* Tabs */}
+      <div className="flex gap-1 border-b border-gray-300">
+        <button
+          onClick={() => { setActiveTab("internal"); setExpandedId(null); }}
+          className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
+            activeTab === "internal"
+              ? "border-blue-600 text-blue-700"
+              : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+          }`}
+        >
+          Internal Team ({internal.length})
+        </button>
+        <button
+          onClick={() => { setActiveTab("vendors"); setExpandedId(null); }}
+          className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
+            activeTab === "vendors"
+              ? "border-blue-600 text-blue-700"
+              : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+          }`}
+        >
+          Vendors ({external.length})
+        </button>
+      </div>
 
-      {/* External Contacts */}
-      <section>
-        <div className="bg-white rounded-lg border border-gray-300 overflow-hidden">
-          <div className="bg-gray-800 px-4 py-2.5 flex items-center justify-between">
-            <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Vendor Contacts ({external.length})</h2>
+      {/* Internal Team Tab */}
+      {activeTab === "internal" && (
+        <section>
+          <div className="bg-gray-800 px-4 py-2.5 rounded-t-lg flex items-center justify-between">
+            <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Internal Team ({internal.length})</h2>
             {canEdit && (
               <button
-                onClick={() => { setAddingExternal(!addingExternal); setAddingInternal(false); setAddName(""); }}
+                onClick={() => { setAddingInternal(!addingInternal); setAddingExternal(false); setAddName(""); }}
                 className="text-xs text-blue-300 hover:text-white transition-colors"
               >
-                + Add Contact
+                + Add Person
               </button>
             )}
           </div>
-          {addingExternal && renderAddForm(false)}
-          {external.length === 0 && !addingExternal ? (
-            <p className="text-sm text-gray-500 p-4">No vendor contacts.</p>
-          ) : external.length > 0 ? (
-            <table className="min-w-full">
-              <thead className="bg-gray-50 border-b border-gray-300">
-                <tr>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Title</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Vendor</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
-                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase w-[70px]">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {external.map((p) => {
-                  const status = getContactStatus(p);
-                  const badge = statusBadge(status);
-                  return (
-                    <Fragment key={p.id}>
-                      <tr
-                        className={`border-b border-gray-200 hover:bg-gray-50 ${canEdit ? "cursor-pointer" : ""} ${expandedId === p.id ? "bg-gray-50" : ""}`}
-                        onClick={() => canEdit && setExpandedId(expandedId === p.id ? null : p.id)}
-                      >
-                        <td className="px-4 py-3 text-sm font-semibold text-gray-900">{p.full_name}</td>
-                        <td className="px-4 py-3 text-sm text-gray-600">{p.title || "—"}</td>
-                        <td className="px-4 py-3 text-sm">
-                          {p.vendor ? (
-                            <Link href={`/settings/vendors/${p.vendor.id}`} className="text-blue-600 hover:underline" onClick={(e) => e.stopPropagation()}>
-                              {p.vendor.name}
-                            </Link>
-                          ) : "—"}
-                        </td>
-                        <td className="px-4 py-3 text-sm">
-                          {p.email ? <span className="text-blue-600">{p.email}</span> : "—"}
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <span className={`inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded ${badge.className}`}>{badge.label}</span>
-                        </td>
-                      </tr>
-                      {expandedId === p.id && canEdit && (
-                        <tr>
-                          <td colSpan={5} className="p-0">
-                            {renderEditPanel(p)}
+          <div className="bg-white rounded-b-lg border border-t-0 border-gray-300 overflow-hidden">
+            {addingInternal && renderAddForm(true)}
+            {internal.length === 0 && !addingInternal ? (
+              <p className="text-sm text-gray-500 p-4">No internal contacts.</p>
+            ) : (
+              internal.map((p) => {
+                const status = getContactStatus(p);
+                const badge = statusBadge(status);
+                return (
+                  <Fragment key={p.id}>
+                    <div
+                      className={`px-4 py-3 border-b border-gray-200 last:border-b-0 hover:bg-gray-50 cursor-pointer flex items-center gap-4 ${expandedId === p.id ? "bg-gray-50" : ""}`}
+                      onClick={() => canEdit && setExpandedId(expandedId === p.id ? null : p.id)}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-sm text-gray-900">{p.full_name}</p>
+                        {p.title && <p className="text-xs text-gray-500">{p.title}</p>}
+                      </div>
+                      {p.email && <span className="text-xs text-gray-500 truncate">{p.email}</span>}
+                      <span className={`inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded ${badge.className}`}>{badge.label}</span>
+                    </div>
+                    {expandedId === p.id && canEdit && renderEditPanel(p)}
+                  </Fragment>
+                );
+              })
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* Vendor Contacts Tab */}
+      {activeTab === "vendors" && (
+        <section>
+          <div className="bg-white rounded-lg border border-gray-300 overflow-hidden">
+            <div className="bg-gray-800 px-4 py-2.5 flex items-center justify-between">
+              <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Vendor Contacts ({external.length})</h2>
+              {canEdit && (
+                <button
+                  onClick={() => { setAddingExternal(!addingExternal); setAddingInternal(false); setAddName(""); }}
+                  className="text-xs text-blue-300 hover:text-white transition-colors"
+                >
+                  + Add Contact
+                </button>
+              )}
+            </div>
+            {addingExternal && renderAddForm(false)}
+            {external.length === 0 && !addingExternal ? (
+              <p className="text-sm text-gray-500 p-4">No vendor contacts.</p>
+            ) : external.length > 0 ? (
+              <table className="min-w-full">
+                <thead className="bg-gray-50 border-b border-gray-300">
+                  <tr>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Title</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Vendor</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
+                    <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase w-[70px]">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {external.map((p) => {
+                    const status = getContactStatus(p);
+                    const badge = statusBadge(status);
+                    return (
+                      <Fragment key={p.id}>
+                        <tr
+                          className={`border-b border-gray-200 hover:bg-gray-50 ${canEdit ? "cursor-pointer" : ""} ${expandedId === p.id ? "bg-gray-50" : ""}`}
+                          onClick={() => canEdit && setExpandedId(expandedId === p.id ? null : p.id)}
+                        >
+                          <td className="px-4 py-3 text-sm font-semibold text-gray-900">{p.full_name}</td>
+                          <td className="px-4 py-3 text-sm text-gray-600">{p.title || "—"}</td>
+                          <td className="px-4 py-3 text-sm">
+                            {p.vendor ? (
+                              <Link href={`/settings/vendors/${p.vendor.id}`} className="text-blue-600 hover:underline" onClick={(e) => e.stopPropagation()}>
+                                {p.vendor.name}
+                              </Link>
+                            ) : "—"}
+                          </td>
+                          <td className="px-4 py-3 text-sm">
+                            {p.email ? <span className="text-blue-600">{p.email}</span> : "—"}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <span className={`inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded ${badge.className}`}>{badge.label}</span>
                           </td>
                         </tr>
-                      )}
-                    </Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
-          ) : null}
-        </div>
-      </section>
+                        {expandedId === p.id && canEdit && (
+                          <tr>
+                            <td colSpan={5} className="p-0">
+                              {renderEditPanel(p)}
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            ) : null}
+          </div>
+        </section>
+      )}
     </div>
   );
 }
