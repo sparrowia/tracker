@@ -206,6 +206,9 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
   const [filterOwner, setFilterOwner] = useState("");
   const [filterAge, setFilterAge] = useState("");
   const colPickerRef = useRef<HTMLDivElement>(null);
+  const [movingId, setMovingId] = useState<string | null>(null);
+  const [moveProjects, setMoveProjects] = useState<{ id: string; name: string; slug: string }[]>([]);
+  const [moveTargetId, setMoveTargetId] = useState("");
   const supabase = createClient();
 
   const hasActiveFilters = filterPriority || filterStatus || filterOwner || filterAge;
@@ -483,6 +486,39 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
         if (!err) setEntries((prev) => [...prev, entry]);
       });
     }
+  }
+
+  async function startMove(id: string) {
+    const { data } = await supabase.from("projects").select("id, name, slug").order("name");
+    const others = (data || []).filter((p: { id: string }) => p.id !== project.id);
+    setMoveProjects(others);
+    setMoveTargetId("");
+    setMovingId(id);
+  }
+
+  async function confirmMove() {
+    if (!movingId || !moveTargetId) return;
+    const entry = entries.find((e) => e.id === movingId);
+    if (!entry) return;
+    const { error } = await supabase.from("raid_entries").update({ project_id: moveTargetId, parent_id: null }).eq("id", movingId);
+    if (!error) {
+      // Also move children
+      const children = entries.filter((e) => e.parent_id === movingId);
+      if (children.length > 0) {
+        await supabase.from("raid_entries").update({ project_id: moveTargetId }).in("id", children.map((c) => c.id));
+      }
+      setEntries((prev) => prev.filter((e) => e.id !== movingId && e.parent_id !== movingId));
+      if (expandedId === movingId) setExpandedId(null);
+      const targetName = moveProjects.find((p) => p.id === moveTargetId)?.name || "another project";
+      addUndo(`Moved "${entry.title}" to ${targetName}`, async () => {
+        await supabase.from("raid_entries").update({ project_id: project.id, parent_id: entry.parent_id }).eq("id", movingId);
+        if (children.length > 0) {
+          await supabase.from("raid_entries").update({ project_id: project.id }).in("id", children.map((c) => c.id));
+        }
+        setEntries((prev) => [...prev, entry, ...children]);
+      });
+    }
+    setMovingId(null);
   }
 
   function handleDragStart(id: string, e: React.DragEvent) {
@@ -1050,26 +1086,25 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                             </select>
                           </div>
 
-                          {/* Row: Parent */}
+                          {/* Row: Parent / Stage */}
                           <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-200">Parent</span>
-                          <div className="px-3 py-2.5 border-b border-gray-200 col-span-3">
+                          <div className={`px-3 py-2.5 border-b border-gray-200${entry.raid_type !== "issue" ? " col-span-3" : ""}`}>
                             <select
                               value={entry.parent_id || ""}
                               onChange={(e) => saveField(entry.id, "parent_id", e.target.value)}
-                              className="text-sm rounded border border-transparent hover:border-gray-300 bg-transparent py-0 focus:border-blue-500 focus:outline-none cursor-pointer -ml-0.5"
+                              className="text-sm rounded border border-transparent hover:border-gray-300 bg-transparent py-0 focus:border-blue-500 focus:outline-none cursor-pointer -ml-0.5 max-w-full"
                             >
                               <option value="">None</option>
-                              {entries.filter((e) => e.id !== entry.id && e.raid_type === entry.raid_type && !e.parent_id && !e.resolved_at).map((e) => (
-                                <option key={e.id} value={e.id}>{e.display_id} — {e.title}</option>
-                              ))}
+                              {entries.filter((e) => e.id !== entry.id && e.raid_type === entry.raid_type && !e.parent_id && !e.resolved_at).map((e) => {
+                                const label = `${e.display_id} — ${e.title}`;
+                                return <option key={e.id} value={e.id}>{label.length > 75 ? label.slice(0, 75) + "…" : label}</option>;
+                              })}
                             </select>
                           </div>
-
-                          {/* Row: Stage */}
-                          {(entry.raid_type === "issue") && (
+                          {entry.raid_type === "issue" && (
                             <>
-                              <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-200">Stage</span>
-                              <div className="px-3 py-2.5 border-b border-gray-200 col-span-3">
+                              <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-200">Stage</span>
+                              <div className="px-3 py-2.5 border-b border-gray-200">
                                 <select
                                   value={entry.stage || ""}
                                   onChange={(e) => saveField(entry.id, "stage", e.target.value)}
@@ -1110,6 +1145,15 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
 
                       {/* Actions bar */}
                       <div className="flex justify-end items-center gap-3 px-5 py-2 border-t border-gray-200">
+                        <button
+                          onClick={() => startMove(entry.id)}
+                          className="text-gray-400 hover:text-blue-600 transition-colors"
+                          title="Move to another project"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M15 3h6v6"/><path d="M10 14L21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                          </svg>
+                        </button>
                         {canDelete(role) && (
                           <button
                             onClick={() => handleDelete(entry.id)}
@@ -1243,6 +1287,29 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
       <div className="flex-1 min-w-0">
         {showArchived ? renderArchived() : renderQuadrant(activeItems.label, activeItems.type as RaidType, activeItems.items)}
       </div>
+
+      {/* Move modal */}
+      {movingId && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center" onClick={() => setMovingId(null)}>
+          <div className="bg-white rounded-lg shadow-xl w-[400px] p-5" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-sm font-semibold text-gray-900 mb-3">Move to another project</h3>
+            <select
+              value={moveTargetId}
+              onChange={(e) => setMoveTargetId(e.target.value)}
+              className="w-full text-sm border border-gray-300 rounded-md px-3 py-2 focus:border-blue-500 focus:outline-none"
+            >
+              <option value="">Select project...</option>
+              {moveProjects.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+            <div className="flex justify-end gap-2 mt-4">
+              <button onClick={() => setMovingId(null)} className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800">Cancel</button>
+              <button onClick={confirmMove} disabled={!moveTargetId} className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed">Move</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
