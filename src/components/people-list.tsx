@@ -35,6 +35,19 @@ export default function PeopleList({ initialPeople, vendors, profiles, initialIn
   const external = people.filter((p) => !p.is_internal).sort((a, b) => a.full_name.localeCompare(b.full_name));
   const canEdit = isAdmin(role);
 
+  // Group external contacts by vendor name
+  const vendorGroupsMap = new Map<string, { vendor: Vendor | null; people: typeof external }>();
+  for (const p of external) {
+    const key = p.vendor?.name || "Unassigned";
+    if (!vendorGroupsMap.has(key)) vendorGroupsMap.set(key, { vendor: p.vendor, people: [] });
+    vendorGroupsMap.get(key)!.people.push(p);
+  }
+  const vendorGroups = [...vendorGroupsMap.entries()].sort((a, b) => {
+    if (a[0] === "Unassigned") return 1;
+    if (b[0] === "Unassigned") return -1;
+    return a[0].localeCompare(b[0]);
+  });
+
   function getContactStatus(person: PersonRow): ContactStatus {
     if (person.profile_id) return "joined";
     if (person.email && invitations.some((inv) => inv.email.toLowerCase() === person.email!.toLowerCase() && !inv.accepted_at)) return "invited";
@@ -367,85 +380,70 @@ export default function PeopleList({ initialPeople, vendors, profiles, initialIn
       )}
 
       {/* Vendor Contacts Tab */}
-      {activeTab === "vendors" && (() => {
-        // Group external contacts by vendor name
-        const grouped = new Map<string, { vendor: Vendor | null; people: typeof external }>();
-        for (const p of external) {
-          const key = p.vendor?.name || "Unassigned";
-          if (!grouped.has(key)) grouped.set(key, { vendor: p.vendor, people: [] });
-          grouped.get(key)!.people.push(p);
-        }
-        const vendorGroups = [...grouped.entries()].sort((a, b) => {
-          if (a[0] === "Unassigned") return 1;
-          if (b[0] === "Unassigned") return -1;
-          return a[0].localeCompare(b[0]);
-        });
-
-        return (
-          <section>
-            <div className="bg-gray-800 px-4 py-2.5 rounded-t-lg flex items-center justify-between">
-              <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Vendor Contacts ({external.length})</h2>
-              {canEdit && (
-                <button
-                  onClick={() => { setAddingExternal(!addingExternal); setAddingInternal(false); setAddName(""); }}
-                  className="text-xs text-blue-300 hover:text-white transition-colors"
-                >
-                  + Add Contact
-                </button>
-              )}
-            </div>
-            <div className="bg-white rounded-b-lg border border-t-0 border-gray-300 overflow-hidden">
-              {addingExternal && renderAddForm(false)}
-              {external.length === 0 && !addingExternal ? (
-                <p className="text-sm text-gray-500 p-4">No vendor contacts.</p>
-              ) : (
-                vendorGroups.map(([vendorName, group]) => {
-                  const isVendorExpanded = expandedVendors.has(vendorName);
-                  return (
-                    <div key={vendorName} className="border-b border-gray-200 last:border-b-0">
-                      <div
-                        className="px-4 py-2.5 flex items-center gap-2 hover:bg-gray-50 cursor-pointer"
-                        onClick={() => setExpandedVendors((prev) => {
-                          const next = new Set(prev);
-                          if (next.has(vendorName)) next.delete(vendorName);
-                          else next.add(vendorName);
-                          return next;
-                        })}
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="currentColor" stroke="none" className={`transition-transform flex-shrink-0 ${isVendorExpanded ? "rotate-90" : ""}`}>
-                          <polygon points="6,4 20,12 6,20" />
-                        </svg>
-                        <span className="text-sm font-semibold text-gray-900">{vendorName}</span>
-                        <span className="text-xs text-gray-400">({group.people.length})</span>
-                      </div>
-                      {isVendorExpanded && group.people.map((p) => {
-                        const status = getContactStatus(p);
-                        const badge = statusBadge(status);
-                        return (
-                          <Fragment key={p.id}>
-                            <div
-                              className={`pl-10 pr-4 py-2.5 border-t border-gray-200 hover:bg-gray-50 cursor-pointer flex items-center gap-4 ${expandedId === p.id ? "bg-gray-50" : ""}`}
-                              onClick={() => canEdit && setExpandedId(expandedId === p.id ? null : p.id)}
-                            >
-                              <div className="flex-1 min-w-0">
-                                <p className="font-semibold text-sm text-gray-900">{p.full_name}</p>
-                                {p.title && <p className="text-xs text-gray-500">{p.title}</p>}
-                              </div>
-                              {p.email && <span className="text-xs text-gray-500 truncate">{p.email}</span>}
-                              <span className={`inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded ${badge.className}`}>{badge.label}</span>
-                            </div>
-                            {expandedId === p.id && canEdit && renderEditPanel(p)}
-                          </Fragment>
-                        );
+      {activeTab === "vendors" && (
+        <section>
+          <div className="bg-gray-800 px-4 py-2.5 rounded-t-lg flex items-center justify-between">
+            <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Vendor Contacts ({external.length})</h2>
+            {canEdit && (
+              <button
+                onClick={() => { setAddingExternal(!addingExternal); setAddingInternal(false); setAddName(""); }}
+                className="text-xs text-blue-300 hover:text-white transition-colors"
+              >
+                + Add Contact
+              </button>
+            )}
+          </div>
+          <div className="bg-white rounded-b-lg border border-t-0 border-gray-300 overflow-hidden">
+            {addingExternal && renderAddForm(false)}
+            {external.length === 0 && !addingExternal ? (
+              <p className="text-sm text-gray-500 p-4">No vendor contacts.</p>
+            ) : (
+              vendorGroups.map(([vendorName, group]) => {
+                const isVendorExpanded = expandedVendors.has(vendorName);
+                return (
+                  <div key={vendorName} className="border-b border-gray-200 last:border-b-0">
+                    <div
+                      className="px-4 py-2.5 flex items-center gap-2 hover:bg-gray-50 cursor-pointer"
+                      onClick={() => setExpandedVendors((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(vendorName)) next.delete(vendorName);
+                        else next.add(vendorName);
+                        return next;
                       })}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="currentColor" stroke="none" className={`transition-transform flex-shrink-0 ${isVendorExpanded ? "rotate-90" : ""}`}>
+                        <polygon points="6,4 20,12 6,20" />
+                      </svg>
+                      <span className="text-sm font-semibold text-gray-900">{vendorName}</span>
+                      <span className="text-xs text-gray-400">({group.people.length})</span>
                     </div>
-                  );
-                }))
-              )}
-            </div>
-          </section>
-        );
-      })()}
+                    {isVendorExpanded && group.people.map((p) => {
+                      const status = getContactStatus(p);
+                      const badge = statusBadge(status);
+                      return (
+                        <Fragment key={p.id}>
+                          <div
+                            className={`pl-10 pr-4 py-2.5 border-t border-gray-200 hover:bg-gray-50 cursor-pointer flex items-center gap-4 ${expandedId === p.id ? "bg-gray-50" : ""}`}
+                            onClick={() => canEdit && setExpandedId(expandedId === p.id ? null : p.id)}
+                          >
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold text-sm text-gray-900">{p.full_name}</p>
+                              {p.title && <p className="text-xs text-gray-500">{p.title}</p>}
+                            </div>
+                            {p.email && <span className="text-xs text-gray-500 truncate">{p.email}</span>}
+                            <span className={`inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded ${badge.className}`}>{badge.label}</span>
+                          </div>
+                          {expandedId === p.id && canEdit && renderEditPanel(p)}
+                        </Fragment>
+                      );
+                    })}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </section>
+      )}
     </div>
   );
 }
