@@ -27,29 +27,26 @@ export default function VendorsPage() {
 
   useEffect(() => {
     async function load() {
-      const [{ data: vendorData }, { data: actions }, { data: blockers }, { data: people }] =
-        await Promise.all([
-          supabase.from("vendors").select("*").order("name"),
-          supabase.from("action_items").select("vendor_id").neq("status", "complete").not("vendor_id", "is", null),
-          supabase.from("blockers").select("vendor_id").is("resolved_at", null).not("vendor_id", "is", null),
-          supabase.from("people").select("vendor_id").not("vendor_id", "is", null),
-        ]);
+      const [{ data: vendorData }, { data: counts }] = await Promise.all([
+        supabase.from("vendors").select("*").order("name"),
+        supabase.rpc("vendor_item_counts"),
+      ]);
 
-      const actionCounts = new Map<string, number>();
-      const blockerCounts = new Map<string, number>();
-      const peopleCounts = new Map<string, number>();
-
-      for (const a of actions || []) actionCounts.set(a.vendor_id, (actionCounts.get(a.vendor_id) || 0) + 1);
-      for (const b of blockers || []) blockerCounts.set(b.vendor_id, (blockerCounts.get(b.vendor_id) || 0) + 1);
-      for (const p of people || []) peopleCounts.set(p.vendor_id, (peopleCounts.get(p.vendor_id) || 0) + 1);
+      const countMap = new Map(
+        ((counts || []) as { vendor_id: string; action_count: number; blocker_count: number; people_count: number }[])
+          .map((c) => [c.vendor_id, c])
+      );
 
       setVendors(
-        ((vendorData || []) as Vendor[]).map((v) => ({
-          ...v,
-          actionCount: actionCounts.get(v.id) || 0,
-          blockerCount: blockerCounts.get(v.id) || 0,
-          peopleCount: peopleCounts.get(v.id) || 0,
-        }))
+        ((vendorData || []) as Vendor[]).map((v) => {
+          const c = countMap.get(v.id);
+          return {
+            ...v,
+            actionCount: c?.action_count || 0,
+            blockerCount: c?.blocker_count || 0,
+            peopleCount: c?.people_count || 0,
+          };
+        })
       );
       setLoading(false);
     }

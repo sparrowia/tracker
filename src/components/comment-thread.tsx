@@ -75,7 +75,7 @@ export default function CommentThread({ raidEntryId, actionItemId, blockerId, or
 
     const { data } = await supabase
       .from("comments")
-      .select("*, author:people(*), attachments:comment_attachments(*)")
+      .select("*, author:people(id, full_name), attachments:comment_attachments(*)")
       .eq(parentFilter.column, parentFilter.value)
       .order("created_at", { ascending: false });
 

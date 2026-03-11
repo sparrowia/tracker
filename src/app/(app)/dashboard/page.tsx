@@ -9,7 +9,7 @@ type SupabaseClient = any;
 async function getCriticalPath(supabase: SupabaseClient) {
   const { data } = await supabase
     .from("action_item_ages")
-    .select("*, owner:people(*), vendor:vendors(*), project:projects(*)")
+    .select("*, owner:people(id, full_name), vendor:vendors(id, name), project:projects(id, name, slug)")
     .in("priority", ["critical", "high"])
     .in("status", ["pending", "in_progress", "at_risk", "blocked"])
     .order("priority")
@@ -21,7 +21,7 @@ async function getCriticalPath(supabase: SupabaseClient) {
 async function getBlockers(supabase: SupabaseClient) {
   const { data } = await supabase
     .from("blocker_ages")
-    .select("*, owner:people(*), vendor:vendors(*), project:projects(*)")
+    .select("*, owner:people(id, full_name), vendor:vendors(id, name), project:projects(id, name, slug)")
     .order("priority")
     .order("first_flagged_at")
     .limit(15);
@@ -31,7 +31,7 @@ async function getBlockers(supabase: SupabaseClient) {
 async function getSupportTickets(supabase: SupabaseClient) {
   const { data } = await supabase
     .from("support_tickets")
-    .select("*, vendor:vendors(*), project:projects(*)")
+    .select("*, vendor:vendors(id, name), project:projects(id, name, slug)")
     .neq("status", "complete")
     .order("priority")
     .order("opened_at")
@@ -42,7 +42,7 @@ async function getSupportTickets(supabase: SupabaseClient) {
 async function getDecisions(supabase: SupabaseClient) {
   const { data } = await supabase
     .from("raid_entries")
-    .select("*, owner:people(*), project:projects(*)")
+    .select("*, owner:people(id, full_name), project:projects(id, name, slug)")
     .eq("raid_type", "decision")
     .neq("status", "complete")
     .order("priority")
@@ -53,33 +53,29 @@ async function getDecisions(supabase: SupabaseClient) {
 async function getProjects(supabase: SupabaseClient) {
   const { data } = await supabase
     .from("projects")
-    .select("*")
+    .select("id, name, slug, health, platform_status, target_completion")
     .order("name");
   return (data || []) as Project[];
 }
 
 async function getVendorSummary(supabase: SupabaseClient) {
-  const [{ data: vendors }, { data: actions }, { data: blockers }] = await Promise.all([
-    supabase.from("vendors").select("*").order("name"),
-    supabase.from("action_items").select("vendor_id").neq("status", "complete").not("vendor_id", "is", null),
-    supabase.from("blockers").select("vendor_id").is("resolved_at", null).not("vendor_id", "is", null),
+  const [{ data: vendors }, { data: counts }] = await Promise.all([
+    supabase.from("vendors").select("id, name, slug").order("name"),
+    supabase.rpc("vendor_item_counts"),
   ]);
 
   if (!vendors) return [];
 
-  const actionCounts = new Map<string, number>();
-  const blockerCounts = new Map<string, number>();
-  for (const a of actions || []) {
-    actionCounts.set(a.vendor_id, (actionCounts.get(a.vendor_id) || 0) + 1);
-  }
-  for (const b of blockers || []) {
-    blockerCounts.set(b.vendor_id, (blockerCounts.get(b.vendor_id) || 0) + 1);
-  }
+  const countMap = new Map(
+    ((counts || []) as { vendor_id: string; action_count: number; blocker_count: number; people_count: number }[])
+      .map((c) => [c.vendor_id, c])
+  );
 
   return (vendors as Vendor[])
     .map((vendor) => {
-      const actionCount = actionCounts.get(vendor.id) || 0;
-      const blockerCount = blockerCounts.get(vendor.id) || 0;
+      const c = countMap.get(vendor.id);
+      const actionCount = c?.action_count || 0;
+      const blockerCount = c?.blocker_count || 0;
       return { vendor, actionCount, blockerCount, totalOpen: actionCount + blockerCount };
     })
     .filter((s) => s.totalOpen > 0)
