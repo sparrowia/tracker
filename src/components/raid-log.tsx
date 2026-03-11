@@ -36,7 +36,7 @@ const decisionStatusOptions: ItemStatus[] = ["pending", "complete"];
 
 const typePrefix: Record<RaidType, string> = { risk: "R", assumption: "A", issue: "I", decision: "D" };
 
-type RaidColumnKey = "priority" | "status" | "owner" | "reporter" | "vendor" | "stage" | "age" | "escalations" | "first_flagged";
+type RaidColumnKey = "priority" | "status" | "owner" | "reporter" | "vendor" | "stage" | "age" | "first_flagged";
 
 const RAID_COLUMNS: { key: RaidColumnKey; label: string; width: string }[] = [
   { key: "priority", label: "Priority", width: "w-[68px]" },
@@ -46,8 +46,7 @@ const RAID_COLUMNS: { key: RaidColumnKey; label: string; width: string }[] = [
   { key: "vendor", label: "Vendor", width: "w-[100px]" },
   { key: "stage", label: "Stage", width: "w-[88px]" },
   { key: "age", label: "Age", width: "w-12" },
-  { key: "escalations", label: "Escalations", width: "w-[72px]" },
-  { key: "first_flagged", label: "Flagged", width: "w-[80px]" },
+  { key: "first_flagged", label: "Opened", width: "w-[80px]" },
 ];
 
 const DEFAULT_RAID_COLS: RaidColumnKey[] = ["priority", "status", "owner", "age"];
@@ -315,8 +314,6 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
       }
       case "age":
         return <span className="text-xs text-gray-500 font-medium flex-shrink-0 w-12 text-right">{formatAge(age)}</span>;
-      case "escalations":
-        return <span className="text-xs text-gray-600 flex-shrink-0 w-[72px] text-right">{entry.escalation_count > 0 ? `${entry.escalation_count}x` : "None"}</span>;
       case "first_flagged":
         return <span className="text-xs text-gray-500 flex-shrink-0 w-[80px] text-right">{new Date(entry.first_flagged_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>;
     }
@@ -1035,18 +1032,13 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                             />
                           </div>
 
-                          {/* Row: Flagged / Escalations */}
-                          <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-200">Flagged</span>
+                          {/* Row: Opened / Impact */}
+                          {/* Row: Opened / Impact */}
+                          <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-200">Opened</span>
                           <div className="px-3 py-2.5 border-b border-gray-200">
                             <span className="text-sm text-gray-700">{new Date(entry.first_flagged_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
                           </div>
-                          <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-200">Escalations</span>
-                          <div className="px-3 py-2.5 border-b border-gray-200">
-                            <span className="text-sm text-gray-700">{entry.escalation_count > 0 ? `${entry.escalation_count}x` : "None"}</span>
-                          </div>
-
-                          {/* Row: Impact / Parent */}
-                          <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-200">Impact</span>
+                          <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-200">Impact</span>
                           <div className="px-3 py-2.5 border-b border-gray-200">
                             <select
                               value={entry.impact || ""}
@@ -1059,8 +1051,10 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                               <option value="high">High</option>
                             </select>
                           </div>
-                          <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-200">Parent</span>
-                          <div className="px-3 py-2.5 border-b border-gray-200">
+
+                          {/* Row: Parent */}
+                          <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-200">Parent</span>
+                          <div className="px-3 py-2.5 border-b border-gray-200 col-span-3">
                             <select
                               value={entry.parent_id || ""}
                               onChange={(e) => saveField(entry.id, "parent_id", e.target.value)}
