@@ -144,6 +144,18 @@ export default function TeamPage() {
     loadData();
   }
 
+  async function handleRoleChange(userId: string, newRole: string) {
+    setActionLoading(userId);
+    const { error } = await supabase.from("profiles").update({ role: newRole }).eq("id", userId);
+    setActionLoading(null);
+    if (error) {
+      showError(error.message);
+      return;
+    }
+    setMembers((prev) => prev.map((m) => m.id === userId ? { ...m, role: newRole as UserRole } : m));
+    showSuccess("Role updated");
+  }
+
   async function handleCancelInvite(invitationId: string) {
     setActionLoading(invitationId);
     const res = await fetch("/api/invite/cancel", {
@@ -310,11 +322,22 @@ export default function TeamPage() {
             <span className="font-semibold text-gray-900">{m.full_name}</span>
             <span className="text-gray-600">{m.email}</span>
             <span>
-              <span
-                className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${roleBadgeColor[m.role]}`}
-              >
-                {roleLabel[m.role]}
-              </span>
+              {m.role === "super_admin" ? (
+                <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${roleBadgeColor[m.role]}`}>
+                  {roleLabel[m.role]}
+                </span>
+              ) : (
+                <select
+                  value={m.role}
+                  onChange={(e) => handleRoleChange(m.id, e.target.value)}
+                  disabled={actionLoading === m.id}
+                  className={`px-2 py-0.5 rounded-full text-xs font-medium border-0 cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500 ${roleBadgeColor[m.role]}`}
+                >
+                  <option value="admin">Admin</option>
+                  <option value="user">User</option>
+                  <option value="vendor">Vendor</option>
+                </select>
+              )}
             </span>
             <span className="text-gray-500 text-xs">
               {new Date(m.created_at).toLocaleDateString()}
