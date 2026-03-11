@@ -1248,7 +1248,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
       </div>
 
       {/* Right panel */}
-      <div className="flex-1">
+      <div className="flex-1 min-w-0">
         {showArchived ? renderArchived() : renderQuadrant(activeItems.label, activeItems.type as RaidType, activeItems.items)}
       </div>
     </div>
