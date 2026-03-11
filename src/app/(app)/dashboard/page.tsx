@@ -134,12 +134,24 @@ export default function DashboardPage() {
         projects = projects.filter((p) => visibleProjectIds!.has(p.id));
       }
 
+      // Derive initiative health from worst child project health
+      const healthRank: Record<string, number> = { at_risk: 3, off_track: 3, needs_attention: 2, in_progress: 1, on_track: 0 };
+      function worstHealth(projs: ProjectRow[]): Initiative["health"] {
+        let worst = 0;
+        let worstVal: Initiative["health"] = "on_track";
+        for (const p of projs) {
+          const rank = healthRank[p.health] ?? 0;
+          if (rank > worst) { worst = rank; worstVal = p.health as Initiative["health"]; }
+        }
+        return worstVal;
+      }
+
       const inits = (initData || []) as Initiative[];
       const groups: InitiativeGroup[] = inits
-        .map((init) => ({
-          ...init,
-          projects: projects.filter((p) => p.initiative_id === init.id),
-        }))
+        .map((init) => {
+          const initProjects = projects.filter((p) => p.initiative_id === init.id);
+          return { ...init, health: worstHealth(initProjects), projects: initProjects };
+        })
         .filter((g) => g.projects.length > 0);
 
       // Add unassigned projects as a pseudo-initiative
