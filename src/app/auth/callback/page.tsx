@@ -13,7 +13,7 @@ function CallbackHandler() {
 
   useEffect(() => {
     async function handleCallback() {
-      // Case 1: PKCE flow — ?code= in URL
+      // Case 1: PKCE flow — ?code= in URL query string
       const code = searchParams.get("code");
       if (code) {
         const { data, error: err } = await supabase.auth.exchangeCodeForSession(code);
@@ -29,8 +29,36 @@ function CallbackHandler() {
       }
 
       // Case 2: Implicit flow — #access_token= in hash fragment
-      // The Supabase client auto-parses hash fragments on init.
-      // Give it a moment to process, then check for session.
+      // The @supabase/ssr client does NOT auto-parse hash fragments,
+      // so we manually extract the tokens and set the session.
+      const hash = window.location.hash;
+      if (hash) {
+        const params = new URLSearchParams(hash.substring(1));
+        const access_token = params.get("access_token");
+        const refresh_token = params.get("refresh_token");
+
+        if (access_token && refresh_token) {
+          const { data, error: err } = await supabase.auth.setSession({
+            access_token,
+            refresh_token,
+          });
+
+          if (err) {
+            setError(err.message);
+            return;
+          }
+
+          if (data?.session?.user) {
+            // Clear the hash from URL
+            window.history.replaceState(null, "", window.location.pathname);
+            await markInvitationAccepted(data.session.user.email);
+            router.replace("/set-password");
+            return;
+          }
+        }
+      }
+
+      // Case 3: Check for existing session (user may already be authenticated)
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
         await markInvitationAccepted(session.user.email);
@@ -38,33 +66,20 @@ function CallbackHandler() {
         return;
       }
 
-      // Case 3: Listen for auth state change (hash parsing may be async)
-      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-        if (event === "SIGNED_IN" && session?.user) {
-          subscription.unsubscribe();
-          await markInvitationAccepted(session.user.email);
-          router.replace("/set-password");
-        }
-      });
-
-      // Timeout — if nothing happens in 5 seconds, redirect to login
-      setTimeout(() => {
-        subscription.unsubscribe();
-        router.replace("/login");
-      }, 5000);
+      // Nothing worked — redirect to login
+      setError("Unable to verify your invitation. The link may have expired.");
     }
 
     async function markInvitationAccepted(email: string | undefined) {
       if (!email) return;
       try {
-        // Use a server endpoint to mark invitation accepted (needs admin client)
         await fetch("/api/invite/accept", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email }),
         });
       } catch {
-        // Non-critical — invitation acceptance is a nice-to-have
+        // Non-critical
       }
     }
 
