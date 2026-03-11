@@ -444,7 +444,7 @@ export default function DashboardPage() {
       {initiativeGroups.length > 0 && (
         <div className="flex items-center gap-4 pt-2">
           <hr className="flex-1 border-gray-300" />
-          <span className="text-xs font-semibold text-gray-400 uppercase tracking-widest">Initiatives</span>
+          <span className="text-xs font-semibold text-gray-700 uppercase tracking-widest">Initiatives</span>
           <hr className="flex-1 border-gray-300" />
         </div>
       )}
