@@ -21,6 +21,7 @@ import {
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import type { UserRole } from "@/lib/types";
+import { useRole } from "@/components/role-context";
 
 interface SidebarProject {
   id: string;
@@ -48,7 +49,11 @@ function getSettingsItems(role: UserRole) {
   return items;
 }
 
-export function Sidebar({ role = "user" as UserRole, profileId, userPersonId }: { role?: UserRole; profileId?: string; userPersonId?: string | null }) {
+export function Sidebar({ role: propRole = "user" as UserRole, profileId, userPersonId }: { role?: UserRole; profileId?: string; userPersonId?: string | null }) {
+  const { role: contextRole, userPersonId: contextPersonId } = useRole();
+  // Use context role (which reflects impersonation) over the server-passed prop
+  const role = contextRole || propRole;
+  const effectivePersonId = contextPersonId || userPersonId;
   const pathname = usePathname();
   const isOnSettings = pathname.startsWith("/settings");
   const isOnInitiatives = pathname.startsWith("/initiatives") || pathname.startsWith("/projects");
@@ -90,8 +95,8 @@ export function Sidebar({ role = "user" as UserRole, profileId, userPersonId }: 
       const blockedProjectIds = new Set((blockerData || []).map((b: { project_id: string }) => b.project_id));
 
       // For regular users, only show projects they are part of
-      if (role === "user" && userPersonId && profileId) {
-        const { data: visibleIds } = await supabase.rpc("user_visible_project_ids", { p_person_id: userPersonId, p_profile_id: profileId });
+      if (role === "user" && effectivePersonId && profileId) {
+        const { data: visibleIds } = await supabase.rpc("user_visible_project_ids", { p_person_id: effectivePersonId, p_profile_id: profileId });
         const idSet = new Set((visibleIds || []).map(String));
         projs = projs.filter((p) => idSet.has(p.id));
       }
@@ -112,7 +117,7 @@ export function Sidebar({ role = "user" as UserRole, profileId, userPersonId }: 
     load();
     window.addEventListener("sidebar:refresh", load);
     return () => window.removeEventListener("sidebar:refresh", load);
-  }, [role, profileId, userPersonId]);
+  }, [role, profileId, effectivePersonId]);
 
   // Auto-expand based on current path (no re-fetch)
   useEffect(() => {
