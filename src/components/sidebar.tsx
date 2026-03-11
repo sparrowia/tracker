@@ -15,6 +15,8 @@ import {
   ChevronRight,
   BookType,
   MessageSquare,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
@@ -55,6 +57,23 @@ export function Sidebar({ role = "user" as UserRole }: { role?: UserRole }) {
   const [expandedInitiatives, setExpandedInitiatives] = useState<Set<string>>(new Set());
   const [initiatives, setInitiatives] = useState<SidebarInitiative[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  const [hovering, setHovering] = useState(false);
+
+  // Load collapsed state from localStorage
+  useEffect(() => {
+    const stored = localStorage.getItem("sidebar-collapsed");
+    if (stored === "true") setCollapsed(true);
+  }, []);
+
+  function toggleCollapsed() {
+    setCollapsed((prev) => {
+      const next = !prev;
+      localStorage.setItem("sidebar-collapsed", String(next));
+      if (next) setHovering(false);
+      return next;
+    });
+  }
 
   // Fetch on mount + re-fetch on sidebar:refresh events
   useEffect(() => {
@@ -121,13 +140,58 @@ export function Sidebar({ role = "user" as UserRole }: { role?: UserRole }) {
     });
   }
 
-  return (
-    <div className="hidden md:flex md:w-56 md:flex-col border-r border-gray-200 bg-white">
-      <div className="flex items-center h-14 px-4 border-b border-gray-200">
+  const isExpanded = !collapsed || hovering;
+
+  // Icon-only collapsed strip
+  if (collapsed && !hovering) {
+    return (
+      <div
+        className="hidden md:flex md:flex-col w-14 border-r border-gray-200 bg-white flex-shrink-0"
+        onMouseEnter={() => setHovering(true)}
+      >
+        <div className="flex items-center justify-center h-14 border-b border-gray-200">
+          <button onClick={toggleCollapsed} className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md">
+            <PanelLeftOpen className="h-4 w-4" />
+          </button>
+        </div>
+        <nav className="flex-1 py-4 flex flex-col items-center gap-1">
+          <Link href="/dashboard" className={cn("p-2 rounded-md", pathname === "/dashboard" || pathname.startsWith("/dashboard/") ? "bg-blue-50 text-blue-700" : "text-gray-500 hover:bg-gray-100 hover:text-gray-700")} title="Dashboard">
+            <LayoutDashboard className="h-4 w-4" />
+          </Link>
+          {role !== "vendor" && (
+            <Link href="/ask" className={cn("p-2 rounded-md", pathname === "/ask" ? "bg-blue-50 text-blue-700" : "text-gray-500 hover:bg-gray-100 hover:text-gray-700")} title="Ask">
+              <MessageSquare className="h-4 w-4" />
+            </Link>
+          )}
+          <Link href="/initiatives" className={cn("p-2 rounded-md", isOnInitiatives ? "bg-blue-50 text-blue-700" : "text-gray-500 hover:bg-gray-100 hover:text-gray-700")} title="Initiatives">
+            <FolderKanban className="h-4 w-4" />
+          </Link>
+          {role !== "vendor" && (
+            <Link href="/intake" className={cn("p-2 rounded-md", pathname === "/intake" || pathname.startsWith("/intake/") ? "bg-blue-50 text-blue-700" : "text-gray-500 hover:bg-gray-100 hover:text-gray-700")} title="Intake">
+              <Inbox className="h-4 w-4" />
+            </Link>
+          )}
+          {role !== "vendor" && (
+            <Link href="/settings" className={cn("p-2 rounded-md", isOnSettings ? "bg-blue-50 text-blue-700" : "text-gray-500 hover:bg-gray-100 hover:text-gray-700")} title="Settings">
+              <Settings className="h-4 w-4" />
+            </Link>
+          )}
+        </nav>
+      </div>
+    );
+  }
+
+  // Full sidebar content (used for both expanded and hover-overlay modes)
+  const sidebarContent = (
+    <>
+      <div className="flex items-center h-14 px-4 border-b border-gray-200 justify-between">
         <Link href="/dashboard" className="flex items-center gap-2">
           <FileText className="h-5 w-5 text-blue-600" />
           <span className="font-semibold text-gray-900">Edcetera</span>
         </Link>
+        <button onClick={toggleCollapsed} className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-md">
+          <PanelLeftClose className="h-4 w-4" />
+        </button>
       </div>
 
       <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
@@ -294,6 +358,30 @@ export function Sidebar({ role = "user" as UserRole }: { role?: UserRole }) {
           </div>
         )}
       </nav>
+    </>
+  );
+
+  // Hovering over collapsed sidebar — show full sidebar as overlay
+  if (collapsed && hovering) {
+    return (
+      <>
+        {/* Collapsed strip stays in place */}
+        <div className="hidden md:flex md:flex-col w-14 border-r border-gray-200 bg-white flex-shrink-0" />
+        {/* Full sidebar overlaid */}
+        <div
+          className="hidden md:flex md:flex-col w-56 bg-white border-r border-gray-200 shadow-xl fixed top-0 left-0 h-full z-40"
+          onMouseLeave={() => setHovering(false)}
+        >
+          {sidebarContent}
+        </div>
+      </>
+    );
+  }
+
+  // Normal expanded sidebar
+  return (
+    <div className="hidden md:flex md:w-56 md:flex-col border-r border-gray-200 bg-white">
+      {sidebarContent}
     </div>
   );
 }
