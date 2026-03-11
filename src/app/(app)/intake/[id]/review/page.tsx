@@ -203,6 +203,7 @@ export default function IntakeReviewPage() {
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const editSnapshotsRef = useRef<Map<string, ExtractedItem>>(new Map());
   const originalExtractedRef = useRef<Record<EntityCategory, ExtractedItem[]> | null>(null);
+  const extractedContactsRef = useRef<{ full_name?: string; title?: string | null; email?: string | null; phone?: string | null }[]>([]);
   const router = useRouter();
   const supabase = createClient();
 
@@ -293,6 +294,7 @@ export default function IntakeReviewPage() {
           blockers: prepItems(ed.blockers || []),
           status_updates: prepItems(ed.status_updates || []),
         });
+        extractedContactsRef.current = ed.contacts || [];
       }
 
       setLoading(false);
@@ -466,17 +468,15 @@ export default function IntakeReviewPage() {
     try {
       if (!orgId) throw new Error("No org found");
 
-      // Get people for fuzzy matching owner names
+      // Get people for fuzzy matching owner names (include contact fields for update detection)
       const { data: existingPeople } = await supabase
         .from("people")
-        .select("id, full_name")
+        .select("id, full_name, title, email, phone")
         .eq("org_id", orgId);
 
+      const peopleList = (existingPeople || []) as { id: string; full_name: string; title: string | null; email: string | null; phone: string | null }[];
       const peopleMap = new Map(
-        (existingPeople || []).map((p: { id: string; full_name: string }) => [
-          p.full_name.toLowerCase(),
-          p.id,
-        ])
+        peopleList.map((p) => [p.full_name.toLowerCase(), p.id])
       );
 
       // Collect all owner names from accepted items that need person records
@@ -526,6 +526,23 @@ export default function IntakeReviewPage() {
           if (newPerson) {
             peopleMap.set(newPerson.full_name.toLowerCase(), newPerson.id);
           }
+        }
+      }
+
+      // Update contact info from AI-extracted contacts
+      const extractedContacts = extractedContactsRef.current;
+      for (const contact of extractedContacts) {
+        if (!contact.full_name) continue;
+        const personId = fuzzyFindPerson(contact.full_name);
+        if (!personId) continue;
+        const existing = peopleList.find((p) => p.id === personId);
+        if (!existing) continue;
+        const updates: Record<string, string> = {};
+        if (contact.title && !existing.title) updates.title = contact.title;
+        if (contact.email && !existing.email) updates.email = contact.email;
+        if (contact.phone && !existing.phone) updates.phone = contact.phone;
+        if (Object.keys(updates).length > 0) {
+          supabase.from("people").update(updates).eq("id", personId).then(() => {});
         }
       }
 

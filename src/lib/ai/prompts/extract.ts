@@ -69,6 +69,14 @@ Return a JSON object with these arrays (each can be empty):
       "confidence": "high|medium|low",
       "source_quote": "Exact short phrase from the original text"
     }
+  ],
+  "contacts": [
+    {
+      "full_name": "Person's full name",
+      "title": "Job title or role mentioned, or null",
+      "email": "Email address mentioned, or null",
+      "phone": "Phone number mentioned, or null"
+    }
   ]
 }
 
@@ -81,6 +89,7 @@ Rules:
 - confidence: "high" = explicitly stated with clear details; "medium" = clearly implied but requires some interpretation; "low" = inferred from vague or ambiguous language
 - Do not fabricate information not present in the text, EXCEPT for term corrections (see below) which MUST be applied
 - source_quote MUST be a verbatim substring copied character-for-character from the input text (5-15 words). It will be used for indexOf() text search, so it MUST match exactly — same punctuation, same capitalization, same spacing. Do NOT apply term corrections to source_quote. If you cannot find a good verbatim substring, use the most distinctive 5-8 words from the relevant sentence
+- contacts: Extract any person mentioned alongside their job title, email, or phone number. Only include a contact if at least one of title/email/phone is present — do not add contacts with only a name. Match names to Known People list using full names. Do not duplicate contacts already fully captured in action_items or other arrays as owner_name
 - Return ONLY valid JSON, no other text`;
 
 export const SOURCE_HINTS: Record<string, string> = {
@@ -184,7 +193,8 @@ OUTPUT:
       "details": "Sarah confirmed the API migration is done.",
       "source_quote": "Sarah confirmed the API migration is done"
     }
-  ]
+  ],
+  "contacts": []
 }
 
 Note how:
