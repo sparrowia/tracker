@@ -440,11 +440,20 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* My Initiatives & Projects */}
+      {/* Initiatives divider */}
       {initiativeGroups.length > 0 && (
-        <section>
+        <div className="flex items-center gap-4 pt-2">
+          <hr className="flex-1 border-gray-300" />
+          <span className="text-xs font-semibold text-gray-400 uppercase tracking-widest">Initiatives</span>
+          <hr className="flex-1 border-gray-300" />
+        </div>
+      )}
+
+      {/* Initiative tables — 2-up grid */}
+      {initiativeGroups.length > 0 && (
+        <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {initiativeGroups.map((init) => (
-            <div key={init.id} className="bg-white rounded-lg border border-gray-300 overflow-hidden mb-6 last:mb-0">
+            <div key={init.id} className="bg-white rounded-lg border border-gray-300 overflow-hidden">
               <div className="bg-gray-800 px-4 py-2.5 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   {init.id !== "__unassigned__" ? (
@@ -465,8 +474,8 @@ export default function DashboardPage() {
                   <tr>
                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Project</th>
                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Health</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Blockers</th>
+                    <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
+                    <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Blockers</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -478,8 +487,8 @@ export default function DashboardPage() {
                       <td className="px-4 py-3">
                         <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full border ${healthColor(p.health)}`}>{healthLabel(p.health)}</span>
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-600">{p.actionCount}</td>
-                      <td className="px-4 py-3 text-sm">
+                      <td className="px-4 py-3 text-sm text-gray-600 text-center">{p.actionCount}</td>
+                      <td className="px-4 py-3 text-sm text-center">
                         {p.blockerCount > 0 ? (
                           <span className="text-red-600 font-medium">{p.blockerCount}</span>
                         ) : (
