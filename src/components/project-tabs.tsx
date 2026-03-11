@@ -341,7 +341,7 @@ const blockerStatusOptions: ItemStatus[] = ["pending", "in_progress", "complete"
 
 type BlockerRow = Blocker & { owner: Person | null; vendor: Vendor | null };
 
-type BlockerColumnKey = "priority" | "status" | "owner" | "vendor" | "due_date" | "age" | "escalations" | "first_flagged";
+type BlockerColumnKey = "priority" | "status" | "owner" | "vendor" | "due_date" | "age" | "first_flagged";
 
 const BLOCKER_COLUMNS: { key: BlockerColumnKey; label: string; width: string }[] = [
   { key: "priority", label: "Priority", width: "w-[68px]" },
@@ -350,7 +350,7 @@ const BLOCKER_COLUMNS: { key: BlockerColumnKey; label: string; width: string }[]
   { key: "vendor", label: "Vendor", width: "w-[100px]" },
   { key: "due_date", label: "Due Date", width: "w-[80px]" },
   { key: "age", label: "Age", width: "w-12" },
-  { key: "escalations", label: "Escalations", width: "w-[72px]" },
+
   { key: "first_flagged", label: "Flagged", width: "w-[80px]" },
 ];
 
@@ -532,7 +532,6 @@ function StagingArea({
       priority: item.priority,
       status: "pending" as const,
       first_flagged_at: now,
-      escalation_count: 0,
       include_in_meeting: false,
       created_by: profileId,
       ...(item.owner_id ? { owner_id: item.owner_id } : {}),
@@ -810,8 +809,6 @@ function BlockersPanel({
         return <span className="text-xs text-gray-600 flex-shrink-0 w-[80px] text-right">{formatDateShort(b.due_date)}</span>;
       case "age":
         return <span className="text-xs text-red-600 font-medium flex-shrink-0 w-12 text-right">{b.age_days != null ? formatAge(b.age_days) : ""}</span>;
-      case "escalations":
-        return <span className="text-xs text-gray-600 flex-shrink-0 w-[72px] text-right">{b.escalation_count > 0 ? `${b.escalation_count}x` : "None"}</span>;
       case "first_flagged":
         return <span className="text-xs text-gray-500 flex-shrink-0 w-[80px] text-right">{new Date(b.first_flagged_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>;
     }
@@ -1096,14 +1093,10 @@ function BlockersPanel({
                         <span className="text-sm text-gray-700">{new Date(b.first_flagged_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
                       </div>
 
-                      {/* Row: Age / Escalations */}
+                      {/* Row: Age */}
                       <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-100">Age</span>
-                      <div className="px-3 py-2.5 border-b border-gray-100">
+                      <div className="px-3 py-2.5 border-b border-gray-100 col-span-3">
                         <span className="text-sm text-red-700 font-medium">{b.age_days != null ? formatAge(b.age_days) : "—"}</span>
-                      </div>
-                      <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-100">Escalations</span>
-                      <div className="px-3 py-2.5 border-b border-gray-100">
-                        <span className="text-sm text-gray-700">{b.escalation_count > 0 ? `${b.escalation_count}x` : "None"}</span>
                       </div>
                     </div>
                   </div>
@@ -1202,7 +1195,7 @@ const actionStatusOptions: ItemStatus[] = ["pending", "in_progress", "complete",
 
 type ActionRow = ActionItem & { owner: Person | null; vendor: Vendor | null };
 
-type ActionColumnKey = "priority" | "status" | "owner" | "vendor" | "stage" | "due_date" | "age" | "escalations" | "first_flagged";
+type ActionColumnKey = "priority" | "status" | "owner" | "vendor" | "stage" | "due_date" | "age" | "first_flagged";
 
 const ACTION_COLUMNS: { key: ActionColumnKey; label: string; width: string }[] = [
   { key: "priority", label: "Priority", width: "w-[68px]" },
@@ -1212,7 +1205,7 @@ const ACTION_COLUMNS: { key: ActionColumnKey; label: string; width: string }[] =
   { key: "stage", label: "Stage", width: "w-[88px]" },
   { key: "due_date", label: "Due Date", width: "w-[80px]" },
   { key: "age", label: "Age", width: "w-12" },
-  { key: "escalations", label: "Escalations", width: "w-[72px]" },
+
   { key: "first_flagged", label: "Flagged", width: "w-[80px]" },
 ];
 
@@ -1367,8 +1360,6 @@ function ActionItemsPanel({
         return <span className="text-xs text-gray-600 flex-shrink-0 w-[80px] text-right">{formatDateShort(a.due_date)}</span>;
       case "age":
         return <span className="text-xs text-gray-500 font-medium flex-shrink-0 w-12 text-right">{a.age_days != null ? formatAge(a.age_days) : ""}</span>;
-      case "escalations":
-        return <span className="text-xs text-gray-600 flex-shrink-0 w-[72px] text-right">{a.escalation_count > 0 ? `${a.escalation_count}x` : "None"}</span>;
       case "first_flagged":
         return <span className="text-xs text-gray-500 flex-shrink-0 w-[80px] text-right">{new Date(a.first_flagged_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>;
     }
@@ -1728,14 +1719,10 @@ function ActionItemsPanel({
                         <span className="text-sm text-gray-700">{new Date(a.first_flagged_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
                       </div>
 
-                      {/* Row: Age / Escalations */}
+                      {/* Row: Age */}
                       <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-100">Age</span>
-                      <div className="px-3 py-2.5 border-b border-gray-100">
+                      <div className="px-3 py-2.5 border-b border-gray-100 col-span-3">
                         <span className="text-sm text-gray-600 font-medium">{a.age_days != null ? formatAge(a.age_days) : "—"}</span>
-                      </div>
-                      <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-100">Escalations</span>
-                      <div className="px-3 py-2.5 border-b border-gray-100">
-                        <span className="text-sm text-gray-700">{a.escalation_count > 0 ? `${a.escalation_count}x` : "None"}</span>
                       </div>
 
                       {/* Row: Stage */}

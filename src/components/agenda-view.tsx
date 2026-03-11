@@ -702,13 +702,9 @@ export function AgendaView({
                   <span className="text-sm text-gray-700">{Math.round(item.score)}</span>
                 </div>
 
-                {/* Row: Escalations / Rank */}
-                <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-200">Escalations</span>
-                <div className="px-3 py-2.5 border-b border-gray-200">
-                  <span className="text-sm text-gray-700">{item.escalation_count > 0 ? `${item.escalation_count}x` : "None"}</span>
-                </div>
-                <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-200">Rank</span>
-                <div className="px-3 py-2.5 border-b border-gray-200">
+                {/* Row: Rank */}
+                <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-200">Rank</span>
+                <div className="px-3 py-2.5 border-b border-gray-200 col-span-3">
                   <span className="text-sm text-gray-700">#{item.rank}</span>
                 </div>
               </div>
@@ -839,7 +835,7 @@ export function AgendaView({
         <div>
           <h2 className="text-lg font-semibold text-gray-900">Meeting Agenda</h2>
           <p className="text-sm text-gray-500 mt-0.5">
-            {items.length} items{mode === "selected" ? " from selected" : ""}, ranked by priority + age + escalations
+            {items.length} items{mode === "selected" ? " from selected" : ""}, ranked by priority + age
           </p>
         </div>
         <div className="flex items-center gap-3">

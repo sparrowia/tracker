@@ -156,7 +156,6 @@ export interface ActionItem {
   priority: PriorityLevel;
   due_date: string | null;
   first_flagged_at: string;
-  escalation_count: number;
   resolved_at: string | null;
   notes: string | null;
   stage: string | null;
@@ -193,7 +192,6 @@ export interface RaidEntry {
   parent_id: string | null;
   sort_order: number;
   first_flagged_at: string;
-  escalation_count: number;
   resolved_at: string | null;
   created_by: string | null;
   created_at: string;
@@ -215,7 +213,6 @@ export interface Blocker {
   status: ItemStatus;
   priority: PriorityLevel;
   first_flagged_at: string;
-  escalation_count: number;
   resolved_at: string | null;
   due_date: string | null;
   include_in_meeting: boolean;
@@ -275,7 +272,6 @@ export interface AgendaItem {
   priority: PriorityLevel;
   status: ItemStatus;
   first_raised_at: string;
-  escalation_count: number;
   resolved_at: string | null;
   action_item_id: string | null;
   blocker_id: string | null;
@@ -311,7 +307,6 @@ export interface VendorAccountabilityRow {
   priority: PriorityLevel;
   due_date: string | null;
   first_flagged_at: string;
-  escalation_count: number;
   age_days: number;
   owner_id: string | null;
   project_id: string | null;
@@ -341,7 +336,6 @@ export interface VendorAgendaRow {
   status: ItemStatus;
   due_date: string | null;
   age_days: number;
-  escalation_count: number;
   score: number;
   owner_name: string | null;
   project_name: string | null;
@@ -387,7 +381,6 @@ export interface ProjectAgendaRow {
   status: ItemStatus;
   due_date: string | null;
   age_days: number;
-  escalation_count: number;
   score: number;
   owner_name: string | null;
   vendor_name: string | null;

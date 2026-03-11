@@ -380,7 +380,6 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
       priority: entry.priority,
       status: entry.status === "identified" || entry.status === "assessing" ? "pending" : entry.status,
       first_flagged_at: entry.first_flagged_at,
-      escalation_count: entry.escalation_count,
       created_by: profileId,
     }).select("id").single();
     if (error) { console.error("Convert failed:", error); return; }
@@ -405,7 +404,6 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
       priority: entry.priority,
       status: entry.status === "identified" || entry.status === "assessing" ? "pending" : entry.status,
       first_flagged_at: entry.first_flagged_at,
-      escalation_count: entry.escalation_count,
       created_by: profileId,
     }).select("id").single();
     if (error) { console.error("Convert failed:", error); return; }

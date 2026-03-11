@@ -201,7 +201,6 @@ export default async function DashboardPage() {
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Vendor</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Age</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Impact</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Escalations</th>
                 </tr>
               </thead>
               <tbody>
@@ -223,7 +222,6 @@ export default async function DashboardPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-600 max-w-xs truncate">{b.impact_description || "—"}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{b.escalation_count > 0 ? `${b.escalation_count}x` : "—"}</td>
                   </tr>
                 ))}
               </tbody>
