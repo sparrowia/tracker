@@ -9,6 +9,7 @@ import { useRole } from "@/components/role-context";
 import { canCreate, canDelete } from "@/lib/permissions";
 import OwnerPicker from "@/components/owner-picker";
 import VendorPicker from "@/components/vendor-picker";
+import CommentThread from "@/components/comment-thread";
 
 const priorityOptions: PriorityLevel[] = ["critical", "high", "medium", "low"];
 
@@ -251,9 +252,31 @@ export function AgendaView({
   const [collapsedGroups, setCollapsedGroups] = useState<Set<PriorityLevel>>(new Set());
   const [notesText, setNotesText] = useState("");
   const [savingNotes, setSavingNotes] = useState(false);
+  // Extra detail fields fetched on expand
+  const [detailFields, setDetailFields] = useState<Record<string, { description?: string; notes?: string; next_steps?: string }>>({});
   const router = useRouter();
   const supabase = createClient();
   const { role, profileId } = useRole();
+
+  // Fetch description/notes/next_steps when expanding an item
+  useEffect(() => {
+    if (!expandedId) return;
+    if (detailFields[expandedId]) return; // already fetched
+    const item = items.find((i) => i.entity_id === expandedId);
+    if (!item) return;
+    const table = item.entity_type === "agenda_item" ? "agenda_items"
+      : item.entity_type === "blocker" ? "blockers"
+      : item.entity_type === "action_item" ? "action_items"
+      : "raid_entries";
+    const cols = item.entity_type === "action_item"
+      ? "description, notes, next_steps"
+      : item.entity_type.startsWith("raid_")
+        ? "description, notes, next_steps"
+        : "description";
+    supabase.from(table).select(cols).eq("id", expandedId).single().then(({ data }) => {
+      if (data) setDetailFields((prev) => ({ ...prev, [expandedId]: data as { description?: string; notes?: string; next_steps?: string } }));
+    });
+  }, [expandedId]);
 
   function toggleGroup(priority: PriorityLevel) {
     setCollapsedGroups((prev) => {
@@ -343,6 +366,10 @@ export function AgendaView({
       }
       return i;
     }));
+    // Update detail fields cache for description/notes/next_steps
+    if (field === "description" || field === "notes" || field === "next_steps") {
+      setDetailFields((prev) => ({ ...prev, [item.entity_id]: { ...prev[item.entity_id], [field]: value || null } }));
+    }
     // Notify parent so other tabs update their state
     onItemFieldChanged?.(item.entity_type, item.entity_id, field, value);
   }
@@ -598,16 +625,101 @@ export function AgendaView({
         </div>
 
         {/* Expanded detail panel */}
-        {isExpanded && (
+        {isExpanded && (() => {
+          const detail = detailFields[item.entity_id] || {};
+          const descField = item.entity_type === "action_item" ? "description"
+            : item.entity_type === "blocker" ? "description"
+            : item.entity_type.startsWith("raid_") ? "description"
+            : "context";
+          const notesField = item.entity_type === "action_item" ? "notes"
+            : item.entity_type === "blocker" ? "impact_description"
+            : item.entity_type.startsWith("raid_") ? "notes"
+            : "context";
+          const descValue = detail.description ?? (descField === "context" ? item.context : null) ?? "";
+          const notesValue = detail.notes ?? (notesField === "context" ? item.context : notesField === "impact_description" ? item.context : null) ?? "";
+          const showNextSteps = item.entity_type === "action_item" || item.entity_type === "raid_issue";
+          const commentProps = item.entity_type === "action_item" ? { actionItemId: item.entity_id }
+            : item.entity_type === "blocker" ? { blockerId: item.entity_id }
+            : item.entity_type.startsWith("raid_") ? { raidEntryId: item.entity_id }
+            : null;
+          return (
           <div className="bg-white border-b border-gray-200" onClick={(e) => e.stopPropagation()}>
             {/* Editable title */}
-            <div className="px-5 pt-3 pb-1">
+            <div className="px-5 pt-4 pb-3 text-base font-semibold text-gray-900 bg-amber-50/60">
               <InlineText
                 value={item.title}
                 onSave={(v) => saveField(item, "title", v)}
                 placeholder="Untitled"
               />
             </div>
+
+            {/* Description & Notes */}
+            <div className="grid grid-cols-2 gap-4 px-5 py-3 border-t border-gray-200">
+              <div className="rounded border border-gray-200 p-3">
+                <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Description</span>
+                <InlineText
+                  value={descValue}
+                  onSave={(v) => saveField(item, descField, v)}
+                  multiline
+                  placeholder="Add description..."
+                />
+              </div>
+              <div className="rounded border border-gray-200 p-3">
+                <div className="flex items-center justify-between mb-0.5">
+                  <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Notes</span>
+                  <button
+                    onClick={() => handleSaveNotes(item)}
+                    disabled={savingNotes || !notesText.trim()}
+                    className="px-2 py-0.5 text-[10px] font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1 transition-colors"
+                  >
+                    {savingNotes && <svg className="animate-spin h-2.5 w-2.5" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>}
+                    {savingNotes ? "Updating..." : "Update"}
+                  </button>
+                </div>
+                <textarea
+                  value={notesText || notesValue}
+                  onChange={(e) => setNotesText(e.target.value)}
+                  placeholder="Add notes..."
+                  rows={3}
+                  className="w-full rounded border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y mt-1"
+                />
+              </div>
+            </div>
+
+            {/* Next Steps — action items and issues only */}
+            {showNextSteps && (
+              <div className="px-5 pb-3">
+                <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Next Steps</span>
+                <textarea
+                  value={detail.next_steps || ""}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setDetailFields((prev) => ({ ...prev, [item.entity_id]: { ...prev[item.entity_id], next_steps: v } }));
+                  }}
+                  onBlur={(e) => {
+                    const v = e.target.value;
+                    if (v !== (detail.next_steps || "")) saveField(item, "next_steps", v);
+                  }}
+                  placeholder="Next steps..."
+                  rows={2}
+                  className="w-full rounded border border-gray-200 px-2 py-1 text-sm font-bold focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none mt-1"
+                />
+              </div>
+            )}
+
+            {/* Ask (agenda items only) */}
+            {(item.entity_type === "agenda_item" || item.ask) && (
+              <div className="px-5 py-3 border-t border-gray-200">
+                <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Ask</span>
+                <InlineText
+                  value={item.ask || ""}
+                  onSave={(v) => saveField(item, "ask", v)}
+                  multiline
+                  placeholder="What do we need?"
+                />
+              </div>
+            )}
+
             {/* Properties grid */}
             <div className="border-t border-gray-200">
               <div className="grid grid-cols-[120px_1fr_120px_1fr] items-stretch">
@@ -710,56 +822,14 @@ export function AgendaView({
               </div>
             </div>
 
-            {/* Context */}
-            <div className="px-5 py-3">
-              <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Context</span>
-              <InlineText
-                value={item.context || ""}
-                onSave={(v) => {
-                  const field = item.entity_type === "action_item" ? "notes" : item.entity_type === "blocker" ? "impact_description" : "context";
-                  saveField(item, field, v);
-                }}
-                multiline
-                placeholder="Add context..."
+            {/* Comments */}
+            {commentProps && (
+              <CommentThread
+                {...commentProps}
+                orgId={project.org_id}
+                people={people}
               />
-            </div>
-
-            {/* Ask (agenda items only) */}
-            {(item.entity_type === "agenda_item" || item.ask) && (
-              <div className="px-5 py-3 border-t border-gray-200">
-                <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Ask</span>
-                <InlineText
-                  value={item.ask || ""}
-                  onSave={(v) => saveField(item, "ask", v)}
-                  multiline
-                  placeholder="What do we need?"
-                />
-              </div>
             )}
-
-            {/* Call Notes */}
-            <div className="px-5 py-3 border-t border-gray-200">
-              <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Call Notes</span>
-              <textarea
-                value={notesText}
-                onChange={(e) => setNotesText(e.target.value)}
-                placeholder="Take notes during the call..."
-                rows={3}
-                className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y mt-1"
-              />
-              {notesText.trim() && (
-                <div className="flex justify-end mt-2">
-                  <button
-                    onClick={() => handleSaveNotes(item)}
-                    disabled={savingNotes}
-                    className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5"
-                  >
-                    {savingNotes && <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>}
-                    {savingNotes ? "Processing..." : "Process Notes"}
-                  </button>
-                </div>
-              )}
-            </div>
 
             {/* Actions bar */}
             <div className="flex justify-end items-center gap-3 px-5 py-2 border-t border-gray-200">
@@ -777,7 +847,8 @@ export function AgendaView({
               )}
             </div>
           </div>
-        )}
+          );
+        })()}
       </Fragment>
     );
   }
