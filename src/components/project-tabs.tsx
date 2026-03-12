@@ -1062,8 +1062,41 @@ function BlockersPanel({
               {isExpanded && (
                 <div className="bg-white border-b border-gray-200" onClick={(e) => e.stopPropagation()}>
                   {/* Title section */}
-                  <div className="px-5 pt-4 pb-3 text-base font-semibold text-gray-900">
+                  <div className="px-5 pt-4 pb-3 text-base font-semibold text-gray-900 bg-amber-50/60">
                     <InlineText value={b.title} onSave={(v) => saveField(b.id, "title", v)} />
+                  </div>
+
+                  {/* Description & Impact */}
+                  <div className="grid grid-cols-2 gap-4 px-5 py-3 border-t border-gray-200">
+                    <div className="rounded border border-gray-200 p-3">
+                      <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Description</span>
+                      <InlineText value={b.description || ""} onSave={(v) => saveField(b.id, "description", v)} multiline placeholder="Add description..." />
+                    </div>
+                    <div className="rounded border border-gray-200 p-3">
+                      <div className="flex items-center justify-between mb-0.5">
+                        <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Notes</span>
+                        <button
+                          onClick={() => saveCallNotes(b.id)}
+                          disabled={savingNotes || !callNotes.trim()}
+                          className="px-2 py-0.5 text-[10px] font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1 transition-colors"
+                        >
+                          {savingNotes && (
+                            <svg className="animate-spin h-2.5 w-2.5" viewBox="0 0 24 24" fill="none">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                            </svg>
+                          )}
+                          {savingNotes ? "Updating..." : "Update"}
+                        </button>
+                      </div>
+                      <textarea
+                        value={callNotes || b.impact_description || ""}
+                        onChange={(e) => { setCallNotes(e.target.value); setCallNotesId(b.id); }}
+                        placeholder="Add notes..."
+                        rows={3}
+                        className="w-full rounded border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y mt-1"
+                      />
+                    </div>
                   </div>
 
                   {/* Properties grid */}
@@ -1133,55 +1166,6 @@ function BlockersPanel({
                     </div>
                   </div>
 
-                  {/* Description & Impact */}
-                  <div className="px-5 py-3 space-y-3">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Impact</span>
-                        <InlineText value={b.impact_description || ""} onSave={(v) => saveField(b.id, "impact_description", v)} multiline placeholder="Add impact..." />
-                      </div>
-                      <div>
-                        <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Description</span>
-                        <InlineText value={b.description || ""} onSave={(v) => saveField(b.id, "description", v)} multiline placeholder="Add description..." />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Call Notes panel */}
-                  {callNotesId === b.id && (
-                    <div className="px-5 pb-3">
-                      <label className="block text-xs font-medium text-gray-500 mb-1">Call Notes</label>
-                      <textarea
-                        value={callNotes}
-                        onChange={(e) => setCallNotes(e.target.value)}
-                        placeholder="Take notes during the call — AI will update fields automatically..."
-                        rows={4}
-                        className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
-                      />
-                      <div className="flex gap-2 justify-end mt-2">
-                        <button
-                          onClick={() => { setCallNotesId(null); setCallNotes(""); }}
-                          className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded hover:bg-gray-50"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          onClick={() => saveCallNotes(b.id)}
-                          disabled={savingNotes || !callNotes.trim()}
-                          className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5"
-                        >
-                          {savingNotes && (
-                            <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-                            </svg>
-                          )}
-                          {savingNotes ? "Updating..." : "Process Notes"}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
                   {/* Comments */}
                   <CommentThread
                     blockerId={b.id}
@@ -1191,14 +1175,6 @@ function BlockersPanel({
 
                   {/* Actions bar */}
                   <div className="flex justify-end items-center gap-3 px-5 py-2 border-t border-gray-100">
-                    <button
-                      onClick={() => { setCallNotesId(callNotesId === b.id ? null : b.id); setCallNotes(""); }}
-                      className={`text-xs font-medium px-2 py-1 rounded border transition-colors ${callNotesId === b.id ? "text-blue-700 border-blue-300 bg-blue-50" : "text-gray-500 border-gray-300 hover:text-blue-600 hover:border-blue-300"}`}
-                      title="Call Notes"
-                    >
-                      Call Notes
-                    </button>
-                    <div className="flex-1" />
                     {canDelete(role) && (
                       <button
                         onClick={() => handleDelete(b.id)}
@@ -1699,8 +1675,41 @@ function ActionItemsPanel({
               {isExpanded && (
                 <div className="bg-white border-b border-gray-200" onClick={(e) => e.stopPropagation()}>
                   {/* Title section */}
-                  <div className="px-5 pt-4 pb-3 text-base font-semibold text-gray-900">
+                  <div className="px-5 pt-4 pb-3 text-base font-semibold text-gray-900 bg-amber-50/60">
                     <InlineText value={a.title} onSave={(v) => saveField(a.id, "title", v)} />
+                  </div>
+
+                  {/* Description & Notes */}
+                  <div className="grid grid-cols-2 gap-4 px-5 py-3 border-t border-gray-200">
+                    <div className="rounded border border-gray-200 p-3">
+                      <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Description</span>
+                      <InlineText value={a.description || ""} onSave={(v) => saveField(a.id, "description", v)} multiline placeholder="Add description..." />
+                    </div>
+                    <div className="rounded border border-gray-200 p-3">
+                      <div className="flex items-center justify-between mb-0.5">
+                        <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Notes</span>
+                        <button
+                          onClick={() => saveCallNotes(a.id)}
+                          disabled={savingNotes || !callNotes.trim()}
+                          className="px-2 py-0.5 text-[10px] font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1 transition-colors"
+                        >
+                          {savingNotes && (
+                            <svg className="animate-spin h-2.5 w-2.5" viewBox="0 0 24 24" fill="none">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                            </svg>
+                          )}
+                          {savingNotes ? "Updating..." : "Update"}
+                        </button>
+                      </div>
+                      <textarea
+                        value={callNotes || a.notes || ""}
+                        onChange={(e) => { setCallNotes(e.target.value); setCallNotesId(a.id); }}
+                        placeholder="Add notes..."
+                        rows={3}
+                        className="w-full rounded border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y mt-1"
+                      />
+                    </div>
                   </div>
 
                   {/* Properties grid */}
@@ -1784,55 +1793,6 @@ function ActionItemsPanel({
                     </div>
                   </div>
 
-                  {/* Description & Notes */}
-                  <div className="px-5 py-3 space-y-3">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Description</span>
-                        <InlineText value={a.description || ""} onSave={(v) => saveField(a.id, "description", v)} multiline placeholder="Add description..." />
-                      </div>
-                      <div>
-                        <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Notes</span>
-                        <InlineText value={a.notes || ""} onSave={(v) => saveField(a.id, "notes", v)} multiline placeholder="Add notes..." />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Call Notes panel */}
-                  {callNotesId === a.id && (
-                    <div className="px-5 pb-3">
-                      <label className="block text-xs font-medium text-gray-500 mb-1">Call Notes</label>
-                      <textarea
-                        value={callNotes}
-                        onChange={(e) => setCallNotes(e.target.value)}
-                        placeholder="Take notes during the call — AI will update fields automatically..."
-                        rows={4}
-                        className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
-                      />
-                      <div className="flex gap-2 justify-end mt-2">
-                        <button
-                          onClick={() => { setCallNotesId(null); setCallNotes(""); }}
-                          className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded hover:bg-gray-50"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          onClick={() => saveCallNotes(a.id)}
-                          disabled={savingNotes || !callNotes.trim()}
-                          className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5"
-                        >
-                          {savingNotes && (
-                            <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-                            </svg>
-                          )}
-                          {savingNotes ? "Updating..." : "Process Notes"}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
                   {/* Comments */}
                   <CommentThread
                     actionItemId={a.id}
@@ -1842,14 +1802,6 @@ function ActionItemsPanel({
 
                   {/* Actions bar */}
                   <div className="flex justify-end items-center gap-3 px-5 py-2 border-t border-gray-100">
-                    <button
-                      onClick={() => { setCallNotesId(callNotesId === a.id ? null : a.id); setCallNotes(""); }}
-                      className={`text-xs font-medium px-2 py-1 rounded border transition-colors ${callNotesId === a.id ? "text-blue-700 border-blue-300 bg-blue-50" : "text-gray-500 border-gray-300 hover:text-blue-600 hover:border-blue-300"}`}
-                      title="Call Notes"
-                    >
-                      Call Notes
-                    </button>
-                    <div className="flex-1" />
                     {canDelete(role) && (
                       <button
                         onClick={() => handleDelete(a.id)}
