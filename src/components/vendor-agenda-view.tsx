@@ -166,7 +166,7 @@ export function VendorAgendaView({
   const [resolvingId, setResolvingId] = useState<string | null>(null);
   const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set());
   const [collapsedGroups, setCollapsedGroups] = useState<Set<PriorityLevel>>(new Set());
-  const [notesText, setNotesText] = useState("");
+  const [notesText, setNotesText] = useState<string | null>(null);
   const [savingNotes, setSavingNotes] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [hasGenerated, setHasGenerated] = useState(false);
@@ -320,7 +320,7 @@ export function VendorAgendaView({
   }
 
   async function handleSaveNotes(item: VendorAgendaRow) {
-    if (!notesText.trim()) return;
+    if (!notesText?.trim()) return;
     const table = item.entity_type === "agenda_item" ? "agenda_items"
       : item.entity_type === "blocker" ? "blockers"
       : item.entity_type === "action_item" ? "action_items"
@@ -389,7 +389,7 @@ export function VendorAgendaView({
       }
 
       setItems((prev) => prev.map((i) => i.entity_id === item.entity_id ? { ...i, ...localUpdates } : i));
-      setNotesText("");
+      setNotesText(null);
       setSavingNotes(false);
 
       supabase.from(table).update(dbUpdates).eq("id", item.entity_id).then(() => {});
@@ -677,13 +677,13 @@ export function VendorAgendaView({
             <div className="px-5 py-3 border-t border-gray-200">
               <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Call Notes</span>
               <textarea
-                value={notesText}
+                value={notesText ?? ""}
                 onChange={(e) => setNotesText(e.target.value)}
                 placeholder="Take notes during the call..."
                 rows={3}
                 className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y mt-1"
               />
-              {notesText.trim() && (
+              {notesText?.trim() && (
                 <div className="flex justify-end mt-2">
                   <button
                     onClick={() => handleSaveNotes(item)}

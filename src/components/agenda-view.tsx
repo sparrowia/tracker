@@ -250,7 +250,7 @@ export function AgendaView({
   const [resolvingId, setResolvingId] = useState<string | null>(null);
   const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set());
   const [collapsedGroups, setCollapsedGroups] = useState<Set<PriorityLevel>>(new Set());
-  const [notesText, setNotesText] = useState("");
+  const [notesText, setNotesText] = useState<string | null>(null);
   const [savingNotes, setSavingNotes] = useState(false);
   // Extra detail fields fetched on expand
   const [detailFields, setDetailFields] = useState<Record<string, { description?: string; notes?: string; next_steps?: string }>>({});
@@ -405,17 +405,29 @@ export function AgendaView({
   }
 
   async function handleSaveNotes(item: ProjectAgendaRow) {
-    if (!notesText.trim()) return;
+    // Get the text the user typed — could be in notesText (edited) or fall back to saved notes
+    const df = detailFields[item.entity_id] || {};
+    const userText = notesText ?? df.notes ?? "";
+    if (!userText.trim()) return;
+
     const table = item.entity_type === "agenda_item" ? "agenda_items"
       : item.entity_type === "blocker" ? "blockers"
       : item.entity_type === "action_item" ? "action_items"
       : "raid_entries";
     setSavingNotes(true);
 
+    // Always save the user's notes text to the DB first
+    const notesDbField = item.entity_type === "agenda_item" ? "context"
+      : item.entity_type === "blocker" ? "impact_description"
+      : "notes";
+    const directSave: Record<string, unknown> = { [notesDbField]: userText };
+    supabase.from(table).update(directSave).eq("id", item.entity_id).then(() => {});
+    // Update local detail fields cache immediately
+    setDetailFields((prev) => ({ ...prev, [item.entity_id]: { ...prev[item.entity_id], notes: userText } }));
+
     // Build current payload with owner/vendor names for AI context
     const ownerPerson = item.owner_id ? people.find((p) => p.id === item.owner_id) : null;
     const itemVendor = item.vendor_id ? vendors.find((v) => v.id === item.vendor_id) : null;
-    const df = detailFields[item.entity_id] || {};
 
     const current: Record<string, string> = {
       title: item.title,
@@ -429,17 +441,17 @@ export function AgendaView({
       current.ask = item.ask || "";
     } else if (item.entity_type === "action_item") {
       current.description = df.description || "";
-      current.notes = df.notes || "";
+      current.notes = userText;
       current.next_steps = df.next_steps || "";
       current.due_date = item.due_date || "";
     } else if (item.entity_type === "blocker") {
       current.description = df.description || "";
-      current.impact_description = df.description || "";
+      current.impact_description = userText;
       current.due_date = item.due_date || "";
     } else {
       // RAID entries
       current.description = df.description || "";
-      current.notes = df.notes || "";
+      current.notes = userText;
       current.next_steps = df.next_steps || "";
     }
 
@@ -447,10 +459,10 @@ export function AgendaView({
       const res = await fetch("/api/agenda-notes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ entity_type: item.entity_type, current, notes: notesText }),
+        body: JSON.stringify({ entity_type: item.entity_type, current, notes: userText }),
       });
 
-      if (!res.ok) { setSavingNotes(false); return; }
+      if (!res.ok) { setSavingNotes(false); setNotesText(null); return; }
       const { updates: aiUpdates, new_items } = await res.json();
 
       const dbUpdates: Record<string, unknown> = {};
@@ -500,27 +512,26 @@ export function AgendaView({
         }
       }
 
-      // Update detail fields cache
-      if (aiUpdates.description !== undefined || aiUpdates.notes !== undefined || aiUpdates.next_steps !== undefined) {
-        setDetailFields((prev) => ({
-          ...prev,
-          [item.entity_id]: {
-            ...prev[item.entity_id],
-            ...(aiUpdates.description !== undefined ? { description: aiUpdates.description } : {}),
-            ...(aiUpdates.notes !== undefined ? { notes: aiUpdates.notes } : {}),
-            ...(aiUpdates.next_steps !== undefined ? { next_steps: aiUpdates.next_steps } : {}),
-          },
-        }));
-      }
+      // Update detail fields cache with AI-derived changes
+      const detailUpdates: Record<string, string> = {};
+      if (aiUpdates.description !== undefined) detailUpdates.description = aiUpdates.description;
+      if (aiUpdates.notes !== undefined) detailUpdates.notes = aiUpdates.notes;
+      else detailUpdates.notes = userText; // preserve user's notes even if AI didn't change them
+      if (aiUpdates.next_steps !== undefined) detailUpdates.next_steps = aiUpdates.next_steps;
+      setDetailFields((prev) => ({ ...prev, [item.entity_id]: { ...prev[item.entity_id], ...detailUpdates } }));
 
       setItems((prev) => prev.map((i) => i.entity_id === item.entity_id ? { ...i, ...localUpdates } : i));
-      setNotesText("");
+      setNotesText(null); // clear the override so textarea shows saved notesValue
       setSavingNotes(false);
 
-      supabase.from(table).update(dbUpdates).eq("id", item.entity_id).then(() => {});
+      if (Object.keys(dbUpdates).length > 0) {
+        supabase.from(table).update(dbUpdates).eq("id", item.entity_id).then(() => {});
+      }
 
       // Notify parent of field changes for cross-tab sync
-      if (onItemFieldChanged && Object.keys(dbUpdates).length > 0) {
+      if (onItemFieldChanged) {
+        // Always sync the notes save
+        onItemFieldChanged(item.entity_type, item.entity_id, notesDbField, userText);
         for (const [field, value] of Object.entries(dbUpdates)) {
           onItemFieldChanged(item.entity_type, item.entity_id, field, String(value ?? ""));
         }
@@ -531,6 +542,7 @@ export function AgendaView({
       }
     } catch {
       setSavingNotes(false);
+      setNotesText(null);
     }
   }
 
@@ -734,7 +746,7 @@ export function AgendaView({
                   <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Notes</span>
                   <button
                     onClick={() => handleSaveNotes(item)}
-                    disabled={savingNotes || !notesText.trim()}
+                    disabled={savingNotes || !(notesText ?? notesValue).trim()}
                     className="px-2 py-0.5 text-[10px] font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1 transition-colors"
                   >
                     {savingNotes && <svg className="animate-spin h-2.5 w-2.5" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>}
@@ -742,7 +754,7 @@ export function AgendaView({
                   </button>
                 </div>
                 <textarea
-                  value={notesText || notesValue}
+                  value={notesText !== null ? notesText : notesValue}
                   onChange={(e) => setNotesText(e.target.value)}
                   placeholder="Add notes..."
                   rows={3}
