@@ -158,6 +158,7 @@ export interface ActionItem {
   first_flagged_at: string;
   resolved_at: string | null;
   notes: string | null;
+  next_steps: string | null;
   stage: string | null;
   include_in_meeting: boolean;
   created_by: string | null;
@@ -181,6 +182,7 @@ export interface RaidEntry {
   title: string;
   description: string | null;
   notes: string | null;
+  next_steps: string | null;
   impact: string | null;
   priority: PriorityLevel;
   status: ItemStatus;

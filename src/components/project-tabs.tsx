@@ -1712,6 +1712,25 @@ function ActionItemsPanel({
                     </div>
                   </div>
 
+                  {/* Next Steps */}
+                  <div className="px-5 pb-3">
+                    <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Next Steps</span>
+                    <textarea
+                      value={a.next_steps || ""}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setActions((prev) => prev.map((act) => act.id === a.id ? { ...act, next_steps: v } : act));
+                      }}
+                      onBlur={(e) => {
+                        const v = e.target.value;
+                        if (v !== (a.next_steps || "")) saveField(a.id, "next_steps", v);
+                      }}
+                      placeholder="Next steps..."
+                      rows={2}
+                      className="w-full rounded border border-gray-200 px-2 py-1 text-sm font-bold focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none mt-1"
+                    />
+                  </div>
+
                   {/* Properties grid */}
                   <div className="border-t border-gray-100">
                     <div className="grid grid-cols-[120px_1fr_120px_1fr] items-center">

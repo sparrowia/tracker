@@ -994,6 +994,27 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                         </div>
                       </div>
 
+                      {/* Next Steps — issues only */}
+                      {entry.raid_type === "issue" && (
+                        <div className="px-5 pb-3">
+                          <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Next Steps</span>
+                          <textarea
+                            value={entry.next_steps || ""}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              setEntries((prev) => prev.map((en) => en.id === entry.id ? { ...en, next_steps: v } : en));
+                            }}
+                            onBlur={(e) => {
+                              const v = e.target.value;
+                              if (v !== (entry.next_steps || "")) saveField(entry.id, "next_steps", v);
+                            }}
+                            placeholder="Next steps..."
+                            rows={2}
+                            className="w-full rounded border border-gray-200 px-2 py-1 text-sm font-bold focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none mt-1"
+                          />
+                        </div>
+                      )}
+
                       {/* Properties grid */}
                       <div className="border-t border-gray-200">
                         {entry.raid_type === "decision" ? (
