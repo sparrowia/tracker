@@ -556,9 +556,15 @@ export default function IntakeReviewPage() {
       const byEffectiveType: Record<EntityCategory, ExtractedItem[]> = {
         action_items: [], decisions: [], issues: [], risks: [], blockers: [], status_updates: [],
       };
+      // Linked items get created as children/cross-references, not updates
+      const linkedItems: { item: ExtractedItem; cat: EntityCategory; linkedTo: MatchCandidate }[] = [];
       for (const [cat, items] of Object.entries(extracted) as [EntityCategory, ExtractedItem[]][]) {
         for (const item of items) {
-          if (item._accepted !== true || item._linked_to) continue;
+          if (item._accepted !== true) continue;
+          if (item._linked_to) {
+            linkedItems.push({ item, cat, linkedTo: item._linked_to });
+            continue;
+          }
           const effectiveType = item._save_as || cat;
           byEffectiveType[effectiveType].push(item);
         }
@@ -710,90 +716,117 @@ export default function IntakeReviewPage() {
         throw batchErr;
       }
 
-      // Update linked items (these are updates to existing records, tracked separately)
+      // Create linked items as children of existing items (preserving both)
       const errors: string[] = [];
-      for (const [cat, items] of Object.entries(extracted) as [EntityCategory, ExtractedItem[]][]) {
-        for (const item of items) {
-          if (item._accepted !== true || !item._linked_to) continue;
+      for (const { item, cat, linkedTo } of linkedItems) {
+        const effectiveCat = item._save_as || cat;
+        const today = new Date().toISOString().split("T")[0];
+        const parentRef = `Related to: ${linkedTo.title}`;
 
-          const linkedTo = item._linked_to;
-          const table = linkedTo.table;
-          const id = linkedTo.id;
-          const effectiveCat = item._save_as || cat;
-
-          const payload: Record<string, unknown> = {};
-
-          // Status updates: apply new_status but don't overwrite the existing item's title
+        try {
+          // Status updates: apply to the parent item directly (these aren't new items)
           if (effectiveCat === "status_updates") {
+            const payload: Record<string, unknown> = {};
             if (item.new_status) payload.status = item.new_status;
-            // For status updates, use details as append content instead of overwriting title
-          } else {
-            // For non-status-updates, update title + priority
-            if (item.title || item.subject) payload.title = item.title || item.subject;
-            if (item.priority) payload.priority = item.priority;
-          }
-
-          if (item.due_date) payload.due_date = item.due_date;
-
-          // Owner — only update if extracted has one
-          const ownerName = effectiveCat === "decisions" ? item.made_by : item.owner_name;
-          if (ownerName) {
-            const ownerId = findPersonId(ownerName);
-            if (ownerId) payload.owner_id = ownerId;
-          }
-
-          // Notes/description append with datestamp
-          let appendField: string | null = null;
-          let appendContent: string | null = null;
-
-          if (effectiveCat === "status_updates") {
-            // Status updates: append details to the linked item's notes/description
             const statusDetails = item.details || item.notes || null;
             if (statusDetails) {
-              if (table === "action_items") { appendField = "notes"; appendContent = statusDetails; }
-              else if (table === "blockers") { appendField = "impact_description"; appendContent = statusDetails; }
-              else if (table === "raid_entries") { appendField = "description"; appendContent = statusDetails; }
+              const appendField = linkedTo.table === "action_items" ? "notes"
+                : linkedTo.table === "blockers" ? "impact_description" : "description";
+              const { data: current } = await supabase
+                .from(linkedTo.table).select(appendField).eq("id", linkedTo.id).single();
+              const existing = (current as Record<string, string | null> | null)?.[appendField] || "";
+              payload[appendField] = existing
+                ? `${existing}\n\n--- Update ${today} ---\n${statusDetails}`
+                : statusDetails;
             }
-          } else if (table === "action_items") {
-            appendField = "notes";
-            appendContent = item.notes || null;
-          } else if (table === "blockers") {
-            appendField = "impact_description";
-            appendContent = item.impact_description || null;
-          } else if (table === "raid_entries") {
-            if (linkedTo.raid_type === "issue") {
-              appendField = "impact";
-              appendContent = item.impact || null;
-            } else if (linkedTo.raid_type === "risk") {
-              appendField = "description";
-              appendContent = item.mitigation || null;
-            } else if (linkedTo.raid_type === "decision") {
-              appendField = "description";
-              appendContent = item.rationale || null;
-            }
+            const { error: err } = await supabase.from(linkedTo.table).update(payload).eq("id", linkedTo.id);
+            if (err) errors.push(`Status update ${linkedTo.title}: ${err.message}`);
+            continue;
           }
 
-          if (appendField && appendContent) {
-            const { data: current } = await supabase
-              .from(table)
-              .select(appendField)
-              .eq("id", id)
-              .single();
+          // For all other types: create as a new item, with parent link where possible
+          if (effectiveCat === "action_items") {
+            const { error: err } = await supabase.from("action_items").insert({
+              org_id: orgId,
+              title: item.title || item.subject,
+              owner_id: findPersonId(item.owner_name),
+              vendor_id: item._vendor_id || null,
+              project_id: item._project_id || null,
+              priority: item.priority || "medium",
+              status: item.status || "pending",
+              due_date: item.due_date || null,
+              first_flagged_at: today,
+              notes: [parentRef, item.notes || item.details || item.rationale || item.impact_description].filter(Boolean).join("\n\n"),
+              created_by: profileId,
+            });
+            if (err) errors.push(`Create ${item.title}: ${err.message}`);
 
-            const existing = (current as Record<string, string | null> | null)?.[appendField] || "";
-            const today = new Date().toISOString().split("T")[0];
-            payload[appendField] = existing
-              ? `${existing}\n\n--- Update ${today} ---\n${appendContent}`
-              : appendContent;
+          } else if (effectiveCat === "blockers") {
+            const { error: err } = await supabase.from("blockers").insert({
+              org_id: orgId,
+              title: item.title || item.subject,
+              impact_description: [parentRef, item.impact_description || item.impact || item.notes || item.details].filter(Boolean).join("\n\n"),
+              owner_id: findPersonId(item.owner_name),
+              vendor_id: item._vendor_id || null,
+              project_id: item._project_id || null,
+              priority: item.priority || "high",
+              first_flagged_at: today,
+              created_by: profileId,
+            });
+            if (err) errors.push(`Create ${item.title}: ${err.message}`);
+
+          } else if (effectiveCat === "decisions" || effectiveCat === "issues" || effectiveCat === "risks") {
+            // RAID entries: use parent_id if the linked item is also a raid_entry
+            const raidType = effectiveCat === "decisions" ? "decision" : effectiveCat === "issues" ? "issue" : "risk";
+            const prefix = raidType === "decision" ? "D" : raidType === "issue" ? "I" : "R";
+            const { count } = await supabase
+              .from("raid_entries")
+              .select("*", { count: "exact", head: true })
+              .eq("org_id", orgId)
+              .eq("raid_type", raidType);
+
+            const parentId = linkedTo.table === "raid_entries" ? linkedTo.id : null;
+            const descParts: string[] = [];
+            if (!parentId) descParts.push(parentRef); // cross-table ref in description
+            if (effectiveCat === "decisions") {
+              if (item.rationale) descParts.push(item.rationale);
+            } else if (effectiveCat === "issues") {
+              if (item.reporter_name) descParts.push(`Reporter: ${item.reporter_name}`);
+              if (item.notes) descParts.push(item.notes);
+              if (item.updates) descParts.push(`--- Updates ---\n${item.updates}`);
+              if (item.attachments) descParts.push(`--- Screenshots/Videos ---\n${item.attachments}`);
+            } else {
+              if (item.mitigation) descParts.push(item.mitigation);
+            }
+            if (!descParts.length && (item.notes || item.details)) descParts.push(item.notes || item.details || "");
+
+            const { error: err } = await supabase.from("raid_entries").insert({
+              org_id: orgId,
+              raid_type: raidType,
+              display_id: `${prefix}${(count || 0) + 1}`,
+              title: item.title || item.subject,
+              description: effectiveCat !== "issues" ? (descParts.join("\n\n") || null) : undefined,
+              impact: effectiveCat === "issues" ? (item.impact || item.impact_description || null) : (effectiveCat === "risks" ? (item.impact || null) : undefined),
+              ...(effectiveCat === "issues" ? { description: descParts.join("\n\n") || null } : {}),
+              owner_id: findPersonId(item.made_by || item.owner_name),
+              reporter_id: effectiveCat === "issues" ? (findPersonId(item.reporter_name) || null) : undefined,
+              project_id: item._project_id || null,
+              vendor_id: item._vendor_id || null,
+              decision_date: effectiveCat === "decisions" ? (item.decision_date || null) : undefined,
+              first_flagged_at: item.decision_date || item.date_reported || today,
+              priority: item.priority || "medium",
+              parent_id: parentId,
+              created_by: profileId,
+            });
+            if (err) errors.push(`Create ${item.title}: ${err.message}`);
           }
-
-          const { error: err } = await supabase.from(table).update(payload).eq("id", id);
-          if (err) errors.push(`Update ${linkedTo.title}: ${err.message}`);
+        } catch (e) {
+          errors.push(`Create ${item.title}: ${(e as Error).message}`);
         }
       }
 
       if (errors.length > 0) {
-        throw new Error(`Some items failed to save:\n${errors.join("\n")}`);
+        throw new Error(`Some linked items failed to save:\n${errors.join("\n")}`);
       }
 
       // Log corrections for feedback loop (non-blocking)
@@ -1256,7 +1289,7 @@ export default function IntakeReviewPage() {
                               <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
                               <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
                             </svg>
-                            <span className="font-medium">Will update:</span> {item._linked_to.title}
+                            <span className="font-medium">{(item._save_as || category) === "status_updates" ? "Will update:" : "Child of:"}</span> {item._linked_to.title}
                             <button
                               onClick={() => unlinkItem(category, idx)}
                               className="ml-1 text-amber-500 hover:text-amber-700 transition-colors"
