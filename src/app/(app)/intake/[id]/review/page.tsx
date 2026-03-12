@@ -723,6 +723,72 @@ export default function IntakeReviewPage() {
         const today = new Date().toISOString().split("T")[0];
         const parentRef = `Related to: ${linkedTo.title}`;
 
+        // Validate that the linked parent item actually exists in the DB
+        const { data: parentExists } = await supabase
+          .from(linkedTo.table)
+          .select("id")
+          .eq("id", linkedTo.id)
+          .maybeSingle();
+
+        if (!parentExists) {
+          // Parent doesn't exist — create as standalone item instead (batch inserts already ran, so insert inline)
+          console.warn(`[Confirm] Linked parent "${linkedTo.title}" (${linkedTo.id}) not found in ${linkedTo.table}, creating as standalone`);
+          try {
+            if (effectiveCat === "action_items") {
+              const { error: err } = await supabase.from("action_items").insert({
+                org_id: orgId, title: item.title || item.subject,
+                owner_id: findPersonId(item.owner_name), vendor_id: item._vendor_id || null,
+                project_id: item._project_id || null, priority: item.priority || "medium",
+                status: item.status || "pending", due_date: item.due_date || null,
+                first_flagged_at: today, notes: item.notes || item.details || null, created_by: profileId,
+              });
+              if (err) errors.push(`Create standalone ${item.title}: ${err.message}`);
+            } else if (effectiveCat === "blockers") {
+              const { error: err } = await supabase.from("blockers").insert({
+                org_id: orgId, title: item.title || item.subject,
+                impact_description: item.impact_description || item.impact || item.notes || item.details || null,
+                owner_id: findPersonId(item.owner_name), vendor_id: item._vendor_id || null,
+                project_id: item._project_id || null, priority: item.priority || "high",
+                first_flagged_at: today, created_by: profileId,
+              });
+              if (err) errors.push(`Create standalone ${item.title}: ${err.message}`);
+            } else if (effectiveCat === "decisions" || effectiveCat === "issues" || effectiveCat === "risks") {
+              const raidType = effectiveCat === "decisions" ? "decision" : effectiveCat === "issues" ? "issue" : "risk";
+              const prefix = raidType === "decision" ? "D" : raidType === "issue" ? "I" : "R";
+              const { count } = await supabase.from("raid_entries")
+                .select("*", { count: "exact", head: true }).eq("org_id", orgId).eq("raid_type", raidType);
+              const descParts: string[] = [];
+              if (effectiveCat === "issues") {
+                if (item.reporter_name) descParts.push(`Reporter: ${item.reporter_name}`);
+                if (item.notes) descParts.push(item.notes);
+                if (item.updates) descParts.push(`--- Updates ---\n${item.updates}`);
+                if (item.attachments) descParts.push(`--- Screenshots/Videos ---\n${item.attachments}`);
+              } else if (effectiveCat === "decisions") {
+                if (item.rationale) descParts.push(item.rationale);
+              } else {
+                if (item.mitigation) descParts.push(item.mitigation);
+              }
+              if (!descParts.length && (item.notes || item.details)) descParts.push(item.notes || item.details || "");
+              const { error: err } = await supabase.from("raid_entries").insert({
+                org_id: orgId, raid_type: raidType, display_id: `${prefix}${(count || 0) + 1}`,
+                title: item.title || item.subject,
+                description: descParts.join("\n\n") || null,
+                impact: (effectiveCat === "issues" || effectiveCat === "risks") ? (item.impact || item.impact_description || null) : undefined,
+                owner_id: findPersonId(item.made_by || item.owner_name),
+                reporter_id: effectiveCat === "issues" ? (findPersonId(item.reporter_name) || null) : undefined,
+                project_id: item._project_id || null, vendor_id: item._vendor_id || null,
+                decision_date: effectiveCat === "decisions" ? (item.decision_date || null) : undefined,
+                first_flagged_at: item.decision_date || item.date_reported || today,
+                priority: item.priority || "medium", created_by: profileId,
+              });
+              if (err) errors.push(`Create standalone ${item.title}: ${err.message}`);
+            }
+          } catch (e) {
+            errors.push(`Create standalone ${item.title}: ${(e as Error).message}`);
+          }
+          continue;
+        }
+
         try {
           // Status updates: update status on parent + add details as a comment by "UPDATES"
           if (effectiveCat === "status_updates") {
