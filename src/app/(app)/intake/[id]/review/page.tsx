@@ -39,6 +39,7 @@ interface ExtractedItem {
   attachments?: string | null;
   updates?: string | null;
   reporter_name?: string | null;
+  status?: string | null;
   // Per-item overrides
   _accepted?: boolean;
   _edited?: boolean;
@@ -596,6 +597,7 @@ export default function IntakeReviewPage() {
             vendor_id: item._vendor_id || null,
             project_id: item._project_id || null,
             priority: item.priority || "medium",
+            status: item.status || "pending",
             due_date: item.due_date || null,
             first_flagged_at: today,
             notes: item.notes || item.details || item.rationale || item.impact_description || null,
@@ -1185,6 +1187,13 @@ export default function IntakeReviewPage() {
                               {item.priority && (
                                 <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border ${priorityColor(item.priority)}`}>
                                   {priorityLabel(item.priority)}
+                                </span>
+                              )}
+                              {item.status && item.status !== "pending" && (
+                                <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border ${
+                                  item.status === "complete" ? "border-green-300 bg-green-50 text-green-700" : "border-blue-300 bg-blue-50 text-blue-700"
+                                }`}>
+                                  {item.status === "complete" ? "Complete" : "In Progress"}
                                 </span>
                               )}
                               {item.confidence && item.confidence !== "high" && (

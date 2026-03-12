@@ -10,6 +10,7 @@ Return a JSON object with these arrays (each can be empty):
       "title": "Brief action description",
       "owner_name": "Person's full name or null",
       "priority": "critical|high|medium|low",
+      "status": "pending|in_progress|complete",
       "due_date": "YYYY-MM-DD or null",
       "notes": "Additional context",
       "confidence": "high|medium|low",
@@ -86,6 +87,7 @@ Rules:
 - Infer priority from language (urgent, ASAP, critical = high/critical; when possible = low)
 - Dates should be in YYYY-MM-DD format
 - Keep titles concise but descriptive
+- action_items.status: "pending" = not yet started or no evidence of completion; "in_progress" = partially done or being worked on; "complete" = the action was fulfilled later in the thread (e.g. requested info was provided, task was done). Default to "pending" if unclear
 - confidence: "high" = explicitly stated with clear details; "medium" = clearly implied but requires some interpretation; "low" = inferred from vague or ambiguous language
 - Do not fabricate information not present in the text, EXCEPT for term corrections (see below) which MUST be applied
 - source_quote MUST be a verbatim substring copied character-for-character from the input text (5-15 words). It will be used for indexOf() text search, so it MUST match exactly — same punctuation, same capitalization, same spacing. Do NOT apply term corrections to source_quote. If you cannot find a good verbatim substring, use the most distinctive 5-8 words from the relevant sentence
@@ -102,12 +104,17 @@ Source format: Slack message
 - "FYI" or "heads up" messages are usually informational, not action items`,
 
   email: `
-Source format: Email
+Source format: Email thread
+- CRITICAL: Process messages in chronological order (oldest first). Later messages may resolve, complete, or supersede actions from earlier messages.
+- When someone asks for information in an earlier message and a later message provides it, that action item is COMPLETE — still extract it, but set status to "complete" with a note explaining how it was resolved.
+- When a question is asked and later answered, the question becomes a completed action item, and the answer may generate a decision or status update.
 - The sender (From:) is often the reporter or person raising the issue
 - To/CC recipients may be responsible parties
 - Subject line often summarizes the main topic
 - Forwarded content (">") is background context, not new actions
-- "Please" or "Can you" phrases directed at someone indicate action items for that person`,
+- "Please" or "Can you" phrases directed at someone indicate action items for that person
+- Auto-reply / ticket-system boilerplate (e.g. "Do any of these articles answer your question?") should be ignored — only extract from human-written content
+- Follow-up messages asking "Do you need any additional information?" indicate the original action is still pending at that point in time — check if a later message resolves it`,
 
   meeting_notes: `
 Source format: Meeting notes
@@ -145,6 +152,7 @@ OUTPUT:
       "title": "Send staging server access credentials to Silk",
       "owner_name": "Matt",
       "priority": "high",
+      "status": "pending",
       "due_date": null,
       "notes": "Due by Friday. Staging server to be used for UAT per team decision.",
       "source_quote": "Matt to send the access credentials to Silk by Friday"
@@ -153,6 +161,7 @@ OUTPUT:
       "title": "Escalate SSO credential request to BenchPrep",
       "owner_name": "John",
       "priority": "critical",
+      "status": "pending",
       "due_date": null,
       "notes": "Credentials have been pending for 2 weeks. Blocking SSO integration.",
       "source_quote": "SSO integration is blocked waiting on credentials from BenchPrep"
