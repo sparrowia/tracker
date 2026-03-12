@@ -180,6 +180,7 @@ export interface RaidEntry {
   project_id: string | null;
   title: string;
   description: string | null;
+  notes: string | null;
   impact: string | null;
   priority: PriorityLevel;
   status: ItemStatus;

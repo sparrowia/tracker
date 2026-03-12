@@ -957,9 +957,43 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                   {isExpanded && (
                     <div className="bg-white border-b border-gray-200" onClick={(e) => e.stopPropagation()}>
                       {/* Editable title */}
-                      <div className="px-5 pt-4 pb-3 text-base font-semibold text-gray-900">
+                      <div className="px-5 pt-4 pb-3 text-base font-semibold text-gray-900 bg-amber-50/60">
                         <InlineText value={entry.title} onSave={(v) => { if (v.trim()) saveField(entry.id, "title", v.trim()); }} placeholder="Title..." />
                       </div>
+
+                      {/* Description & Notes — side by side */}
+                      <div className="grid grid-cols-2 gap-4 px-5 py-3 border-t border-gray-200">
+                        <div className="rounded border border-gray-200 p-3">
+                          <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Description</span>
+                          <InlineText value={entry.description || ""} onSave={(v) => saveField(entry.id, "description", v)} multiline placeholder="Add description..." />
+                        </div>
+                        <div className="rounded border border-gray-200 p-3">
+                          <div className="flex items-center justify-between mb-0.5">
+                            <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Notes</span>
+                          </div>
+                          <textarea
+                            value={entry.notes || ""}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              setEntries((prev) => prev.map((en) => en.id === entry.id ? { ...en, notes: v } : en));
+                            }}
+                            placeholder="Add notes..."
+                            rows={3}
+                            className="w-full rounded border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y mt-1"
+                          />
+                          {(entry.notes || "").trim() && (
+                            <div className="flex justify-end mt-1.5">
+                              <button
+                                onClick={() => saveField(entry.id, "notes", entry.notes || "")}
+                                className="px-3 py-1 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 transition-colors"
+                              >
+                                Update
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
                       {/* Properties grid */}
                       <div className="border-t border-gray-200">
                         {entry.raid_type === "decision" ? (
@@ -1136,12 +1170,6 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                           )}
                           </div>
                         )}
-                      </div>
-
-                      {/* Description */}
-                      <div className="px-5 py-3">
-                        <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Description</span>
-                        <InlineText value={entry.description || ""} onSave={(v) => saveField(entry.id, "description", v)} multiline placeholder="Add description..." />
                       </div>
 
                       {/* Comments */}
