@@ -724,23 +724,40 @@ export default function IntakeReviewPage() {
         const parentRef = `Related to: ${linkedTo.title}`;
 
         try {
-          // Status updates: apply to the parent item directly (these aren't new items)
+          // Status updates: update status on parent + add details as a comment by "UPDATES"
           if (effectiveCat === "status_updates") {
             const payload: Record<string, unknown> = {};
             if (item.new_status) payload.status = item.new_status;
-            const statusDetails = item.details || item.notes || null;
-            if (statusDetails) {
-              const appendField = linkedTo.table === "action_items" ? "notes"
-                : linkedTo.table === "blockers" ? "impact_description" : "description";
-              const { data: current } = await supabase
-                .from(linkedTo.table).select(appendField).eq("id", linkedTo.id).single();
-              const existing = (current as Record<string, string | null> | null)?.[appendField] || "";
-              payload[appendField] = existing
-                ? `${existing}\n\n--- Update ${today} ---\n${statusDetails}`
-                : statusDetails;
-            }
             const { error: err } = await supabase.from(linkedTo.table).update(payload).eq("id", linkedTo.id);
             if (err) errors.push(`Status update ${linkedTo.title}: ${err.message}`);
+
+            // Add details as a comment authored by the "UPDATES" system person
+            const statusDetails = item.details || item.notes || null;
+            if (statusDetails) {
+              // Find or create the UPDATES person
+              let updatesPersonId: string | null = null;
+              const { data: existing } = await supabase
+                .from("people").select("id").eq("org_id", orgId).eq("full_name", "UPDATES").maybeSingle();
+              if (existing) {
+                updatesPersonId = existing.id;
+              } else {
+                const { data: created } = await supabase
+                  .from("people").insert({ org_id: orgId, full_name: "UPDATES", is_internal: true }).select("id").single();
+                if (created) updatesPersonId = created.id;
+              }
+
+              const commentPayload: Record<string, unknown> = {
+                org_id: orgId,
+                body: statusDetails,
+                author_id: updatesPersonId,
+              };
+              if (linkedTo.table === "action_items") commentPayload.action_item_id = linkedTo.id;
+              else if (linkedTo.table === "blockers") commentPayload.blocker_id = linkedTo.id;
+              else if (linkedTo.table === "raid_entries") commentPayload.raid_entry_id = linkedTo.id;
+
+              const { error: commentErr } = await supabase.from("comments").insert(commentPayload);
+              if (commentErr) errors.push(`Comment on ${linkedTo.title}: ${commentErr.message}`);
+            }
             continue;
           }
 
