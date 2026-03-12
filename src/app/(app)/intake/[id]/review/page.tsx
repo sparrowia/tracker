@@ -14,6 +14,7 @@ interface MatchCandidate {
   status: string;
   priority: string;
   raid_type?: string;
+  project_name?: string;
   confidence: "high" | "medium";
   reason: string;
 }
@@ -319,13 +320,14 @@ export default function IntakeReviewPage() {
             // Convert API shape to MatchCandidate[]
             const converted: Record<string, MatchCandidate[]> = {};
             for (const [key, candidates] of Object.entries(raw)) {
-              converted[key] = (candidates as { existing_id: string; existing_table: string; title: string; status: string; priority: string; raid_type?: string; confidence: "high" | "medium"; reason: string }[]).map((c) => ({
+              converted[key] = (candidates as { existing_id: string; existing_table: string; title: string; status: string; priority: string; raid_type?: string; project_name?: string; confidence: "high" | "medium"; reason: string }[]).map((c) => ({
                 table: c.existing_table as MatchCandidate["table"],
                 id: c.existing_id,
                 title: c.title,
                 status: c.status,
                 priority: c.priority,
                 raid_type: c.raid_type,
+                project_name: c.project_name,
                 confidence: c.confidence,
                 reason: c.reason,
               }));
@@ -1373,6 +1375,11 @@ export default function IntakeReviewPage() {
                               <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
                             </svg>
                             <span className="font-medium">{(item._save_as || category) === "status_updates" ? "Will update:" : "Child of:"}</span> {item._linked_to.title}
+                            {item._linked_to.project_name && (
+                              <span className="inline-flex px-1 py-0.5 rounded text-[10px] bg-orange-100 text-orange-700 border border-orange-200 font-medium">
+                                from {item._linked_to.project_name}
+                              </span>
+                            )}
                             <button
                               onClick={() => unlinkItem(category, idx)}
                               className="ml-1 text-amber-500 hover:text-amber-700 transition-colors"
@@ -1418,6 +1425,11 @@ export default function IntakeReviewPage() {
                                             {candidate.confidence}
                                           </span>
                                           <span className="text-gray-400 text-[10px]">{candidate.reason}</span>
+                                          {candidate.project_name && (
+                                            <span className="inline-flex px-1 py-0.5 rounded text-[10px] bg-orange-100 text-orange-700 border border-orange-200 font-medium">
+                                              {candidate.project_name}
+                                            </span>
+                                          )}
                                         </div>
                                       </div>
                                       <button

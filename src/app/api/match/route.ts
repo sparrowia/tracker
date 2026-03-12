@@ -40,7 +40,7 @@ export async function POST(request: Request) {
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
     function buildActionQuery() {
-      let q = supabase.from("action_items").select("id, title, status, priority").eq("org_id", orgId);
+      let q = supabase.from("action_items").select("id, title, status, priority, project_id, project:projects(name)").eq("org_id", orgId);
       if (scopeProjectId) q = q.eq("project_id", scopeProjectId);
       else if (scopeVendorId) q = q.eq("vendor_id", scopeVendorId);
       q = q.or(`status.neq.complete,updated_at.gte.${thirtyDaysAgo}`);
@@ -48,7 +48,7 @@ export async function POST(request: Request) {
     }
 
     function buildBlockerQuery() {
-      let q = supabase.from("blockers").select("id, title, status, priority, resolved_at").eq("org_id", orgId);
+      let q = supabase.from("blockers").select("id, title, status, priority, resolved_at, project_id, project:projects(name)").eq("org_id", orgId);
       if (scopeProjectId) q = q.eq("project_id", scopeProjectId);
       else if (scopeVendorId) q = q.eq("vendor_id", scopeVendorId);
       q = q.or(`resolved_at.is.null,resolved_at.gte.${thirtyDaysAgo}`);
@@ -56,7 +56,7 @@ export async function POST(request: Request) {
     }
 
     function buildRaidQuery() {
-      let q = supabase.from("raid_entries").select("id, title, status, priority, raid_type").eq("org_id", orgId);
+      let q = supabase.from("raid_entries").select("id, title, status, priority, raid_type, project_id, project:projects(name)").eq("org_id", orgId);
       if (scopeProjectId) q = q.eq("project_id", scopeProjectId);
       else if (scopeVendorId) q = q.eq("vendor_id", scopeVendorId);
       q = q.or(`status.neq.complete,updated_at.gte.${thirtyDaysAgo}`);
@@ -84,23 +84,29 @@ export async function POST(request: Request) {
 
     // Build existing items text and lookup map
     const existingLines: string[] = [];
-    const existingMap = new Map<string, { title: string; status: string; priority: string; table: string; raid_type?: string }>();
+    const existingMap = new Map<string, { title: string; status: string; priority: string; table: string; raid_type?: string; project_id?: string; project_name?: string }>();
+
+    function projectName(item: { project?: { name: string } | { name: string }[] | null }): string | undefined {
+      if (!item.project) return undefined;
+      if (Array.isArray(item.project)) return item.project[0]?.name || undefined;
+      return (item.project as { name: string }).name || undefined;
+    }
 
     for (const a of (actions || [])) {
       const closed = a.status === "complete" ? " [CLOSED]" : "";
       existingLines.push(`[A] ${a.id}: "${a.title}" (${a.status}, ${a.priority})${closed}`);
-      existingMap.set(a.id, { title: a.title, status: a.status, priority: a.priority, table: "action_items" });
+      existingMap.set(a.id, { title: a.title, status: a.status, priority: a.priority, table: "action_items", project_id: a.project_id, project_name: projectName(a) });
     }
     for (const b of (blockers || [])) {
       const closed = b.resolved_at ? " [CLOSED]" : "";
       existingLines.push(`[B] ${b.id}: "${b.title}" (${b.status}, ${b.priority})${closed}`);
-      existingMap.set(b.id, { title: b.title, status: b.status, priority: b.priority, table: "blockers" });
+      existingMap.set(b.id, { title: b.title, status: b.status, priority: b.priority, table: "blockers", project_id: b.project_id, project_name: projectName(b) });
     }
     for (const r of (raids || [])) {
       const prefix = r.raid_type === "risk" ? "R" : r.raid_type === "issue" ? "I" : r.raid_type === "assumption" ? "AS" : "D";
       const closed = r.status === "complete" ? " [CLOSED]" : "";
       existingLines.push(`[${prefix}] ${r.id}: "${r.title}" (${r.status}, ${r.priority})${closed}`);
-      existingMap.set(r.id, { title: r.title, status: r.status, priority: r.priority, table: "raid_entries", raid_type: r.raid_type });
+      existingMap.set(r.id, { title: r.title, status: r.status, priority: r.priority, table: "raid_entries", raid_type: r.raid_type, project_id: r.project_id, project_name: projectName(r) });
     }
 
     if (extractedLines.length === 0 || existingLines.length === 0) {
@@ -127,13 +133,15 @@ export async function POST(request: Request) {
     const rawMatches = result.data.matches || {};
 
     // Enrich matches with existing item data
-    const enriched: Record<string, { existing_id: string; existing_table: string; title: string; status: string; priority: string; raid_type?: string; confidence: string; reason: string }[]> = {};
+    const enriched: Record<string, { existing_id: string; existing_table: string; title: string; status: string; priority: string; raid_type?: string; project_name?: string; confidence: string; reason: string }[]> = {};
 
     for (const [key, candidates] of Object.entries(rawMatches)) {
       const enrichedCandidates = [];
       for (const c of candidates) {
         const existing = existingMap.get(c.existing_id);
         if (existing) {
+          // Flag if from a different project than the intake
+          const fromDifferentProject = scopeProjectId && existing.project_id && existing.project_id !== scopeProjectId;
           enrichedCandidates.push({
             existing_id: c.existing_id,
             existing_table: existing.table,
@@ -141,6 +149,7 @@ export async function POST(request: Request) {
             status: existing.status,
             priority: existing.priority,
             raid_type: existing.raid_type,
+            project_name: fromDifferentProject ? existing.project_name : undefined,
             confidence: c.confidence,
             reason: c.reason,
           });
