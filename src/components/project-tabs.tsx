@@ -91,6 +91,7 @@ export default function ProjectTabs({
   const [tabOrder, setTabOrder] = useState<Tab[]>(loadTabOrder);
   const urlTab = searchParams.get("tab") as Tab | null;
   const [active, setActive] = useState<Tab>(urlTab && DEFAULT_ORDER.includes(urlTab) ? urlTab : tabOrder[0]);
+  const [searchFilter, setSearchFilter] = useState("");
   const [dragTab, setDragTab] = useState<Tab | null>(null);
   const [dragOverTab, setDragOverTab] = useState<Tab | null>(null);
   const dragStartIndex = useRef<number>(-1);
@@ -238,7 +239,7 @@ export default function ProjectTabs({
   return (
     <div>
       {/* Tab bar */}
-      <div className="flex border-b border-gray-300">
+      <div className="flex items-center border-b border-gray-300">
         {tabOrder.map((tabKey, idx) => {
           const count = countForTab(tabKey);
           const isBlockers = tabKey === "blockers";
@@ -276,6 +277,26 @@ export default function ProjectTabs({
             </button>
           );
         })}
+        <div className="ml-auto flex items-center px-3">
+          <div className="relative">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            <input
+              type="text"
+              placeholder="Filter..."
+              value={searchFilter}
+              onChange={(e) => setSearchFilter(e.target.value)}
+              className="w-48 pl-7 pr-7 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400"
+            />
+            {searchFilter && (
+              <button
+                onClick={() => setSearchFilter("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Staging area for AI-suggested new items */}
@@ -298,11 +319,11 @@ export default function ProjectTabs({
         </div>
 
         <div style={{ display: active === "blockers" ? "block" : "none" }}>
-          <BlockersPanel blockers={blockers} people={peopleList} vendors={vendorsList} onPersonAdded={addPerson} onVendorAdded={addVendor} addUndo={addUndo} onCountChange={setBlockerCount} intakeSourceMap={intakeSourceMap} onNewItemsSuggested={onNewItemsSuggested} registerAdder={(fn) => { itemAddersRef.current.addBlocker = fn; return () => { itemAddersRef.current.addBlocker = undefined; }; }} registerResolver={(fn) => { itemAddersRef.current.resolveBlocker = fn; return () => { itemAddersRef.current.resolveBlocker = undefined; }; }} registerUpdater={(fn) => { itemAddersRef.current.updateBlocker = fn; return () => { itemAddersRef.current.updateBlocker = undefined; }; }} onMeetingToggle={bumpAgendaRefresh} orgId={project.org_id} />
+          <BlockersPanel blockers={blockers} people={peopleList} vendors={vendorsList} onPersonAdded={addPerson} onVendorAdded={addVendor} addUndo={addUndo} onCountChange={setBlockerCount} intakeSourceMap={intakeSourceMap} onNewItemsSuggested={onNewItemsSuggested} registerAdder={(fn) => { itemAddersRef.current.addBlocker = fn; return () => { itemAddersRef.current.addBlocker = undefined; }; }} registerResolver={(fn) => { itemAddersRef.current.resolveBlocker = fn; return () => { itemAddersRef.current.resolveBlocker = undefined; }; }} registerUpdater={(fn) => { itemAddersRef.current.updateBlocker = fn; return () => { itemAddersRef.current.updateBlocker = undefined; }; }} onMeetingToggle={bumpAgendaRefresh} orgId={project.org_id} searchFilter={searchFilter} />
         </div>
 
         <div style={{ display: active === "raid" ? "block" : "none" }}>
-          <RaidLog initialEntries={raidEntries} project={project} people={peopleList} vendors={vendorsList} onPersonAdded={addPerson} onVendorAdded={addVendor} addUndo={addUndo} onCountChange={setRaidCount} intakeSourceMap={intakeSourceMap} onMeetingToggle={bumpAgendaRefresh}
+          <RaidLog initialEntries={raidEntries} project={project} people={peopleList} vendors={vendorsList} onPersonAdded={addPerson} onVendorAdded={addVendor} addUndo={addUndo} onCountChange={setRaidCount} intakeSourceMap={intakeSourceMap} onMeetingToggle={bumpAgendaRefresh} searchFilter={searchFilter}
             onConvertedToAction={async (actionId) => {
               const { data } = await supabase.from("action_items").select("*, owner:people!action_items_owner_id_fkey(*), vendor:vendors(*)").eq("id", actionId).single();
               if (data && itemAddersRef.current.addAction) {
@@ -320,7 +341,7 @@ export default function ProjectTabs({
         </div>
 
         <div style={{ display: active === "actions" ? "block" : "none" }}>
-          <ActionItemsPanel actions={actions} people={peopleList} vendors={vendorsList} onPersonAdded={addPerson} onVendorAdded={addVendor} addUndo={addUndo} onCountChange={setActionCount} intakeSourceMap={intakeSourceMap} onNewItemsSuggested={onNewItemsSuggested} registerAdder={(fn) => { itemAddersRef.current.addAction = fn; return () => { itemAddersRef.current.addAction = undefined; }; }} registerResolver={(fn) => { itemAddersRef.current.resolveAction = fn; return () => { itemAddersRef.current.resolveAction = undefined; }; }} registerUpdater={(fn) => { itemAddersRef.current.updateAction = fn; return () => { itemAddersRef.current.updateAction = undefined; }; }} onMeetingToggle={bumpAgendaRefresh} orgId={project.org_id} projectId={project.id} />
+          <ActionItemsPanel actions={actions} people={peopleList} vendors={vendorsList} onPersonAdded={addPerson} onVendorAdded={addVendor} addUndo={addUndo} onCountChange={setActionCount} intakeSourceMap={intakeSourceMap} onNewItemsSuggested={onNewItemsSuggested} registerAdder={(fn) => { itemAddersRef.current.addAction = fn; return () => { itemAddersRef.current.addAction = undefined; }; }} registerResolver={(fn) => { itemAddersRef.current.resolveAction = fn; return () => { itemAddersRef.current.resolveAction = undefined; }; }} registerUpdater={(fn) => { itemAddersRef.current.updateAction = fn; return () => { itemAddersRef.current.updateAction = undefined; }; }} onMeetingToggle={bumpAgendaRefresh} orgId={project.org_id} projectId={project.id} searchFilter={searchFilter} />
         </div>
 
         <div style={{ display: active === "intake" ? "block" : "none" }}>
@@ -697,6 +718,7 @@ function BlockersPanel({
   registerUpdater,
   onMeetingToggle,
   orgId,
+  searchFilter = "",
 }: {
   blockers: BlockerRow[];
   people: Person[];
@@ -712,6 +734,7 @@ function BlockersPanel({
   registerUpdater?: (fn: (id: string, field: string, value: string, person?: Person | null, vendor?: Vendor | null) => void) => () => void;
   onMeetingToggle?: () => void;
   orgId: string;
+  searchFilter?: string;
 }) {
   const { role, profileId, userPersonId } = useRole();
   const [blockers, setBlockers] = useState<BlockerRow[]>(initialBlockers);
@@ -744,6 +767,15 @@ function BlockersPanel({
   }, [registerUpdater]);
 
   useEffect(() => { onCountChange?.(blockers.length); }, [blockers.length, onCountChange]);
+
+  const searchLower = searchFilter.toLowerCase();
+  const filteredBlockers = searchFilter
+    ? blockers.filter((b) => {
+        const text = [b.title, b.impact_description, b.owner?.full_name, b.vendor?.name].filter(Boolean).join(" ").toLowerCase();
+        return text.includes(searchLower);
+      })
+    : blockers;
+
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [callNotesId, setCallNotesId] = useState<string | null>(null);
   const [callNotes, setCallNotes] = useState("");
@@ -939,7 +971,7 @@ function BlockersPanel({
   return (
     <div className="bg-white rounded-lg border border-gray-300 overflow-hidden">
       <div className="bg-red-800 px-4 py-2.5 flex items-center justify-between">
-        <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Active Blockers ({blockers.length})</h2>
+        <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Active Blockers ({searchFilter ? `${filteredBlockers.length}/${blockers.length}` : blockers.length})</h2>
         <div className="relative" ref={colPickerRef}>
           <button
             onClick={() => setShowColPicker((p) => !p)}
@@ -978,7 +1010,7 @@ function BlockersPanel({
         </div>
       </div>
       <div>
-        {blockers.map((b) => {
+        {filteredBlockers.map((b) => {
           const isExpanded = expandedId === b.id;
           const badge = statusBadge(b.status);
 
@@ -1240,6 +1272,7 @@ function ActionItemsPanel({
   onMeetingToggle,
   orgId,
   projectId,
+  searchFilter = "",
 }: {
   actions: ActionRow[];
   people: Person[];
@@ -1256,6 +1289,7 @@ function ActionItemsPanel({
   onMeetingToggle?: () => void;
   orgId: string;
   projectId: string;
+  searchFilter?: string;
 }) {
   const { role, profileId, userPersonId } = useRole();
   const [actions, setActions] = useState<ActionRow[]>(initialActions);
@@ -1288,6 +1322,15 @@ function ActionItemsPanel({
   }, [registerUpdater]);
 
   useEffect(() => { onCountChange?.(actions.length); }, [actions.length, onCountChange]);
+
+  const actionSearchLower = searchFilter.toLowerCase();
+  const filteredActions = searchFilter
+    ? actions.filter((a) => {
+        const text = [a.title, a.notes, a.description, a.owner?.full_name, a.vendor?.name].filter(Boolean).join(" ").toLowerCase();
+        return text.includes(actionSearchLower);
+      })
+    : actions;
+
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [callNotesId, setCallNotesId] = useState<string | null>(null);
   const [callNotes, setCallNotes] = useState("");
@@ -1514,7 +1557,7 @@ function ActionItemsPanel({
   return (
     <div className="bg-white rounded-lg border border-gray-300 overflow-hidden">
       <div className="bg-gray-800 px-4 py-2.5 flex items-center justify-between">
-        <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Action Items ({actions.length})</h2>
+        <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Action Items ({searchFilter ? `${filteredActions.length}/${actions.length}` : actions.length})</h2>
         <div className="flex items-center gap-3">
           <div className="relative" ref={colPickerRef}>
             <button
@@ -1604,7 +1647,7 @@ function ActionItemsPanel({
         </div>
       </div>
       <div>
-        {actions.map((a) => {
+        {filteredActions.map((a) => {
           const isExpanded = expandedId === a.id;
           const badge = statusBadge(a.status);
 

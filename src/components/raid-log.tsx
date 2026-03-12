@@ -26,6 +26,7 @@ interface RaidLogProps {
   onConvertedToAction?: (actionId: string) => void;
   onConvertedToBlocker?: (blockerId: string) => void;
   registerUpdater?: (fn: (id: string, field: string, value: string, person?: Person | null, vendor?: Vendor | null) => void) => () => void;
+  searchFilter?: string;
 }
 
 const raidTypes: RaidType[] = ["risk", "assumption", "issue", "decision"];
@@ -167,7 +168,7 @@ function InlineDate({ value, onSave }: { value: string | null; onSave: (v: strin
   );
 }
 
-export default function RaidLog({ initialEntries, project, people, vendors, onPersonAdded, onVendorAdded, addUndo, onCountChange, intakeSourceMap = {}, onMeetingToggle, onConvertedToAction, onConvertedToBlocker, registerUpdater }: RaidLogProps) {
+export default function RaidLog({ initialEntries, project, people, vendors, onPersonAdded, onVendorAdded, addUndo, onCountChange, intakeSourceMap = {}, onMeetingToggle, onConvertedToAction, onConvertedToBlocker, registerUpdater, searchFilter = "" }: RaidLogProps) {
   const { role, profileId, userPersonId } = useRole();
   const [entries, setEntries] = useState<RaidRow[]>(initialEntries);
 
@@ -211,7 +212,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
   const [moveTargetId, setMoveTargetId] = useState("");
   const supabase = createClient();
 
-  const hasActiveFilters = filterPriority || filterStatus || filterOwner || filterAge;
+  const hasActiveFilters = filterPriority || filterStatus || filterOwner || filterAge || searchFilter;
 
   function applyFilters(items: RaidRow[]): RaidRow[] {
     let filtered = items;
@@ -235,6 +236,13 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
           case "15+": return age >= 15;
           default: return true;
         }
+      });
+    }
+    if (searchFilter) {
+      const lower = searchFilter.toLowerCase();
+      filtered = filtered.filter((e) => {
+        const text = [e.title, e.description, e.impact, e.owner?.full_name, e.vendor?.name].filter(Boolean).join(" ").toLowerCase();
+        return text.includes(lower);
       });
     }
     return filtered;
