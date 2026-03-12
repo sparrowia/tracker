@@ -411,55 +411,120 @@ export function AgendaView({
       : item.entity_type === "action_item" ? "action_items"
       : "raid_entries";
     setSavingNotes(true);
+
+    // Build current payload with owner/vendor names for AI context
+    const ownerPerson = item.owner_id ? people.find((p) => p.id === item.owner_id) : null;
+    const itemVendor = item.vendor_id ? vendors.find((v) => v.id === item.vendor_id) : null;
+    const df = detailFields[item.entity_id] || {};
+
+    const current: Record<string, string> = {
+      title: item.title,
+      priority: item.priority,
+      status: item.status,
+      owner_name: ownerPerson?.full_name || "(none)",
+      vendor_name: itemVendor?.name || "(none)",
+    };
+    if (item.entity_type === "agenda_item") {
+      current.context = item.context || "";
+      current.ask = item.ask || "";
+    } else if (item.entity_type === "action_item") {
+      current.description = df.description || "";
+      current.notes = df.notes || "";
+      current.next_steps = df.next_steps || "";
+      current.due_date = item.due_date || "";
+    } else if (item.entity_type === "blocker") {
+      current.description = df.description || "";
+      current.impact_description = df.description || "";
+      current.due_date = item.due_date || "";
+    } else {
+      // RAID entries
+      current.description = df.description || "";
+      current.notes = df.notes || "";
+      current.next_steps = df.next_steps || "";
+    }
+
     try {
       const res = await fetch("/api/agenda-notes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          entity_type: item.entity_type,
-          current: {
-            title: item.title,
-            context: item.context || "",
-            ask: item.ask || "",
-            priority: item.priority,
-          },
-          notes: notesText,
-        }),
+        body: JSON.stringify({ entity_type: item.entity_type, current, notes: notesText }),
       });
 
       if (!res.ok) { setSavingNotes(false); return; }
       const { updates: aiUpdates, new_items } = await res.json();
 
-      const merged = {
-        title: aiUpdates.title || item.title,
-        context: aiUpdates.context !== undefined ? aiUpdates.context : (item.context || ""),
-        ask: aiUpdates.ask !== undefined ? aiUpdates.ask : (item.ask || ""),
-        priority: aiUpdates.priority || item.priority,
-      };
+      const dbUpdates: Record<string, unknown> = {};
+      const localUpdates: Partial<ProjectAgendaRow> = {};
 
-      const dbUpdates: Record<string, unknown> = { title: merged.title, priority: merged.priority };
+      if (aiUpdates.title) { dbUpdates.title = aiUpdates.title; localUpdates.title = aiUpdates.title; }
+      if (aiUpdates.priority) { dbUpdates.priority = aiUpdates.priority; localUpdates.priority = aiUpdates.priority as PriorityLevel; }
+      if (aiUpdates.status) { dbUpdates.status = aiUpdates.status; localUpdates.status = aiUpdates.status; }
+      if (aiUpdates.due_date !== undefined) { dbUpdates.due_date = aiUpdates.due_date; }
+
+      // Map text fields to correct DB columns
       if (item.entity_type === "agenda_item") {
-        dbUpdates.context = merged.context || null;
-        dbUpdates.ask = merged.ask || null;
+        if (aiUpdates.context !== undefined) { dbUpdates.context = aiUpdates.context || null; localUpdates.context = aiUpdates.context || null; }
+        if (aiUpdates.ask !== undefined) { dbUpdates.ask = aiUpdates.ask || null; localUpdates.ask = aiUpdates.ask || null; }
       } else if (item.entity_type === "action_item") {
-        dbUpdates.notes = merged.context || null;
+        if (aiUpdates.description !== undefined) dbUpdates.description = aiUpdates.description || null;
+        if (aiUpdates.notes !== undefined) dbUpdates.notes = aiUpdates.notes || null;
+        if (aiUpdates.next_steps !== undefined) dbUpdates.next_steps = aiUpdates.next_steps || null;
       } else if (item.entity_type === "blocker") {
-        dbUpdates.impact_description = merged.context || null;
+        if (aiUpdates.description !== undefined) dbUpdates.description = aiUpdates.description || null;
+        if (aiUpdates.impact_description !== undefined) dbUpdates.impact_description = aiUpdates.impact_description || null;
+      } else {
+        // RAID entries
+        if (aiUpdates.description !== undefined) dbUpdates.description = aiUpdates.description || null;
+        if (aiUpdates.notes !== undefined) dbUpdates.notes = aiUpdates.notes || null;
+        if (aiUpdates.next_steps !== undefined) dbUpdates.next_steps = aiUpdates.next_steps || null;
       }
-      if (aiUpdates.status) dbUpdates.status = aiUpdates.status;
-      if (aiUpdates.due_date !== undefined) dbUpdates.due_date = aiUpdates.due_date;
 
-      setItems((prev) =>
-        prev.map((i) =>
-          i.entity_id === item.entity_id
-            ? { ...i, title: merged.title, priority: merged.priority as PriorityLevel, context: merged.context || null, ask: merged.ask || null }
-            : i
-        )
-      );
+      // Resolve owner_name to owner_id
+      if (aiUpdates.owner_name) {
+        const nameL = aiUpdates.owner_name.toLowerCase();
+        const match = people.find((p) => p.full_name.toLowerCase().includes(nameL) || nameL.includes(p.full_name.toLowerCase()));
+        if (match) {
+          dbUpdates.owner_id = match.id;
+          localUpdates.owner_id = match.id;
+          localUpdates.owner_name = match.full_name;
+        }
+      }
+
+      // Resolve vendor_name to vendor_id
+      if (aiUpdates.vendor_name) {
+        const nameL = aiUpdates.vendor_name.toLowerCase();
+        const match = vendors.find((v) => v.name.toLowerCase().includes(nameL) || nameL.includes(v.name.toLowerCase()));
+        if (match) {
+          dbUpdates.vendor_id = match.id;
+          localUpdates.vendor_id = match.id;
+        }
+      }
+
+      // Update detail fields cache
+      if (aiUpdates.description !== undefined || aiUpdates.notes !== undefined || aiUpdates.next_steps !== undefined) {
+        setDetailFields((prev) => ({
+          ...prev,
+          [item.entity_id]: {
+            ...prev[item.entity_id],
+            ...(aiUpdates.description !== undefined ? { description: aiUpdates.description } : {}),
+            ...(aiUpdates.notes !== undefined ? { notes: aiUpdates.notes } : {}),
+            ...(aiUpdates.next_steps !== undefined ? { next_steps: aiUpdates.next_steps } : {}),
+          },
+        }));
+      }
+
+      setItems((prev) => prev.map((i) => i.entity_id === item.entity_id ? { ...i, ...localUpdates } : i));
       setNotesText("");
       setSavingNotes(false);
 
       supabase.from(table).update(dbUpdates).eq("id", item.entity_id).then(() => {});
+
+      // Notify parent of field changes for cross-tab sync
+      if (onItemFieldChanged && Object.keys(dbUpdates).length > 0) {
+        for (const [field, value] of Object.entries(dbUpdates)) {
+          onItemFieldChanged(item.entity_type, item.entity_id, field, String(value ?? ""));
+        }
+      }
 
       if (new_items?.length > 0 && onNewItemsSuggested) {
         onNewItemsSuggested(new_items);

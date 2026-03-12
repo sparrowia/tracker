@@ -326,51 +326,69 @@ export function VendorAgendaView({
       : item.entity_type === "action_item" ? "action_items"
       : "raid_entries";
     setSavingNotes(true);
+
+    const ownerPerson = item.owner_id ? people.find((p) => p.id === item.owner_id) : null;
+
+    const current: Record<string, string> = {
+      title: item.title,
+      priority: item.priority,
+      status: item.status,
+      owner_name: ownerPerson?.full_name || item.owner_name || "(none)",
+      vendor_name: vendor.name,
+    };
+    if (item.entity_type === "agenda_item") {
+      current.context = item.context || "";
+      current.ask = item.ask || "";
+    } else {
+      current.due_date = item.due_date || "";
+    }
+
     try {
       const res = await fetch("/api/agenda-notes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          entity_type: item.entity_type,
-          current: {
-            title: item.title,
-            context: item.context || "",
-            ask: item.ask || "",
-            priority: item.priority,
-          },
-          notes: notesText,
-        }),
+        body: JSON.stringify({ entity_type: item.entity_type, current, notes: notesText }),
       });
 
       if (!res.ok) { setSavingNotes(false); return; }
       const { updates: aiUpdates } = await res.json();
 
-      const merged = {
-        title: aiUpdates.title || item.title,
-        context: aiUpdates.context !== undefined ? aiUpdates.context : (item.context || ""),
-        ask: aiUpdates.ask !== undefined ? aiUpdates.ask : (item.ask || ""),
-        priority: aiUpdates.priority || item.priority,
-      };
+      const dbUpdates: Record<string, unknown> = {};
+      const localUpdates: Partial<VendorAgendaRow> = {};
 
-      const dbUpdates: Record<string, unknown> = { title: merged.title, priority: merged.priority };
-      if (item.entity_type === "agenda_item") {
-        dbUpdates.context = merged.context || null;
-        dbUpdates.ask = merged.ask || null;
-      } else if (item.entity_type === "action_item") {
-        dbUpdates.notes = merged.context || null;
-      } else if (item.entity_type === "blocker") {
-        dbUpdates.impact_description = merged.context || null;
-      }
-      if (aiUpdates.status) dbUpdates.status = aiUpdates.status;
+      if (aiUpdates.title) { dbUpdates.title = aiUpdates.title; localUpdates.title = aiUpdates.title; }
+      if (aiUpdates.priority) { dbUpdates.priority = aiUpdates.priority; localUpdates.priority = aiUpdates.priority as PriorityLevel; }
+      if (aiUpdates.status) { dbUpdates.status = aiUpdates.status; localUpdates.status = aiUpdates.status; }
       if (aiUpdates.due_date !== undefined) dbUpdates.due_date = aiUpdates.due_date;
 
-      setItems((prev) =>
-        prev.map((i) =>
-          i.entity_id === item.entity_id
-            ? { ...i, title: merged.title, priority: merged.priority as PriorityLevel, context: merged.context || null, ask: merged.ask || null }
-            : i
-        )
-      );
+      if (item.entity_type === "agenda_item") {
+        if (aiUpdates.context !== undefined) { dbUpdates.context = aiUpdates.context || null; localUpdates.context = aiUpdates.context || null; }
+        if (aiUpdates.ask !== undefined) { dbUpdates.ask = aiUpdates.ask || null; localUpdates.ask = aiUpdates.ask || null; }
+      } else if (item.entity_type === "action_item") {
+        if (aiUpdates.description !== undefined) dbUpdates.description = aiUpdates.description || null;
+        if (aiUpdates.notes !== undefined) dbUpdates.notes = aiUpdates.notes || null;
+        if (aiUpdates.next_steps !== undefined) dbUpdates.next_steps = aiUpdates.next_steps || null;
+      } else if (item.entity_type === "blocker") {
+        if (aiUpdates.description !== undefined) dbUpdates.description = aiUpdates.description || null;
+        if (aiUpdates.impact_description !== undefined) dbUpdates.impact_description = aiUpdates.impact_description || null;
+      } else {
+        if (aiUpdates.description !== undefined) dbUpdates.description = aiUpdates.description || null;
+        if (aiUpdates.notes !== undefined) dbUpdates.notes = aiUpdates.notes || null;
+        if (aiUpdates.next_steps !== undefined) dbUpdates.next_steps = aiUpdates.next_steps || null;
+      }
+
+      // Resolve owner_name to owner_id
+      if (aiUpdates.owner_name) {
+        const nameL = aiUpdates.owner_name.toLowerCase();
+        const match = people.find((p) => p.full_name.toLowerCase().includes(nameL) || nameL.includes(p.full_name.toLowerCase()));
+        if (match) {
+          dbUpdates.owner_id = match.id;
+          localUpdates.owner_id = match.id;
+          localUpdates.owner_name = match.full_name;
+        }
+      }
+
+      setItems((prev) => prev.map((i) => i.entity_id === item.entity_id ? { ...i, ...localUpdates } : i));
       setNotesText("");
       setSavingNotes(false);
 

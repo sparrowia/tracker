@@ -876,6 +876,9 @@ function BlockersPanel({
     const entry = blockers.find((b) => b.id === id);
     if (!entry || !callNotes.trim()) return;
 
+    const ownerPerson = entry.owner_id ? people.find((p) => p.id === entry.owner_id) : null;
+    const entryVendor = entry.vendor_id ? vendors.find((v) => v.id === entry.vendor_id) : null;
+
     setSavingNotes(true);
     try {
       const res = await fetch("/api/agenda-notes", {
@@ -885,11 +888,13 @@ function BlockersPanel({
           entity_type: "blocker",
           current: {
             title: entry.title,
-            impact_description: entry.impact_description,
-            description: entry.description,
+            impact_description: entry.impact_description || "",
+            description: entry.description || "",
             priority: entry.priority,
             status: entry.status,
-            due_date: entry.due_date,
+            due_date: entry.due_date || "",
+            owner_name: ownerPerson?.full_name || "(none)",
+            vendor_name: entryVendor?.name || "(none)",
           },
           notes: callNotes,
         }),
@@ -903,10 +908,25 @@ function BlockersPanel({
         if (aiUpdates.impact_description !== undefined) merged.impact_description = aiUpdates.impact_description;
         if (aiUpdates.description !== undefined) merged.description = aiUpdates.description;
         if (aiUpdates.due_date !== undefined) merged.due_date = aiUpdates.due_date;
+
+        // Resolve owner_name to owner_id
+        if (aiUpdates.owner_name) {
+          const nameL = aiUpdates.owner_name.toLowerCase();
+          const match = people.find((p) => p.full_name.toLowerCase().includes(nameL) || nameL.includes(p.full_name.toLowerCase()));
+          if (match) { merged.owner_id = match.id; merged.owner = match; }
+        }
+        // Resolve vendor_name to vendor_id
+        if (aiUpdates.vendor_name) {
+          const nameL = aiUpdates.vendor_name.toLowerCase();
+          const match = vendors.find((v) => v.name.toLowerCase().includes(nameL) || nameL.includes(v.name.toLowerCase()));
+          if (match) { merged.vendor_id = match.id; merged.vendor = match; }
+        }
+
         setBlockers((prev) => prev.map((b) => b.id === id ? { ...b, ...merged } as BlockerRow : b));
         setCallNotes("");
         setCallNotesId(null);
-        supabase.from("blockers").update(merged).eq("id", id).then(({ error }) => { if (error) console.error("Save failed:", error); });
+        const { owner, vendor: _v, ...dbMerged } = merged as Record<string, unknown> & { owner?: unknown; vendor?: unknown };
+        supabase.from("blockers").update(dbMerged).eq("id", id).then(({ error }) => { if (error) console.error("Save failed:", error); });
         if (new_items?.length > 0 && onNewItemsSuggested) {
           onNewItemsSuggested(new_items);
         }
@@ -1415,6 +1435,9 @@ function ActionItemsPanel({
     const entry = actions.find((a) => a.id === id);
     if (!entry || !callNotes.trim()) return;
 
+    const ownerPerson = entry.owner_id ? people.find((p) => p.id === entry.owner_id) : null;
+    const entryVendor = entry.vendor_id ? vendors.find((v) => v.id === entry.vendor_id) : null;
+
     setSavingNotes(true);
     try {
       const res = await fetch("/api/agenda-notes", {
@@ -1424,11 +1447,14 @@ function ActionItemsPanel({
           entity_type: "action_item",
           current: {
             title: entry.title,
-            description: entry.description,
-            notes: entry.notes,
+            description: entry.description || "",
+            notes: entry.notes || "",
+            next_steps: entry.next_steps || "",
             priority: entry.priority,
             status: entry.status,
-            due_date: entry.due_date,
+            due_date: entry.due_date || "",
+            owner_name: ownerPerson?.full_name || "(none)",
+            vendor_name: entryVendor?.name || "(none)",
           },
           notes: callNotes,
         }),
@@ -1441,11 +1467,27 @@ function ActionItemsPanel({
         if (aiUpdates.status) merged.status = aiUpdates.status;
         if (aiUpdates.description !== undefined) merged.description = aiUpdates.description;
         if (aiUpdates.notes !== undefined) merged.notes = aiUpdates.notes;
+        if (aiUpdates.next_steps !== undefined) merged.next_steps = aiUpdates.next_steps;
         if (aiUpdates.due_date !== undefined) merged.due_date = aiUpdates.due_date;
+
+        // Resolve owner_name to owner_id
+        if (aiUpdates.owner_name) {
+          const nameL = aiUpdates.owner_name.toLowerCase();
+          const match = people.find((p) => p.full_name.toLowerCase().includes(nameL) || nameL.includes(p.full_name.toLowerCase()));
+          if (match) { merged.owner_id = match.id; merged.owner = match; }
+        }
+        // Resolve vendor_name to vendor_id
+        if (aiUpdates.vendor_name) {
+          const nameL = aiUpdates.vendor_name.toLowerCase();
+          const match = vendors.find((v) => v.name.toLowerCase().includes(nameL) || nameL.includes(v.name.toLowerCase()));
+          if (match) { merged.vendor_id = match.id; merged.vendor = match; }
+        }
+
         setActions((prev) => prev.map((a) => a.id === id ? { ...a, ...merged } as ActionRow : a));
         setCallNotes("");
         setCallNotesId(null);
-        supabase.from("action_items").update(merged).eq("id", id).then(({ error }) => { if (error) console.error("Save failed:", error); });
+        const { owner, vendor: _v, ...dbMerged } = merged as Record<string, unknown> & { owner?: unknown; vendor?: unknown };
+        supabase.from("action_items").update(dbMerged).eq("id", id).then(({ error }) => { if (error) console.error("Save failed:", error); });
         if (new_items?.length > 0 && onNewItemsSuggested) {
           onNewItemsSuggested(new_items);
         }

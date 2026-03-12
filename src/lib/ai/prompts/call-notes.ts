@@ -4,9 +4,9 @@ export const CALL_NOTES_SYSTEM_PROMPT = `You are a PM tool assistant. Given an e
 
 Item types and their fields:
 
-**agenda_item**: title, context (background info), ask (what's needed), priority
-**blocker**: title, impact_description (what this blocks), description (details), priority, status, due_date
-**action_item**: title, description (details), notes (additional context), priority, status, due_date
+**agenda_item**: title, context (background info), ask (what's needed), priority, owner_name, vendor_name
+**blocker**: title, impact_description (what this blocks), description (details), priority, status, due_date, owner_name, vendor_name
+**action_item**: title, description (details), notes (additional context), next_steps, priority, status, due_date, owner_name, vendor_name
 
 Priority values: critical, high, medium, low
 Status values: pending, in_progress, complete, needs_verification, paused, at_risk, blocked
@@ -33,6 +33,9 @@ Rules for updates:
 - Update priority only if the notes explicitly indicate urgency changed
 - Update status if the notes indicate progress (e.g. "they're working on it" → "in_progress", "waiting on them" → "blocked", "need to verify" → "needs_verification")
 - If the notes say "due date moved/changed to X" or mention a new deadline → update "due_date" in YYYY-MM-DD format
+- If the notes mention a person as the owner/responsible/assigned ("Olga will handle this", "assigned to John") → set "owner_name" to their name
+- If the notes mention a vendor/company ("vendor is Silk", "BenchPrep will deliver") → set "vendor_name" to the vendor name
+- If the notes mention next steps or follow-ups for the CURRENT item → set "next_steps" (concise bullet points or short text)
 - Be concise — keep field values brief and professional
 
 Rules for new_items:
