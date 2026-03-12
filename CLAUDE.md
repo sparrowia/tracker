@@ -37,7 +37,7 @@ Matt has multiple projects across different directories and Vercel accounts. **A
 src/
 ├── app/
 │   ├── (app)/                    # Authenticated routes
-│   │   ├── dashboard/            # Weekly command center
+│   │   ├── dashboard/            # Role-scoped dashboard (client component)
 │   │   ├── agendas/              # Agenda index (vendor list)
 │   │   │   └── [vendorSlug]/     # Vendor-specific agenda (uses AgendaView component)
 │   │   ├── blockers/             # Active blockers list
@@ -222,6 +222,27 @@ Client component `people-list.tsx` with two tabs: **Internal Team** and **Vendor
 - Same click-to-expand inline editing as Internal Team tab
 - "+ Add Contact" button in dark header
 
+## Dashboard
+
+Client component (`/dashboard`) with role-scoped data:
+- **Overdue** (red `bg-red-800` header) — action items past due date
+- **Due This Week** — action items due in next 7 days
+- **Active Blockers** — with age severity coloring from `blocker_ages` view
+- **Risks & Issues** (left column) / **Decisions Needed** (right column) — 2-column grid from `raid_entries`
+- **Initiatives** — HR divider with "Initiatives" label, then 2-column grid of initiative tables showing child projects with health/action/blocker counts
+- Initiative health is **computed from worst child project health** (not the manually-set DB field)
+- Scoped via `user_visible_project_ids` RPC for regular users; admins see everything
+- Empty sections are hidden
+
+## Initiative Detail
+
+Client component (`/initiatives/[slug]`) with inline editing:
+- **Click-to-edit name** — click title to edit inline
+- **Properties grid** — Health (dropdown), Owner (OwnerPicker), Target date (date picker), Slug (read-only)
+- **Editable Description and Notes** — click to open textarea
+- Editing gated to admins (`super_admin`/`admin`) and initiative owner (`owner_id` match via `userPersonId`)
+- `+ Add Project` button also hidden for non-editors
+
 ## Inline Add Pattern
 
 Consistent inline add form across RAID log, Action Items, Blockers, and People:
@@ -271,7 +292,7 @@ Deactivation DB check skipped on RSC fetch requests (`rsc` or `next-router-state
 `layout.tsx` runs profile + person queries in parallel with `Promise.all` instead of sequential awaits.
 
 ### Client-Side Pages for Fast Navigation
-Initiative detail (`/initiatives/[slug]`) is a client component — fetches directly from browser Supabase client, avoiding server round-trip overhead (middleware + layout re-render). Shows inline loading skeleton while data loads.
+Initiative detail (`/initiatives/[slug]`) and dashboard (`/dashboard`) are client components — fetch directly from browser Supabase client, avoiding server round-trip overhead (middleware + layout re-render). Show inline loading skeletons while data loads.
 
 ## Development
 
