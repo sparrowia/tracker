@@ -387,6 +387,7 @@ export interface Milestone {
   project_id: string | null;
   owner_id: string | null;
   status: MilestoneStatus;
+  parent_id: string | null;
   sort_order: number;
   created_by: string | null;
   created_at: string;

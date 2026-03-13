@@ -24,7 +24,6 @@ function getMonthLabel(date: Date): string {
 }
 
 function parseDate(d: string): Date {
-  // target_date is YYYY-MM-DD, parse as local
   const [y, m, day] = d.split("-").map(Number);
   return new Date(y, m - 1, day);
 }
@@ -35,7 +34,9 @@ interface GroupedMilestones {
 }
 
 function groupByQuarterMonth(milestones: Milestone[]): GroupedMilestones[] {
-  const sorted = [...milestones].sort((a, b) => a.target_date.localeCompare(b.target_date));
+  // Only group top-level milestones (no parent_id)
+  const topLevel = milestones.filter((m) => !m.parent_id);
+  const sorted = [...topLevel].sort((a, b) => a.target_date.localeCompare(b.target_date));
   const groups: GroupedMilestones[] = [];
   let currentQuarter = "";
   let currentMonth = "";
@@ -75,6 +76,7 @@ export default function TimelinePage() {
   const [initiatives, setInitiatives] = useState<Initiative[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedChildren, setExpandedChildren] = useState<Set<string>>(new Set());
   const [showAdd, setShowAdd] = useState(false);
   const [addForm, setAddForm] = useState({ title: "", target_date: "", milestone_type: "proposed_project" as MilestoneType, description: "" });
   const [saving, setSaving] = useState(false);
@@ -98,6 +100,21 @@ export default function TimelinePage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  function getChildren(parentId: string): Milestone[] {
+    return milestones
+      .filter((m) => m.parent_id === parentId)
+      .sort((a, b) => a.target_date.localeCompare(b.target_date));
+  }
+
+  function toggleChildren(id: string) {
+    setExpandedChildren((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   async function addMilestone() {
     if (!addForm.title.trim() || !addForm.target_date || saving) return;
@@ -123,7 +140,7 @@ export default function TimelinePage() {
 
   async function deleteMilestone(id: string) {
     await supabase.from("milestones").delete().eq("id", id).then(() => {});
-    setMilestones((prev) => prev.filter((m) => m.id !== id));
+    setMilestones((prev) => prev.filter((m) => m.id !== id && m.parent_id !== id));
     if (expandedId === id) setExpandedId(null);
   }
 
@@ -134,15 +151,18 @@ export default function TimelinePage() {
   }
 
   async function handleEntityCreated(milestoneId: string, entityType: "project" | "initiative", entityId: string) {
-    const updates: Record<string, string> = {
-      milestone_type: entityType,
-    };
+    const updates: Record<string, string> = { milestone_type: entityType };
     if (entityType === "project") {
-      (updates as Record<string, string>).project_id = entityId;
+      updates.project_id = entityId;
     } else {
-      (updates as Record<string, string>).initiative_id = entityId;
+      updates.initiative_id = entityId;
     }
     await supabase.from("milestones").update(updates).eq("id", milestoneId).then(() => {});
+    // Also update children to match
+    const children = getChildren(milestoneId);
+    for (const c of children) {
+      await supabase.from("milestones").update(updates).eq("id", c.id).then(() => {});
+    }
     setCreatingFrom(null);
     setCreateType(null);
     load();
@@ -283,17 +303,32 @@ export default function TimelinePage() {
                   const expanded = expandedId === m.id;
                   const linkedHealth = m.project?.health || m.initiative?.health;
                   const dateStr = formatDateShort(m.target_date);
+                  const children = getChildren(m.id);
+                  const hasChildren = children.length > 0;
+                  const childrenOpen = expandedChildren.has(m.id);
 
                   return (
                     <div key={m.id} className={cn(
                       "border-b border-gray-200",
                       proposed ? "bg-gray-50/50" : (m.milestone_type === "project" || m.milestone_type === "initiative") && "bg-yellow-50/60"
                     )}>
-                      {/* Row */}
+                      {/* Parent row */}
                       <div
                         className={cn("flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors", proposed ? "hover:bg-gray-50" : "hover:bg-yellow-50")}
                         onClick={() => setExpandedId(expanded ? null : m.id)}
                       >
+                        {/* Disclosure triangle for parents with children */}
+                        {hasChildren ? (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); toggleChildren(m.id); }}
+                            className="text-gray-400 hover:text-gray-600 flex-shrink-0 w-4 text-center"
+                          >
+                            <span className={cn("inline-block transition-transform text-xs", childrenOpen ? "rotate-90" : "")}>&#9654;</span>
+                          </button>
+                        ) : (
+                          <span className="w-4 flex-shrink-0" />
+                        )}
+
                         {/* Dot */}
                         <span className={cn(
                           "w-2.5 h-2.5 rounded-full flex-shrink-0",
@@ -304,7 +339,12 @@ export default function TimelinePage() {
                         <span className="text-xs text-gray-500 w-16 flex-shrink-0 font-medium">{dateStr}</span>
 
                         {/* Title */}
-                        <span className={cn("text-sm font-semibold flex-1 truncate", proposed && "text-gray-500")}>{m.title}</span>
+                        <span className={cn("text-sm font-semibold flex-1 truncate", proposed && "text-gray-500")}>
+                          {m.title}
+                          {hasChildren && (
+                            <span className="ml-1.5 text-xs font-normal text-gray-400">({children.length})</span>
+                          )}
+                        </span>
 
                         {/* Type badge — proposed pills are clickable to create */}
                         {proposed && canCreate(role) ? (
@@ -359,6 +399,59 @@ export default function TimelinePage() {
                           onReload={load}
                         />
                       )}
+
+                      {/* Children rows */}
+                      {hasChildren && childrenOpen && children.map((child) => {
+                        const childProposed = isProposed(child.milestone_type);
+                        const childExpanded = expandedId === child.id;
+                        const childDateStr = formatDateShort(child.target_date);
+
+                        return (
+                          <div key={child.id} className="border-t border-gray-100">
+                            <div
+                              className={cn("flex items-center gap-3 pl-10 pr-4 py-2 cursor-pointer transition-colors", childProposed ? "hover:bg-gray-50" : "hover:bg-yellow-50/50")}
+                              onClick={() => setExpandedId(childExpanded ? null : child.id)}
+                            >
+                              {/* Arrow indent */}
+                              <span className="text-gray-300 text-xs flex-shrink-0">&#8627;</span>
+
+                              {/* Dot */}
+                              <span className={cn(
+                                "w-2 h-2 rounded-full flex-shrink-0",
+                                childProposed ? "border border-dashed border-gray-400" : "bg-gray-500"
+                              )} />
+
+                              {/* Date */}
+                              <span className="text-xs text-gray-400 w-16 flex-shrink-0">{childDateStr}</span>
+
+                              {/* Title */}
+                              <span className={cn("text-sm flex-1 truncate", childProposed ? "text-gray-400" : "text-gray-600")}>{child.title}</span>
+
+                              {/* Status — hidden for proposed */}
+                              {!childProposed && (
+                                <span className={cn("text-xs px-2 py-0.5 rounded-full flex-shrink-0", milestoneStatusColor(child.status))}>
+                                  {milestoneStatusLabel(child.status)}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Child detail panel */}
+                            {childExpanded && (
+                              <MilestoneDetail
+                                milestone={child}
+                                people={people}
+                                projects={projects}
+                                initiatives={initiatives}
+                                role={role}
+                                onUpdate={updateField}
+                                onDelete={deleteMilestone}
+                                onPersonAdded={(p) => setPeople((prev) => [...prev, p])}
+                                onReload={load}
+                              />
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   );
                 })}
@@ -426,6 +519,7 @@ function MilestoneDetail({
   const [title, setTitle] = useState(m.title);
   const [desc, setDesc] = useState(m.description || "");
   const [editDesc, setEditDesc] = useState(false);
+  const proposed = m.milestone_type === "proposed_project" || m.milestone_type === "proposed_initiative";
 
   return (
     <div className="px-4 pb-4 pt-1 bg-gray-50 border-t border-gray-200">
@@ -464,7 +558,7 @@ function MilestoneDetail({
           ))}
         </select>
 
-        {!(m.milestone_type === "proposed_project" || m.milestone_type === "proposed_initiative") && (
+        {!proposed && (
           <>
             <span className="text-gray-500 font-medium">Status</span>
             <select
@@ -495,7 +589,6 @@ function MilestoneDetail({
           onPersonAdded={onPersonAdded}
         />
 
-        {/* Link to project/initiative */}
         {(m.milestone_type === "project" || m.milestone_type === "proposed_project") && (
           <>
             <span className="text-gray-500 font-medium">Project</span>
