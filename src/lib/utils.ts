@@ -78,6 +78,15 @@ export function severityBadge(severity: SeverityIndicator): { label: string; cla
 
 export function formatDate(date: string | null): string {
   if (!date) return "—";
+  // Parse YYYY-MM-DD as local time to avoid UTC timezone shift
+  const [y, m, d] = date.split("-").map(Number);
+  if (y && m && d) {
+    return new Date(y, m - 1, d).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  }
   return new Date(date).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
@@ -121,6 +130,14 @@ export function milestoneStatusColor(status: MilestoneStatus): string {
 
 export function formatDateShort(date: string | null): string {
   if (!date) return "—";
+  // Parse YYYY-MM-DD as local time to avoid UTC timezone shift
+  const [y, m, d] = date.split("-").map(Number);
+  if (y && m && d) {
+    return new Date(y, m - 1, d).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+    });
+  }
   return new Date(date).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
