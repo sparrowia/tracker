@@ -45,6 +45,7 @@ src/
 │   │   │   └── [id]/             # Vendor detail (contacts, accountability)
 │   │   ├── projects/             # Project list + detail pages
 │   │   │   └── [slug]/           # Project detail (blockers, actions, RAID log)
+│   │   ├── timeline/             # Company timeline with milestones (3 views: timeline, calendar, gantt)
 │   │   ├── people/               # Internal team + vendor contacts
 │   │   ├── intake/               # Raw text/image intake with OCR
 │   │   │   └── [id]/review/      # Review extracted items
@@ -138,6 +139,7 @@ Defined in `src/lib/types.ts`:
 - **VendorAccountabilityRow** — combined view of vendor action items + blockers
 - **Profile** — user profile with role, deactivated_at, vendor_id
 - **Invitation** — email-based invitations with role, token, expiry
+- **Milestone** — timeline milestones with parent/child grouping, linked or proposed projects/initiatives
 
 All data tables (ActionItem, RaidEntry, Blocker, AgendaItem, SupportTicket, Project, Vendor, Person) include a `created_by` field linking to the profile that created the record, used for RLS permission checks.
 
@@ -242,6 +244,39 @@ Client component (`/initiatives/[slug]`) with inline editing:
 - **Editable Description and Notes** — click to open textarea
 - Editing gated to admins (`super_admin`/`admin`) and initiative owner (`owner_id` match via `userPersonId`)
 - `+ Add Project` button also hidden for non-editors
+
+## Company Timeline
+
+Client component (`/timeline`) with three view tabs: **Timeline**, **Calendar**, **Gantt**.
+
+### Database
+`milestones` table with `parent_id` self-referencing FK (CASCADE delete) for parent/child grouping. Migrations: `20260313000001_milestones.sql`, `20260313000002_milestones_parent_id.sql`. RLS: org-scoped, hidden from vendors.
+
+### Milestone Types
+- `MilestoneType`: `project`, `initiative`, `proposed_project`, `proposed_initiative`
+- `MilestoneStatus`: `pending`, `in_progress`, `complete`
+- Helper functions in utils.ts: `milestoneTypeLabel`, `milestoneTypeColor`, `milestoneStatusLabel`, `milestoneStatusColor`
+
+### Visual Patterns
+- **Linked milestones:** Solid dot, `bg-yellow-50/60` background, health badge from linked entity
+- **Proposed milestones:** Dashed dot border, no status badge, clickable type pill opens AddProjectButton/AddInitiativeButton modal pre-filled with milestone data
+- **Complete milestones:** `opacity-50 hover:opacity-70`, green dot (`bg-green-500`)
+- **Parent/child:** Disclosure triangles (▶) for expand/collapse, child rows indented with ↳ arrow
+- **Helper text:** "Click on a proposed project/initiative pill to create it" at top of page
+
+### Three Views
+- **Timeline:** Vertical list grouped by quarter → month, with inline detail panel on click
+- **Calendar:** Monthly grid with month navigation, milestone pills on date cells, "+N more" overflow, today highlight
+- **Gantt:** Two-panel layout (260px label column + scrollable chart), MONTH_WIDTH=140px, parent span bars from earliest to latest child date, diamond markers, today red line
+
+### "Create from Proposed" Flow
+1. User clicks proposed type pill on a milestone
+2. Opens AddProjectButton or AddInitiativeButton modal pre-filled with title, description, target_date
+3. On save, `onCreated(id)` callback updates milestone: sets `milestone_type` to `project`/`initiative`, sets `project_id`/`initiative_id`
+4. Both AddProjectButton and AddInitiativeButton accept `defaultValues`, `onCreated`, `openExternal` props
+
+### Sidebar
+Timeline link uses `CalendarDays` icon from lucide-react, placed between Ask and Initiatives group, hidden from vendor role.
 
 ## Inline Add Pattern
 
