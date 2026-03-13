@@ -248,6 +248,11 @@ export default function TimelinePage() {
         </div>
       )}
 
+      {/* Helper text */}
+      <div className="border border-t-0 border-gray-300 border-b-0 bg-white px-4 py-1.5">
+        <span className="text-xs text-gray-400">Click on a proposed project pill to create a new project from it</span>
+      </div>
+
       {/* Timeline content */}
       <div className="border border-t-0 border-gray-300 rounded-b-md bg-white">
         {grouped.length === 0 && (
@@ -298,10 +303,19 @@ export default function TimelinePage() {
                         {/* Title */}
                         <span className={cn("text-sm font-semibold flex-1 truncate", proposed && "text-gray-500")}>{m.title}</span>
 
-                        {/* Type badge */}
-                        <span className={cn("text-xs px-2 py-0.5 rounded-full border flex-shrink-0", milestoneTypeColor(m.milestone_type))}>
-                          {milestoneTypeLabel(m.milestone_type)}
-                        </span>
+                        {/* Type badge — proposed pills are clickable to create */}
+                        {proposed && canCreate(role) ? (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleCreateFromProposed(m); }}
+                            className={cn("text-xs px-2 py-0.5 rounded-full border flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity", milestoneTypeColor(m.milestone_type))}
+                          >
+                            {milestoneTypeLabel(m.milestone_type)}
+                          </button>
+                        ) : (
+                          <span className={cn("text-xs px-2 py-0.5 rounded-full border flex-shrink-0", milestoneTypeColor(m.milestone_type))}>
+                            {milestoneTypeLabel(m.milestone_type)}
+                          </span>
+                        )}
 
                         {/* Health badge (for linked entities) */}
                         {linkedHealth && (
@@ -310,21 +324,11 @@ export default function TimelinePage() {
                           </span>
                         )}
 
-                        {/* Status badge */}
+                        {/* Status badge — hidden for proposed */}
                         {!proposed && (
                           <span className={cn("text-xs px-2 py-0.5 rounded-full flex-shrink-0", milestoneStatusColor(m.status))}>
                             {milestoneStatusLabel(m.status)}
                           </span>
-                        )}
-
-                        {/* Create button for proposed */}
-                        {proposed && canCreate(role) && (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleCreateFromProposed(m); }}
-                            className="text-xs font-medium text-blue-600 hover:text-blue-800 px-2 py-0.5 border border-blue-300 rounded-md hover:bg-blue-50 flex-shrink-0"
-                          >
-                            Create &rarr;
-                          </button>
                         )}
 
                         {/* Owner */}
@@ -457,16 +461,20 @@ function MilestoneDetail({
           ))}
         </select>
 
-        <span className="text-gray-500 font-medium">Status</span>
-        <select
-          value={m.status}
-          onChange={(e) => onUpdate(m.id, "status", e.target.value)}
-          className="rounded border border-gray-200 px-2 py-0.5 text-sm"
-        >
-          {MILESTONE_STATUSES.map((s) => (
-            <option key={s} value={s}>{milestoneStatusLabel(s)}</option>
-          ))}
-        </select>
+        {!(m.milestone_type === "proposed_project" || m.milestone_type === "proposed_initiative") && (
+          <>
+            <span className="text-gray-500 font-medium">Status</span>
+            <select
+              value={m.status}
+              onChange={(e) => onUpdate(m.id, "status", e.target.value)}
+              className="rounded border border-gray-200 px-2 py-0.5 text-sm"
+            >
+              {MILESTONE_STATUSES.map((s) => (
+                <option key={s} value={s}>{milestoneStatusLabel(s)}</option>
+              ))}
+            </select>
+          </>
+        )}
 
         <span className="text-gray-500 font-medium">Target Date</span>
         <input
