@@ -15,6 +15,7 @@ import {
   ChevronRight,
   BookType,
   MessageSquare,
+  CalendarDays,
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
@@ -179,6 +180,11 @@ export function Sidebar({ role: propRole = "user" as UserRole, profileId, userPe
               <MessageSquare className="h-4 w-4" />
             </Link>
           )}
+          {role !== "vendor" && (
+            <Link href="/timeline" className={cn("p-2 rounded-md", pathname === "/timeline" ? "bg-blue-50 text-blue-700" : "text-gray-500 hover:bg-gray-100 hover:text-gray-700")} title="Timeline">
+              <CalendarDays className="h-4 w-4" />
+            </Link>
+          )}
           <Link href="/initiatives" className={cn("p-2 rounded-md", isOnInitiatives ? "bg-blue-50 text-blue-700" : "text-gray-500 hover:bg-gray-100 hover:text-gray-700")} title="Initiatives">
             <FolderKanban className="h-4 w-4" />
           </Link>
@@ -238,6 +244,22 @@ export function Sidebar({ role: propRole = "user" as UserRole, profileId, userPe
           >
             <MessageSquare className="h-4 w-4 flex-shrink-0" />
             Ask
+          </Link>
+        )}
+
+        {/* Timeline — hidden from vendors */}
+        {role !== "vendor" && (
+          <Link
+            href="/timeline"
+            className={cn(
+              "flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors",
+              pathname === "/timeline"
+                ? "bg-blue-50 text-blue-700"
+                : "text-gray-700 hover:bg-gray-100"
+            )}
+          >
+            <CalendarDays className="h-4 w-4 flex-shrink-0" />
+            Timeline
           </Link>
         )}
 

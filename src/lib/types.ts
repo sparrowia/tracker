@@ -23,6 +23,10 @@ export type ProjectHealth =
 
 export type RaidType = "risk" | "assumption" | "issue" | "decision";
 
+export type MilestoneType = "project" | "initiative" | "proposed_project" | "proposed_initiative";
+
+export type MilestoneStatus = "pending" | "in_progress" | "complete";
+
 export type SeverityIndicator = "critical" | "high" | "new" | "normal";
 
 export type UserRole = "super_admin" | "admin" | "user" | "vendor";
@@ -370,6 +374,26 @@ export interface CommentAttachment {
   file_size: number | null;
   mime_type: string | null;
   created_at: string;
+}
+
+export interface Milestone {
+  id: string;
+  org_id: string;
+  title: string;
+  description: string | null;
+  target_date: string;
+  milestone_type: MilestoneType;
+  initiative_id: string | null;
+  project_id: string | null;
+  owner_id: string | null;
+  status: MilestoneStatus;
+  sort_order: number;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  owner?: Person;
+  initiative?: Initiative;
+  project?: Project;
 }
 
 export interface ProjectAgendaRow {

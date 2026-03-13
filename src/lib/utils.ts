@@ -1,4 +1,4 @@
-import { type PriorityLevel, type ItemStatus, type ProjectHealth, type SeverityIndicator } from "./types";
+import { type PriorityLevel, type ItemStatus, type ProjectHealth, type SeverityIndicator, type MilestoneType, type MilestoneStatus } from "./types";
 
 export function cn(...classes: (string | boolean | undefined | null)[]) {
   return classes.filter(Boolean).join(" ");
@@ -83,6 +83,40 @@ export function formatDate(date: string | null): string {
     day: "numeric",
     year: "numeric",
   });
+}
+
+export function milestoneTypeLabel(type: MilestoneType): string {
+  switch (type) {
+    case "project": return "Project";
+    case "initiative": return "Initiative";
+    case "proposed_project": return "Proposed Project";
+    case "proposed_initiative": return "Proposed Initiative";
+  }
+}
+
+export function milestoneTypeColor(type: MilestoneType): string {
+  switch (type) {
+    case "project": return "text-blue-700 bg-blue-50 border-blue-200";
+    case "initiative": return "text-purple-700 bg-purple-50 border-purple-200";
+    case "proposed_project": return "text-blue-500 bg-blue-50/50 border-dashed border-blue-300";
+    case "proposed_initiative": return "text-purple-500 bg-purple-50/50 border-dashed border-purple-300";
+  }
+}
+
+export function milestoneStatusLabel(status: MilestoneStatus): string {
+  switch (status) {
+    case "pending": return "Pending";
+    case "in_progress": return "In Progress";
+    case "complete": return "Complete";
+  }
+}
+
+export function milestoneStatusColor(status: MilestoneStatus): string {
+  switch (status) {
+    case "pending": return "text-gray-700 bg-gray-100";
+    case "in_progress": return "text-blue-700 bg-blue-100";
+    case "complete": return "text-green-700 bg-green-100";
+  }
 }
 
 export function formatDateShort(date: string | null): string {

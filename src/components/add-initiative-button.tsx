@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { healthLabel } from "@/lib/utils";
 import type { ProjectHealth } from "@/lib/types";
@@ -12,18 +12,29 @@ function generateSlug(name: string) {
   return name.toLowerCase().replace(/[^a-z0-9\s-]/g, "").replace(/\s+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
 }
 
-export default function AddInitiativeButton({ onSaved }: { onSaved?: () => void } = {}) {
+interface AddInitiativeButtonProps {
+  onSaved?: () => void;
+  defaultValues?: { name?: string; description?: string; target_completion?: string };
+  onCreated?: (id: string) => void;
+  openExternal?: boolean;
+}
+
+export default function AddInitiativeButton({ onSaved, defaultValues, onCreated, openExternal }: AddInitiativeButtonProps = {}) {
   const { orgId } = useRole();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(openExternal || false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
-    name: "",
+    name: defaultValues?.name || "",
     slug: "",
-    description: "",
+    description: defaultValues?.description || "",
     health: "on_track" as ProjectHealth,
-    target_completion: "",
+    target_completion: defaultValues?.target_completion || "",
   });
   const supabase = createClient();
+
+  useEffect(() => {
+    if (openExternal) setOpen(true);
+  }, [openExternal]);
 
   function close() {
     setOpen(false);
@@ -35,18 +46,22 @@ export default function AddInitiativeButton({ onSaved }: { onSaved?: () => void 
     setSaving(true);
     if (!orgId) { setSaving(false); return; }
     const slug = form.slug.trim() || generateSlug(form.name);
-    const { error } = await supabase.from("initiatives").insert({
+    const { data, error } = await supabase.from("initiatives").insert({
       org_id: orgId,
       name: form.name.trim(),
       slug,
       description: form.description.trim() || null,
       health: form.health,
       target_completion: form.target_completion || null,
-    });
+    }).select("id").single();
     setSaving(false);
     if (!error) {
       close();
-      onSaved?.();
+      if (onCreated && data) {
+        onCreated(data.id);
+      } else {
+        onSaved?.();
+      }
     }
   }
 

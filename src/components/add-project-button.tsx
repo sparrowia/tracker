@@ -13,23 +13,35 @@ function generateSlug(name: string) {
   return name.toLowerCase().replace(/[^a-z0-9\s-]/g, "").replace(/\s+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
 }
 
-export default function AddProjectButton({ initiativeId, onSaved }: { initiativeId?: string; onSaved?: () => void }) {
-  const [open, setOpen] = useState(false);
+interface AddProjectButtonProps {
+  initiativeId?: string;
+  onSaved?: () => void;
+  defaultValues?: { name?: string; description?: string; target_completion?: string };
+  onCreated?: (id: string) => void;
+  openExternal?: boolean;
+}
+
+export default function AddProjectButton({ initiativeId, onSaved, defaultValues, onCreated, openExternal }: AddProjectButtonProps) {
+  const [open, setOpen] = useState(openExternal || false);
   const [saving, setSaving] = useState(false);
   const [initiatives, setInitiatives] = useState<Initiative[]>([]);
   const [form, setForm] = useState({
-    name: "",
+    name: defaultValues?.name || "",
     slug: "",
-    description: "",
+    description: defaultValues?.description || "",
     health: "on_track" as ProjectHealth,
     platform_status: "",
     start_date: "",
-    target_completion: "",
+    target_completion: defaultValues?.target_completion || "",
     initiative_id: initiativeId || "",
   });
   const supabase = createClient();
   const router = useRouter();
   const { profileId, orgId } = useRole();
+
+  useEffect(() => {
+    if (openExternal) setOpen(true);
+  }, [openExternal]);
 
   useEffect(() => {
     if (!initiativeId && open) {
@@ -49,7 +61,7 @@ export default function AddProjectButton({ initiativeId, onSaved }: { initiative
     setSaving(true);
     if (!orgId) { setSaving(false); return; }
     const slug = form.slug.trim() || generateSlug(form.name);
-    const { error } = await supabase.from("projects").insert({
+    const { data, error } = await supabase.from("projects").insert({
       org_id: orgId,
       name: form.name.trim(),
       slug,
@@ -60,11 +72,15 @@ export default function AddProjectButton({ initiativeId, onSaved }: { initiative
       target_completion: form.target_completion || null,
       initiative_id: form.initiative_id || null,
       created_by: profileId,
-    });
+    }).select("id").single();
     setSaving(false);
     if (!error) {
       close();
-      onSaved ? onSaved() : router.refresh();
+      if (onCreated && data) {
+        onCreated(data.id);
+      } else {
+        onSaved ? onSaved() : router.refresh();
+      }
     }
   }
 
