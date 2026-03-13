@@ -300,6 +300,7 @@ export default function TimelinePage() {
                 {/* Milestone rows */}
                 {monthGroup.milestones.map((m) => {
                   const proposed = isProposed(m.milestone_type);
+                  const complete = m.status === "complete";
                   const expanded = expandedId === m.id;
                   const linkedHealth = m.project?.health || m.initiative?.health;
                   const dateStr = formatDateShort(m.target_date);
@@ -310,11 +311,11 @@ export default function TimelinePage() {
                   return (
                     <div key={m.id} className={cn(
                       "border-b border-gray-200",
-                      proposed ? "bg-gray-50/50" : (m.milestone_type === "project" || m.milestone_type === "initiative") && "bg-yellow-50/60"
+                      complete ? "" : proposed ? "bg-gray-50/50" : (m.milestone_type === "project" || m.milestone_type === "initiative") && "bg-yellow-50/60"
                     )}>
                       {/* Parent row */}
                       <div
-                        className={cn("flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors", proposed ? "hover:bg-gray-50" : "hover:bg-yellow-50")}
+                        className={cn("flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors", complete ? "opacity-50 hover:opacity-70" : proposed ? "hover:bg-gray-50" : "hover:bg-yellow-50")}
                         onClick={() => setExpandedId(expanded ? null : m.id)}
                       >
                         {/* Disclosure triangle for parents with children */}
@@ -332,14 +333,14 @@ export default function TimelinePage() {
                         {/* Dot */}
                         <span className={cn(
                           "w-2.5 h-2.5 rounded-full flex-shrink-0",
-                          proposed ? "border-2 border-dashed border-gray-400" : "bg-gray-700"
+                          complete ? "bg-green-500" : proposed ? "border-2 border-dashed border-gray-400" : "bg-gray-700"
                         )} />
 
                         {/* Date */}
-                        <span className="text-xs text-gray-500 w-16 flex-shrink-0 font-medium">{dateStr}</span>
+                        <span className={cn("text-xs w-16 flex-shrink-0 font-medium", complete ? "text-gray-400" : "text-gray-500")}>{dateStr}</span>
 
                         {/* Title */}
-                        <span className={cn("text-sm font-semibold flex-1 truncate", proposed && "text-gray-500")}>
+                        <span className={cn("text-sm font-semibold flex-1 truncate", complete ? "text-gray-400" : proposed ? "text-gray-500" : "")}>
                           {m.title}
                           {hasChildren && (
                             <span className="ml-1.5 text-xs font-normal text-gray-400">({children.length})</span>
@@ -403,13 +404,14 @@ export default function TimelinePage() {
                       {/* Children rows */}
                       {hasChildren && childrenOpen && children.map((child) => {
                         const childProposed = isProposed(child.milestone_type);
+                        const childComplete = child.status === "complete";
                         const childExpanded = expandedId === child.id;
                         const childDateStr = formatDateShort(child.target_date);
 
                         return (
                           <div key={child.id} className="border-t border-gray-100">
                             <div
-                              className={cn("flex items-center gap-3 pl-10 pr-4 py-2 cursor-pointer transition-colors", childProposed ? "hover:bg-gray-50" : "hover:bg-yellow-50/50")}
+                              className={cn("flex items-center gap-3 pl-10 pr-4 py-2 cursor-pointer transition-colors", childComplete ? "opacity-50 hover:opacity-70" : childProposed ? "hover:bg-gray-50" : "hover:bg-yellow-50/50")}
                               onClick={() => setExpandedId(childExpanded ? null : child.id)}
                             >
                               {/* Arrow indent */}
@@ -418,14 +420,14 @@ export default function TimelinePage() {
                               {/* Dot */}
                               <span className={cn(
                                 "w-2 h-2 rounded-full flex-shrink-0",
-                                childProposed ? "border border-dashed border-gray-400" : "bg-gray-500"
+                                childComplete ? "bg-green-500" : childProposed ? "border border-dashed border-gray-400" : "bg-gray-500"
                               )} />
 
                               {/* Date */}
-                              <span className="text-xs text-gray-400 w-16 flex-shrink-0">{childDateStr}</span>
+                              <span className={cn("text-xs w-16 flex-shrink-0", childComplete ? "text-gray-400" : "text-gray-400")}>{childDateStr}</span>
 
                               {/* Title */}
-                              <span className={cn("text-sm flex-1 truncate", childProposed ? "text-gray-400" : "text-gray-600")}>{child.title}</span>
+                              <span className={cn("text-sm flex-1 truncate", childComplete ? "text-gray-400" : childProposed ? "text-gray-400" : "text-gray-600")}>{child.title}</span>
 
                               {/* Status — hidden for proposed */}
                               {!childProposed && (
