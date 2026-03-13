@@ -285,10 +285,13 @@ export default function TimelinePage() {
                   const dateStr = formatDateShort(m.target_date);
 
                   return (
-                    <div key={m.id} className={cn("border-b border-gray-200", proposed && "bg-gray-50/50")}>
+                    <div key={m.id} className={cn(
+                      "border-b border-gray-200",
+                      proposed ? "bg-gray-50/50" : (m.milestone_type === "project" || m.milestone_type === "initiative") && "bg-yellow-50/60"
+                    )}>
                       {/* Row */}
                       <div
-                        className="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-gray-50 transition-colors"
+                        className={cn("flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors", proposed ? "hover:bg-gray-50" : "hover:bg-yellow-50")}
                         onClick={() => setExpandedId(expanded ? null : m.id)}
                       >
                         {/* Dot */}
