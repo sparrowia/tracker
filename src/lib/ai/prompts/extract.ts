@@ -87,6 +87,7 @@ Rules:
 - Infer priority from language (urgent, ASAP, critical = high/critical; when possible = low)
 - Dates should be in YYYY-MM-DD format
 - Keep titles concise but descriptive
+- ONE action per item. Never combine multiple tasks into a single action item. If a sentence describes multiple steps or assigns work to multiple people, split them into separate action items each with their own owner. Do NOT create summary/rollup items that restate what individual items already cover
 - action_items.status: "pending" = not yet started or no evidence of completion; "in_progress" = partially done or being worked on; "complete" = the action was fulfilled later in the thread (e.g. requested info was provided, task was done). Default to "pending" if unclear
 - confidence: "high" = explicitly stated with clear details; "medium" = clearly implied but requires some interpretation; "low" = inferred from vague or ambiguous language
 - Do not fabricate information not present in the text, EXCEPT for term corrections (see below) which MUST be applied
