@@ -33,3 +33,13 @@ export function canInvite(role: UserRole): boolean {
 export function isAdmin(role: UserRole): boolean {
   return role === "super_admin" || role === "admin";
 }
+
+export function canEditWikiPage(
+  role: UserRole,
+  profileId: string,
+  page: { created_by?: string | null }
+): boolean {
+  if (role === "super_admin" || role === "admin") return true;
+  if (role === "vendor") return false;
+  return !!(page.created_by && page.created_by === profileId);
+}

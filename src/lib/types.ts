@@ -397,6 +397,20 @@ export interface Milestone {
   project?: Project;
 }
 
+export interface WikiPage {
+  id: string;
+  org_id: string;
+  title: string;
+  slug: string;
+  content: Record<string, unknown>;
+  parent_id: string | null;
+  sort_order: number;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ProjectAgendaRow {
   rank: number;
   entity_type: string;

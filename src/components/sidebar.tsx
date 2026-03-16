@@ -14,6 +14,7 @@ import {
   ChevronDown,
   ChevronRight,
   BookType,
+  BookOpen,
   MessageSquare,
   CalendarDays,
   PanelLeftClose,
@@ -185,6 +186,11 @@ export function Sidebar({ role: propRole = "user" as UserRole, profileId, userPe
               <CalendarDays className="h-4 w-4" />
             </Link>
           )}
+          {role !== "vendor" && (
+            <Link href="/docs" className={cn("p-2 rounded-md", pathname === "/docs" || pathname.startsWith("/docs/") ? "bg-blue-50 text-blue-700" : "text-gray-500 hover:bg-gray-100 hover:text-gray-700")} title="Docs">
+              <BookOpen className="h-4 w-4" />
+            </Link>
+          )}
           <Link href="/initiatives" className={cn("p-2 rounded-md", isOnInitiatives ? "bg-blue-50 text-blue-700" : "text-gray-500 hover:bg-gray-100 hover:text-gray-700")} title="Initiatives">
             <FolderKanban className="h-4 w-4" />
           </Link>
@@ -260,6 +266,22 @@ export function Sidebar({ role: propRole = "user" as UserRole, profileId, userPe
           >
             <CalendarDays className="h-4 w-4 flex-shrink-0" />
             Timeline
+          </Link>
+        )}
+
+        {/* Docs — hidden from vendors */}
+        {role !== "vendor" && (
+          <Link
+            href="/docs"
+            className={cn(
+              "flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors",
+              pathname === "/docs" || pathname.startsWith("/docs/")
+                ? "bg-blue-50 text-blue-700"
+                : "text-gray-700 hover:bg-gray-100"
+            )}
+          >
+            <BookOpen className="h-4 w-4 flex-shrink-0" />
+            Docs
           </Link>
         )}
 
