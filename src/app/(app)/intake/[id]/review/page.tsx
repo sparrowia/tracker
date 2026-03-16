@@ -1027,22 +1027,6 @@ export default function IntakeReviewPage() {
     }
   }
 
-  if (loading) {
-    return (
-      <div className="max-w-5xl mx-auto">
-        <p className="text-sm text-gray-500">Loading extraction results...</p>
-      </div>
-    );
-  }
-
-  if (!intake) {
-    return (
-      <div className="max-w-5xl mx-auto">
-        <p className="text-sm text-red-600">{error || "Intake not found"}</p>
-      </div>
-    );
-  }
-
   const totalItems = Object.values(extracted).flat().length;
   const allAccepted = Object.values(extracted).flat().filter((i) => i._accepted === true);
   const totalAccepted = allAccepted.length;
@@ -1071,6 +1055,22 @@ export default function IntakeReviewPage() {
       setActiveIndex(currentTabItems.length - 1);
     }
   }, [activeTab, currentTabItems.length]);
+
+  if (loading) {
+    return (
+      <div className="max-w-5xl mx-auto">
+        <p className="text-sm text-gray-500">Loading extraction results...</p>
+      </div>
+    );
+  }
+
+  if (!intake) {
+    return (
+      <div className="max-w-5xl mx-auto">
+        <p className="text-sm text-red-600">{error || "Intake not found"}</p>
+      </div>
+    );
+  }
 
   // Render a single card for a given category and index
   function renderCard(category: EntityCategory, idx: number, item: ExtractedItem) {
