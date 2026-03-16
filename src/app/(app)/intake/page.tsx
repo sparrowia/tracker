@@ -390,38 +390,117 @@ export default function IntakePage() {
       if (insertError) throw insertError;
       intakeId = intake.id;
 
-      setProgressStep("Analyzing and extracting items...");
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 90_000);
+      // Split long text into chunks to avoid Vercel function timeouts
+      const CHUNK_CHAR_LIMIT = 4000;
+      const chunks: string[] = [];
 
-      const response = await fetch("/api/extract", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          intake_id: intake.id,
-          raw_text: combinedText,
-          vendor_id: resolvedVendorId,
-          project_id: resolvedProjectId,
-        }),
-        signal: controller.signal,
-      });
-      clearTimeout(timeout);
-
-      if (!response.ok) {
-        let errorMsg = "Extraction failed";
-        try {
-          const err = await response.json();
-          errorMsg = err.error || errorMsg;
-        } catch {
-          // Response wasn't JSON (e.g. Vercel error page)
-          const text = await response.text().catch(() => "");
-          if (response.status === 504 || text.includes("FUNCTION_INVOCATION_TIMEOUT")) {
-            errorMsg = "Extraction timed out. Please try again with shorter text.";
+      if (combinedText.length <= CHUNK_CHAR_LIMIT) {
+        chunks.push(combinedText);
+      } else {
+        // Split at paragraph boundaries (double newlines)
+        const paragraphs = combinedText.split(/\n\n+/);
+        let currentChunk = "";
+        for (const para of paragraphs) {
+          if (currentChunk.length + para.length + 2 > CHUNK_CHAR_LIMIT && currentChunk.length > 0) {
+            chunks.push(currentChunk.trim());
+            currentChunk = para;
           } else {
-            errorMsg = `Server error (${response.status}). Please try again.`;
+            currentChunk = currentChunk ? currentChunk + "\n\n" + para : para;
           }
         }
-        throw new Error(errorMsg);
+        if (currentChunk.trim()) chunks.push(currentChunk.trim());
+        // If a single paragraph was longer than the limit, it stays as one chunk — better than splitting mid-sentence
+      }
+
+      const totalChunks = chunks.length;
+
+      async function extractChunk(chunkText: string, chunkIndex: number) {
+        setProgressStep(`Extracting${totalChunks > 1 ? ` (part ${chunkIndex + 1}/${totalChunks})` : ""}...`);
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 120_000);
+
+        const response = await fetch("/api/extract", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            intake_id: intake.id,
+            raw_text: chunkText,
+            vendor_id: resolvedVendorId,
+            project_id: resolvedProjectId,
+          }),
+          signal: controller.signal,
+        });
+        clearTimeout(timeout);
+
+        if (!response.ok) {
+          let errorMsg = "Extraction failed";
+          try {
+            const err = await response.json();
+            errorMsg = err.error || errorMsg;
+          } catch {
+            const text = await response.text().catch(() => "");
+            if (response.status === 504 || text.includes("FUNCTION_INVOCATION_TIMEOUT")) {
+              errorMsg = `Part ${chunkIndex + 1} timed out. Please try again.`;
+            } else {
+              errorMsg = `Server error (${response.status}). Please try again.`;
+            }
+          }
+          throw new Error(errorMsg);
+        }
+
+        return response.json();
+      }
+
+      // Process chunks — parallel if multiple, single call if one
+      if (totalChunks === 1) {
+        setProgressStep("Analyzing and extracting items...");
+        await extractChunk(chunks[0], 0);
+      } else {
+        setProgressStep(`Splitting into ${totalChunks} segments for extraction...`);
+        // Run chunks in parallel for speed
+        const results = await Promise.all(
+          chunks.map((chunk, i) => extractChunk(chunk, i))
+        );
+
+        // Merge all chunk results from API responses
+        setProgressStep("Merging results...");
+        const mergedData: Record<string, unknown[]> = {
+          action_items: [],
+          decisions: [],
+          issues: [],
+          risks: [],
+          blockers: [],
+          status_updates: [],
+          contacts: [],
+        };
+
+        for (const result of results) {
+          const data = result.data || {};
+          for (const key of Object.keys(mergedData)) {
+            const items = (data as Record<string, unknown[]>)[key];
+            if (Array.isArray(items)) {
+              mergedData[key].push(...items);
+            }
+          }
+        }
+
+        // Deduplicate by title within each category
+        for (const key of Object.keys(mergedData)) {
+          const items = mergedData[key] as { title?: string; subject?: string }[];
+          const seen = new Set<string>();
+          mergedData[key] = items.filter((item) => {
+            const title = (item.title || item.subject || "").toLowerCase().trim();
+            if (!title || seen.has(title)) return false;
+            seen.add(title);
+            return true;
+          });
+        }
+
+        // Save merged data back to intake
+        await supabase
+          .from("intakes")
+          .update({ extracted_data: mergedData, extraction_status: "complete" })
+          .eq("id", intake.id);
       }
 
       setProgressStep("Extraction complete! Loading review...");

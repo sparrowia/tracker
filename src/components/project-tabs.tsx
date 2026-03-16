@@ -2072,25 +2072,80 @@ function IntakePanel({
       if (insertError) throw insertError;
       intake = insertedIntake;
 
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 90_000);
+      // Split long text into chunks to avoid Vercel function timeouts
+      const CHUNK_CHAR_LIMIT = 4000;
+      const chunks: string[] = [];
+      if (combinedText.length <= CHUNK_CHAR_LIMIT) {
+        chunks.push(combinedText);
+      } else {
+        const paragraphs = combinedText.split(/\n\n+/);
+        let currentChunk = "";
+        for (const para of paragraphs) {
+          if (currentChunk.length + para.length + 2 > CHUNK_CHAR_LIMIT && currentChunk.length > 0) {
+            chunks.push(currentChunk.trim());
+            currentChunk = para;
+          } else {
+            currentChunk = currentChunk ? currentChunk + "\n\n" + para : para;
+          }
+        }
+        if (currentChunk.trim()) chunks.push(currentChunk.trim());
+      }
 
-      const response = await fetch("/api/extract", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          intake_id: intake!.id,
-          raw_text: combinedText,
-          vendor_id: vendorId && vendorId !== "none" ? vendorId : null,
-          project_id: project.id,
-        }),
-        signal: controller.signal,
-      });
-      clearTimeout(timeout);
+      const resolvedVendorId = vendorId && vendorId !== "none" ? vendorId : null;
 
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.error || "Extraction failed");
+      async function extractChunk(chunkText: string, chunkIndex: number) {
+        if (chunks.length > 1) setProgressStep(`Extracting (part ${chunkIndex + 1}/${chunks.length})...`);
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 120_000);
+        const response = await fetch("/api/extract", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            intake_id: intake!.id,
+            raw_text: chunkText,
+            vendor_id: resolvedVendorId,
+            project_id: project.id,
+          }),
+          signal: controller.signal,
+        });
+        clearTimeout(timeout);
+        if (!response.ok) {
+          const err = await response.json();
+          throw new Error(err.error || "Extraction failed");
+        }
+        return response.json();
+      }
+
+      if (chunks.length === 1) {
+        await extractChunk(chunks[0], 0);
+      } else {
+        const results = await Promise.all(chunks.map((c, i) => extractChunk(c, i)));
+        // Merge chunk results
+        const mergedData: Record<string, unknown[]> = {
+          action_items: [], decisions: [], issues: [], risks: [], blockers: [], status_updates: [], contacts: [],
+        };
+        for (const result of results) {
+          const data = result.data || {};
+          for (const key of Object.keys(mergedData)) {
+            const items = (data as Record<string, unknown[]>)[key];
+            if (Array.isArray(items)) mergedData[key].push(...items);
+          }
+        }
+        // Deduplicate by title
+        for (const key of Object.keys(mergedData)) {
+          const items = mergedData[key] as { title?: string; subject?: string }[];
+          const seen = new Set<string>();
+          mergedData[key] = items.filter((item) => {
+            const title = (item.title || item.subject || "").toLowerCase().trim();
+            if (!title || seen.has(title)) return false;
+            seen.add(title);
+            return true;
+          });
+        }
+        await supabase
+          .from("intakes")
+          .update({ extracted_data: mergedData, extraction_status: "complete" })
+          .eq("id", intake!.id);
       }
 
       const updatedIntake = { ...intake!, extraction_status: "complete" } as Intake;
