@@ -201,6 +201,8 @@ export default function IntakeReviewPage() {
   const [matchResults, setMatchResults] = useState<Record<string, MatchCandidate[]>>({});
   const [matchLoading, setMatchLoading] = useState(false);
   const [dismissedMatches, setDismissedMatches] = useState<Set<string>>(new Set());
+  const [activeTab, setActiveTab] = useState<EntityCategory | null>(null);
+  const [activeIndex, setActiveIndex] = useState(0);
   const rawTextRef = useRef<HTMLDivElement>(null);
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const editSnapshotsRef = useRef<Map<string, ExtractedItem>>(new Map());
@@ -1047,8 +1049,444 @@ export default function IntakeReviewPage() {
   const totalLinked = allAccepted.filter((i) => i._linked_to).length;
   const totalNew = totalAccepted - totalLinked;
 
+  // Categories that have items
+  const activeCats = (Object.entries(extracted) as [EntityCategory, ExtractedItem[]][])
+    .filter(([, items]) => items.length > 0)
+    .map(([cat]) => cat);
+
+  // Set initial tab when data loads
+  useEffect(() => {
+    if (activeTab === null && activeCats.length > 0) {
+      setActiveTab(activeCats[0]);
+    }
+  }, [activeCats.length]);
+
+  // Current tab items
+  const currentTabItems = activeTab ? extracted[activeTab] : [];
+  const currentItem = currentTabItems[activeIndex] || null;
+
+  // Clamp activeIndex when switching tabs
+  useEffect(() => {
+    if (activeIndex >= currentTabItems.length && currentTabItems.length > 0) {
+      setActiveIndex(currentTabItems.length - 1);
+    }
+  }, [activeTab, currentTabItems.length]);
+
+  // Render a single card for a given category and index
+  function renderCard(category: EntityCategory, idx: number, item: ExtractedItem) {
+    return (
+      <div
+        className={`rounded-lg border p-3 transition-all ${
+          item._accepted === true
+            ? "border-green-300 bg-green-50"
+            : item._accepted === false
+              ? "border-gray-200 bg-gray-100 opacity-50"
+              : categoryColors[category]
+        }`}
+      >
+        {item._editing ? (
+          /* Edit mode */
+          <div className="space-y-2">
+            {/* Type reassignment dropdown */}
+            {category !== "status_updates" && (
+              <div className="flex items-start gap-2">
+                <label className="text-xs text-gray-500 w-16 flex-shrink-0 pt-1">Type</label>
+                <select
+                  value={item._save_as || category}
+                  onChange={(e) => {
+                    const newType = e.target.value as EntityCategory;
+                    setExtracted((prev) => ({
+                      ...prev,
+                      [category]: prev[category].map((it, i) =>
+                        i === idx
+                          ? {
+                              ...it,
+                              _save_as: newType === category ? undefined : newType,
+                              _linked_to: newType !== (it._save_as || category) ? null : it._linked_to,
+                              _edited: true,
+                            }
+                          : it
+                      ),
+                    }));
+                  }}
+                  className="flex-1 text-sm text-gray-900 bg-white/60 rounded border border-gray-200 px-2 py-0.5 focus:border-blue-500 focus:outline-none"
+                >
+                  {reassignableCategories.map((cat) => (
+                    <option key={cat} value={cat}>{categoryLabels[cat]}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {((item._save_as && item._save_as !== category ? categoryFields[item._save_as] : categoryFields[category])).map((fieldDef) => {
+              const val = (item as unknown as Record<string, unknown>)[fieldDef.field] as string || "";
+              return (
+                <div key={fieldDef.field} className="flex items-start gap-2">
+                  <label className="text-xs text-gray-500 w-16 flex-shrink-0 pt-1">{fieldDef.label}</label>
+                  {fieldDef.type === "text" && (
+                    <input
+                      type="text"
+                      value={val}
+                      onChange={(e) => updateItem(category, idx, fieldDef.field, e.target.value)}
+                      className="flex-1 text-sm text-gray-900 bg-white/60 rounded border border-gray-200 px-2 py-0.5 focus:border-blue-500 focus:outline-none"
+                    />
+                  )}
+                  {fieldDef.type === "date" && (
+                    <input
+                      type="date"
+                      value={val}
+                      onChange={(e) => updateItem(category, idx, fieldDef.field, e.target.value)}
+                      className="flex-1 text-sm text-gray-900 bg-white/60 rounded border border-gray-200 px-2 py-0.5 focus:border-blue-500 focus:outline-none"
+                    />
+                  )}
+                  {fieldDef.type === "textarea" && (
+                    <textarea
+                      value={val}
+                      onChange={(e) => updateItem(category, idx, fieldDef.field, e.target.value)}
+                      rows={2}
+                      className="flex-1 text-sm text-gray-900 bg-white/60 rounded border border-gray-200 px-2 py-0.5 focus:border-blue-500 focus:outline-none resize-y"
+                    />
+                  )}
+                  {fieldDef.type === "select" && fieldDef.field === "priority" && (
+                    <select
+                      value={val}
+                      onChange={(e) => updateItem(category, idx, fieldDef.field, e.target.value)}
+                      className="flex-1 text-sm text-gray-900 bg-white/60 rounded border border-gray-200 px-2 py-0.5 focus:border-blue-500 focus:outline-none"
+                    >
+                      <option value="">—</option>
+                      {priorityOptions.map((p) => (
+                        <option key={p} value={p}>{priorityLabel(p)}</option>
+                      ))}
+                    </select>
+                  )}
+                  {fieldDef.type === "select" && fieldDef.field === "new_status" && (
+                    <select
+                      value={val}
+                      onChange={(e) => updateItem(category, idx, fieldDef.field, e.target.value)}
+                      className="flex-1 text-sm text-gray-900 bg-white/60 rounded border border-gray-200 px-2 py-0.5 focus:border-blue-500 focus:outline-none"
+                    >
+                      <option value="">—</option>
+                      {statusOptions.map((s) => (
+                        <option key={s} value={s}>{s.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase())}</option>
+                      ))}
+                    </select>
+                  )}
+                  {fieldDef.type === "person" && (() => {
+                    const isKnown = people.some((pr) => pr.full_name === val);
+                    const showInput = val && !isKnown;
+                    return (
+                      <div className="flex-1">
+                        <select
+                          value={isKnown ? val : showInput ? "__new__" : ""}
+                          onChange={(e) => {
+                            if (e.target.value === "__new__") {
+                              updateItem(category, idx, fieldDef.field, " ");
+                            } else {
+                              updateItem(category, idx, fieldDef.field, e.target.value);
+                            }
+                          }}
+                          className="w-full text-sm text-gray-900 bg-white/60 rounded border border-gray-200 px-2 py-0.5 focus:border-blue-500 focus:outline-none"
+                        >
+                          <option value="">— Unassigned —</option>
+                          {people.map((pr) => (
+                            <option key={pr.id} value={pr.full_name}>{pr.full_name}</option>
+                          ))}
+                          <option value="__new__">+ New Person</option>
+                        </select>
+                        {showInput && (
+                          <input
+                            type="text"
+                            value={val}
+                            onChange={(e) => updateItem(category, idx, fieldDef.field, e.target.value)}
+                            placeholder="Full name"
+                            className="mt-1 w-full text-sm text-gray-900 bg-white/60 rounded border border-gray-200 px-2 py-0.5 focus:border-blue-500 focus:outline-none"
+                          />
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+              );
+            })}
+
+            {/* Per-item project/vendor assignment */}
+            {category !== "status_updates" && (
+              <div className="flex items-start gap-2">
+                <label className="text-xs text-gray-500 w-16 flex-shrink-0 pt-1">Assign</label>
+                <div className="flex-1 flex gap-2">
+                  <select
+                    value={item._project_id || ""}
+                    onChange={(e) => updateItem(category, idx, "_project_id", e.target.value || "")}
+                    className="flex-1 text-xs rounded border border-gray-200 px-2 py-1 bg-white/60 focus:border-blue-500 focus:outline-none"
+                  >
+                    <option value="">No project</option>
+                    {projects.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={item._vendor_id || ""}
+                    onChange={(e) => updateItem(category, idx, "_vendor_id", e.target.value || "")}
+                    className="flex-1 text-xs rounded border border-gray-200 px-2 py-1 bg-white/60 focus:border-blue-500 focus:outline-none"
+                  >
+                    <option value="">No vendor</option>
+                    {vendors.map((v) => (
+                      <option key={v.id} value={v.id}>{v.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          /* Read-only mode */
+          <div>
+            <p className="text-sm font-medium text-gray-900">
+              {item.title || item.subject || ""}
+            </p>
+            <div className="flex gap-2 mt-1 flex-wrap">
+              {item.owner_name && (
+                <span className="text-xs text-gray-500">Owner: {item.owner_name}</span>
+              )}
+              {item.reporter_name && (
+                <span className="text-xs text-gray-500">Reporter: {item.reporter_name}</span>
+              )}
+              {item.made_by && (
+                <span className="text-xs text-gray-500">By: {item.made_by}</span>
+              )}
+              {item.priority && (
+                <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border ${priorityColor(item.priority)}`}>
+                  {priorityLabel(item.priority)}
+                </span>
+              )}
+              {item.status && item.status !== "pending" && (
+                <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border ${
+                  item.status === "complete" ? "border-green-300 bg-green-50 text-green-700" : "border-blue-300 bg-blue-50 text-blue-700"
+                }`}>
+                  {item.status === "complete" ? "Complete" : "In Progress"}
+                </span>
+              )}
+              {item.confidence && item.confidence !== "high" && (
+                <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border ${
+                  item.confidence === "low" ? "border-red-300 bg-red-50 text-red-700" : "border-yellow-300 bg-yellow-50 text-yellow-700"
+                }`}>
+                  {item.confidence} confidence
+                </span>
+              )}
+              {item.new_status && (
+                <span className="inline-flex px-1.5 py-0.5 text-xs rounded border border-gray-300 bg-gray-100 text-gray-700">
+                  {item.new_status.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase())}
+                </span>
+              )}
+              {(item.due_date || item.decision_date || item.date_reported) && (
+                <span className="text-xs text-gray-500">
+                  {item.due_date ? `Due: ${item.due_date}` : item.date_reported ? `Reported: ${item.date_reported}` : `Date: ${item.decision_date}`}
+                </span>
+              )}
+            </div>
+            {(item._project_id || item._vendor_id) && (
+              <div className="flex gap-2 mt-1 flex-wrap">
+                {item._project_id && (() => {
+                  const proj = projects.find((p) => p.id === item._project_id);
+                  return proj ? <span className="text-xs text-gray-500">Project: {proj.name}</span> : null;
+                })()}
+                {item._vendor_id && (() => {
+                  const vend = vendors.find((v) => v.id === item._vendor_id);
+                  return vend ? <span className="text-xs text-gray-500">Vendor: {vend.name}</span> : null;
+                })()}
+              </div>
+            )}
+            {(item.notes || item.impact || item.impact_description || item.rationale || item.details || item.mitigation) && (
+              <p className="text-xs text-gray-600 mt-1 whitespace-pre-line">
+                {item.notes || item.impact || item.impact_description || item.rationale || item.details || item.mitigation}
+              </p>
+            )}
+            {item.attachments && (
+              <p className="text-xs text-blue-600 mt-1 break-all">
+                {item.attachments}
+              </p>
+            )}
+            {item.updates && (
+              <div className="text-xs text-gray-500 mt-1">
+                <span className="font-medium">Updates:</span>
+                <p className="whitespace-pre-line">{item.updates}</p>
+              </div>
+            )}
+            {item._save_as && item._save_as !== category && (
+              <p className="text-xs text-blue-600 mt-1.5 font-medium">
+                → Saving as {categoryLabels[item._save_as]}
+              </p>
+            )}
+          </div>
+        )}
+        {/* Linked indicator */}
+        {item._linked_to && (
+          <div className="flex items-center gap-1.5 mt-2 text-xs text-amber-700">
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+            </svg>
+            <span className="font-medium">{(item._save_as || category) === "status_updates" ? "Will update:" : "Child of:"}</span> {item._linked_to.title}
+            {item._linked_to.project_name && (
+              <span className="inline-flex px-1 py-0.5 rounded text-[10px] bg-orange-100 text-orange-700 border border-orange-200 font-medium">
+                from {item._linked_to.project_name}
+              </span>
+            )}
+            <button
+              onClick={() => unlinkItem(category, idx)}
+              className="ml-1 text-amber-500 hover:text-amber-700 transition-colors"
+              title="Unlink"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>
+        )}
+        {/* Match suggestions */}
+        {!item._editing && matchResults[`${category}-${idx}`] && (
+          (() => {
+            const candidates = matchResults[`${category}-${idx}`].filter(
+              (c) => !dismissedMatches.has(`${category}-${idx}-${c.id}`)
+            );
+            if (candidates.length === 0) return null;
+            return (
+              <div className="ml-4 mt-2 space-y-1.5">
+                <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Possibly related</span>
+                {candidates.map((candidate) => {
+                  const isLinked = item._linked_to?.id === candidate.id;
+                  const sb = statusBadge(candidate.status as ItemStatus);
+                  return (
+                    <div
+                      key={candidate.id}
+                      className={`flex items-center gap-2 rounded border border-dashed p-2 text-xs ${
+                        isLinked ? "border-amber-400 bg-amber-50" : "border-gray-300 bg-white"
+                      }`}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-gray-800 truncate">{candidate.title}</p>
+                        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                          <span className={`inline-flex px-1 py-0.5 rounded text-[10px] ${priorityColor(candidate.priority as PriorityLevel)}`}>
+                            {priorityLabel(candidate.priority as PriorityLevel)}
+                          </span>
+                          <span className={`inline-flex px-1 py-0.5 rounded text-[10px] ${sb.className}`}>
+                            {sb.label}
+                          </span>
+                          <span className={`text-[10px] ${candidate.confidence === "high" ? "text-green-600" : "text-yellow-600"}`}>
+                            {candidate.confidence}
+                          </span>
+                          <span className="text-gray-400 text-[10px]">{candidate.reason}</span>
+                          {candidate.project_name && (
+                            <span className="inline-flex px-1 py-0.5 rounded text-[10px] bg-orange-100 text-orange-700 border border-orange-200 font-medium">
+                              {candidate.project_name}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => linkItem(category, idx, candidate)}
+                        className={`flex-shrink-0 transition-colors ${
+                          isLinked ? "text-green-600" : "text-gray-300 hover:text-green-600"
+                        }`}
+                        title="Link as update"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => dismissMatch(category, idx, candidate.id)}
+                        className="flex-shrink-0 text-gray-300 hover:text-red-500 transition-colors"
+                        title="Dismiss suggestion"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="18" y1="6" x2="6" y2="18"/>
+                          <line x1="6" y1="6" x2="18" y2="18"/>
+                        </svg>
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()
+        )}
+        <div className="flex justify-end items-center gap-2 mt-2">
+          {item._editing ? (
+            <>
+              <button
+                onClick={() => cancelEdit(category, idx)}
+                className="px-3 py-1 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => saveEdit(category, idx)}
+                className="px-3 py-1 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 transition-colors"
+              >
+                Save
+              </button>
+            </>
+          ) : (
+            <>
+              {item.source_quote && (
+                <button
+                  onClick={() => scrollToSource(item.source_quote)}
+                  className="text-gray-400 hover:text-blue-600 transition-colors"
+                  title="View source in original text"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                  </svg>
+                </button>
+              )}
+              <button
+                onClick={() => startEdit(category, idx)}
+                className="text-gray-400 hover:text-blue-600 transition-colors"
+                title="Edit"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                </svg>
+              </button>
+              <button
+                onClick={() => acceptItem(category, idx)}
+                className={`transition-colors ${
+                  item._accepted === true
+                    ? "text-green-600"
+                    : "text-gray-300 hover:text-green-600"
+                }`}
+                title="Accept"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+              </button>
+              <button
+                onClick={() => rejectItem(category, idx)}
+                className={`transition-colors ${
+                  item._accepted === false
+                    ? "text-red-500"
+                    : "text-gray-300 hover:text-red-500"
+                }`}
+                title="Reject"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"/>
+                  <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="max-w-6xl mx-auto space-y-6 pb-20">
+    <div className="max-w-3xl mx-auto space-y-6 pb-20">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Review Extraction</h1>
         <p className="text-sm text-gray-500 mt-1">
@@ -1062,492 +1500,123 @@ export default function IntakeReviewPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:items-start">
-        {/* Raw text / Import source */}
-        <div className="lg:sticky lg:top-4 lg:self-start">
-          {intake.raw_text.startsWith("[Spreadsheet Import]") ? (
-            <>
-              <h2 className="text-sm font-semibold text-gray-700 mb-2 uppercase tracking-wide">
-                Import Source
-              </h2>
-              <div className="bg-white rounded-lg border border-gray-200 p-4">
-                <div className="flex items-center gap-3">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600 flex-shrink-0">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                    <polyline points="14 2 14 8 20 8"/>
-                    <line x1="16" y1="13" x2="8" y2="13"/>
-                    <line x1="16" y1="17" x2="8" y2="17"/>
-                    <polyline points="10 9 9 9 8 9"/>
-                  </svg>
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">Spreadsheet Import</p>
-                    <p className="text-xs text-gray-500 mt-0.5">{intake.raw_text}</p>
-                  </div>
-                </div>
-              </div>
-            </>
-          ) : (
-            <>
-              <h2 className="text-sm font-semibold text-gray-700 mb-2 uppercase tracking-wide">
-                Original Text
-              </h2>
-              <div ref={rawTextRef} className="bg-white rounded-lg border border-gray-200 p-4 max-h-[600px] overflow-y-auto">
-                <pre className="text-sm text-gray-700 whitespace-pre-wrap font-mono">{highlightedQuote ? renderHighlightedText(intake.raw_text, highlightedQuote) : intake.raw_text}</pre>
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Extracted entities */}
+      {/* Category tabs */}
+      {activeCats.length > 0 && (
         <div className="space-y-4">
-          <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
-            Extracted Entities
-          </h2>
+          <div className="flex gap-1 border-b border-gray-200 overflow-x-auto">
+            {activeCats.map((cat) => {
+              const items = extracted[cat];
+              const acceptedCount = items.filter((i) => i._accepted === true).length;
+              return (
+                <button
+                  key={cat}
+                  onClick={() => { setActiveTab(cat); setActiveIndex(0); }}
+                  className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+                    activeTab === cat
+                      ? "border-blue-600 text-blue-700"
+                      : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                  }`}
+                >
+                  {categoryLabels[cat]}
+                  <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                    activeTab === cat ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-500"
+                  }`}>
+                    {acceptedCount}/{items.length}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
 
-          {matchLoading && (
-            <div className="flex items-center gap-2 text-sm text-gray-500 py-1">
-              <svg className="animate-spin h-4 w-4 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-              </svg>
-              Checking for related existing items...
+          {/* Card navigation + single card */}
+          {activeTab && currentTabItems.length > 0 && (
+            <div className="space-y-3">
+              {/* Navigation bar */}
+              <div className="flex items-center justify-between">
+                <button
+                  onClick={() => setActiveIndex((i) => Math.max(0, i - 1))}
+                  disabled={activeIndex === 0}
+                  className="p-1 rounded text-gray-500 hover:text-gray-700 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  title="Previous"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="15 18 9 12 15 6"/>
+                  </svg>
+                </button>
+                <span className="text-sm text-gray-600 font-medium">
+                  {activeIndex + 1} of {currentTabItems.length}
+                </span>
+                <button
+                  onClick={() => setActiveIndex((i) => Math.min(currentTabItems.length - 1, i + 1))}
+                  disabled={activeIndex >= currentTabItems.length - 1}
+                  className="p-1 rounded text-gray-500 hover:text-gray-700 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  title="Next"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="9 18 15 12 9 6"/>
+                  </svg>
+                </button>
+              </div>
+
+              {/* The card */}
+              {currentItem && renderCard(activeTab, activeIndex, currentItem)}
+
+              {matchLoading && (
+                <div className="flex items-center gap-2 text-sm text-gray-500 py-1">
+                  <svg className="animate-spin h-4 w-4 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                  </svg>
+                  Checking for related existing items...
+                </div>
+              )}
             </div>
           )}
-
-          {(Object.entries(extracted) as [EntityCategory, ExtractedItem[]][]).map(
-            ([category, items]) =>
-              items.length > 0 && (
-                <div key={category}>
-                  <h3 className="text-sm font-medium text-gray-700 mb-2">
-                    {categoryLabels[category]} ({items.filter((i) => i._accepted === true).length}/{items.length})
-                  </h3>
-                  <div className="space-y-2">
-                    {items.map((item, idx) => (
-                      <div
-                        key={idx}
-                        className={`rounded-lg border p-3 transition-all ${
-                          item._accepted === true
-                            ? "border-green-300 bg-green-50"
-                            : item._accepted === false
-                              ? "border-gray-200 bg-gray-100 opacity-50"
-                              : categoryColors[category]
-                        }`}
-                      >
-                        {item._editing ? (
-                          /* Edit mode */
-                          <div className="space-y-2">
-                            {/* Type reassignment dropdown */}
-                            {category !== "status_updates" && (
-                              <div className="flex items-start gap-2">
-                                <label className="text-xs text-gray-500 w-16 flex-shrink-0 pt-1">Type</label>
-                                <select
-                                  value={item._save_as || category}
-                                  onChange={(e) => {
-                                    const newType = e.target.value as EntityCategory;
-                                    setExtracted((prev) => ({
-                                      ...prev,
-                                      [category]: prev[category].map((it, i) =>
-                                        i === idx
-                                          ? {
-                                              ...it,
-                                              _save_as: newType === category ? undefined : newType,
-                                              _linked_to: newType !== (it._save_as || category) ? null : it._linked_to,
-                                              _edited: true,
-                                            }
-                                          : it
-                                      ),
-                                    }));
-                                  }}
-                                  className="flex-1 text-sm text-gray-900 bg-white/60 rounded border border-gray-200 px-2 py-0.5 focus:border-blue-500 focus:outline-none"
-                                >
-                                  {reassignableCategories.map((cat) => (
-                                    <option key={cat} value={cat}>{categoryLabels[cat]}</option>
-                                  ))}
-                                </select>
-                              </div>
-                            )}
-                            {((item._save_as && item._save_as !== category ? categoryFields[item._save_as] : categoryFields[category])).map((fieldDef) => {
-                              const val = (item as unknown as Record<string, unknown>)[fieldDef.field] as string || "";
-                              return (
-                                <div key={fieldDef.field} className="flex items-start gap-2">
-                                  <label className="text-xs text-gray-500 w-16 flex-shrink-0 pt-1">{fieldDef.label}</label>
-                                  {fieldDef.type === "text" && (
-                                    <input
-                                      type="text"
-                                      value={val}
-                                      onChange={(e) => updateItem(category, idx, fieldDef.field, e.target.value)}
-                                      className="flex-1 text-sm text-gray-900 bg-white/60 rounded border border-gray-200 px-2 py-0.5 focus:border-blue-500 focus:outline-none"
-                                    />
-                                  )}
-                                  {fieldDef.type === "date" && (
-                                    <input
-                                      type="date"
-                                      value={val}
-                                      onChange={(e) => updateItem(category, idx, fieldDef.field, e.target.value)}
-                                      className="flex-1 text-sm text-gray-900 bg-white/60 rounded border border-gray-200 px-2 py-0.5 focus:border-blue-500 focus:outline-none"
-                                    />
-                                  )}
-                                  {fieldDef.type === "textarea" && (
-                                    <textarea
-                                      value={val}
-                                      onChange={(e) => updateItem(category, idx, fieldDef.field, e.target.value)}
-                                      rows={2}
-                                      className="flex-1 text-sm text-gray-900 bg-white/60 rounded border border-gray-200 px-2 py-0.5 focus:border-blue-500 focus:outline-none resize-y"
-                                    />
-                                  )}
-                                  {fieldDef.type === "select" && fieldDef.field === "priority" && (
-                                    <select
-                                      value={val}
-                                      onChange={(e) => updateItem(category, idx, fieldDef.field, e.target.value)}
-                                      className="flex-1 text-sm text-gray-900 bg-white/60 rounded border border-gray-200 px-2 py-0.5 focus:border-blue-500 focus:outline-none"
-                                    >
-                                      <option value="">—</option>
-                                      {priorityOptions.map((p) => (
-                                        <option key={p} value={p}>{priorityLabel(p)}</option>
-                                      ))}
-                                    </select>
-                                  )}
-                                  {fieldDef.type === "select" && fieldDef.field === "new_status" && (
-                                    <select
-                                      value={val}
-                                      onChange={(e) => updateItem(category, idx, fieldDef.field, e.target.value)}
-                                      className="flex-1 text-sm text-gray-900 bg-white/60 rounded border border-gray-200 px-2 py-0.5 focus:border-blue-500 focus:outline-none"
-                                    >
-                                      <option value="">—</option>
-                                      {statusOptions.map((s) => (
-                                        <option key={s} value={s}>{s.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase())}</option>
-                                      ))}
-                                    </select>
-                                  )}
-                                  {fieldDef.type === "person" && (() => {
-                                    const isKnown = people.some((pr) => pr.full_name === val);
-                                    const showInput = val && !isKnown;
-                                    return (
-                                      <div className="flex-1">
-                                        <select
-                                          value={isKnown ? val : showInput ? "__new__" : ""}
-                                          onChange={(e) => {
-                                            if (e.target.value === "__new__") {
-                                              updateItem(category, idx, fieldDef.field, " ");
-                                            } else {
-                                              updateItem(category, idx, fieldDef.field, e.target.value);
-                                            }
-                                          }}
-                                          className="w-full text-sm text-gray-900 bg-white/60 rounded border border-gray-200 px-2 py-0.5 focus:border-blue-500 focus:outline-none"
-                                        >
-                                          <option value="">— Unassigned —</option>
-                                          {people.map((pr) => (
-                                            <option key={pr.id} value={pr.full_name}>{pr.full_name}</option>
-                                          ))}
-                                          <option value="__new__">+ New Person</option>
-                                        </select>
-                                        {showInput && (
-                                          <input
-                                            type="text"
-                                            value={val}
-                                            onChange={(e) => updateItem(category, idx, fieldDef.field, e.target.value)}
-                                            placeholder="Full name"
-                                            className="mt-1 w-full text-sm text-gray-900 bg-white/60 rounded border border-gray-200 px-2 py-0.5 focus:border-blue-500 focus:outline-none"
-                                          />
-                                        )}
-                                      </div>
-                                    );
-                                  })()}
-                                </div>
-                              );
-                            })}
-
-                            {/* Per-item project/vendor assignment */}
-                            {category !== "status_updates" && (
-                              <div className="flex items-start gap-2">
-                                <label className="text-xs text-gray-500 w-16 flex-shrink-0 pt-1">Assign</label>
-                                <div className="flex-1 flex gap-2">
-                                  <select
-                                    value={item._project_id || ""}
-                                    onChange={(e) => updateItem(category, idx, "_project_id", e.target.value || "")}
-                                    className="flex-1 text-xs rounded border border-gray-200 px-2 py-1 bg-white/60 focus:border-blue-500 focus:outline-none"
-                                  >
-                                    <option value="">No project</option>
-                                    {projects.map((p) => (
-                                      <option key={p.id} value={p.id}>{p.name}</option>
-                                    ))}
-                                  </select>
-                                  <select
-                                    value={item._vendor_id || ""}
-                                    onChange={(e) => updateItem(category, idx, "_vendor_id", e.target.value || "")}
-                                    className="flex-1 text-xs rounded border border-gray-200 px-2 py-1 bg-white/60 focus:border-blue-500 focus:outline-none"
-                                  >
-                                    <option value="">No vendor</option>
-                                    {vendors.map((v) => (
-                                      <option key={v.id} value={v.id}>{v.name}</option>
-                                    ))}
-                                  </select>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        ) : (
-                          /* Read-only mode */
-                          <div>
-                            <p className="text-sm font-medium text-gray-900">
-                              {item.title || item.subject || ""}
-                            </p>
-                            <div className="flex gap-2 mt-1 flex-wrap">
-                              {item.owner_name && (
-                                <span className="text-xs text-gray-500">Owner: {item.owner_name}</span>
-                              )}
-                              {item.reporter_name && (
-                                <span className="text-xs text-gray-500">Reporter: {item.reporter_name}</span>
-                              )}
-                              {item.made_by && (
-                                <span className="text-xs text-gray-500">By: {item.made_by}</span>
-                              )}
-                              {item.priority && (
-                                <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border ${priorityColor(item.priority)}`}>
-                                  {priorityLabel(item.priority)}
-                                </span>
-                              )}
-                              {item.status && item.status !== "pending" && (
-                                <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border ${
-                                  item.status === "complete" ? "border-green-300 bg-green-50 text-green-700" : "border-blue-300 bg-blue-50 text-blue-700"
-                                }`}>
-                                  {item.status === "complete" ? "Complete" : "In Progress"}
-                                </span>
-                              )}
-                              {item.confidence && item.confidence !== "high" && (
-                                <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border ${
-                                  item.confidence === "low" ? "border-red-300 bg-red-50 text-red-700" : "border-yellow-300 bg-yellow-50 text-yellow-700"
-                                }`}>
-                                  {item.confidence} confidence
-                                </span>
-                              )}
-                              {item.new_status && (
-                                <span className="inline-flex px-1.5 py-0.5 text-xs rounded border border-gray-300 bg-gray-100 text-gray-700">
-                                  {item.new_status.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase())}
-                                </span>
-                              )}
-                              {(item.due_date || item.decision_date || item.date_reported) && (
-                                <span className="text-xs text-gray-500">
-                                  {item.due_date ? `Due: ${item.due_date}` : item.date_reported ? `Reported: ${item.date_reported}` : `Date: ${item.decision_date}`}
-                                </span>
-                              )}
-                            </div>
-                            {(item._project_id || item._vendor_id) && (
-                              <div className="flex gap-2 mt-1 flex-wrap">
-                                {item._project_id && (() => {
-                                  const proj = projects.find((p) => p.id === item._project_id);
-                                  return proj ? <span className="text-xs text-gray-500">Project: {proj.name}</span> : null;
-                                })()}
-                                {item._vendor_id && (() => {
-                                  const vend = vendors.find((v) => v.id === item._vendor_id);
-                                  return vend ? <span className="text-xs text-gray-500">Vendor: {vend.name}</span> : null;
-                                })()}
-                              </div>
-                            )}
-                            {(item.notes || item.impact || item.impact_description || item.rationale || item.details || item.mitigation) && (
-                              <p className="text-xs text-gray-600 mt-1 whitespace-pre-line">
-                                {item.notes || item.impact || item.impact_description || item.rationale || item.details || item.mitigation}
-                              </p>
-                            )}
-                            {item.attachments && (
-                              <p className="text-xs text-blue-600 mt-1 break-all">
-                                {item.attachments}
-                              </p>
-                            )}
-                            {item.updates && (
-                              <div className="text-xs text-gray-500 mt-1">
-                                <span className="font-medium">Updates:</span>
-                                <p className="whitespace-pre-line">{item.updates}</p>
-                              </div>
-                            )}
-                            {item._save_as && item._save_as !== category && (
-                              <p className="text-xs text-blue-600 mt-1.5 font-medium">
-                                → Saving as {categoryLabels[item._save_as]}
-                              </p>
-                            )}
-                          </div>
-                        )}
-                        {/* Linked indicator */}
-                        {item._linked_to && (
-                          <div className="flex items-center gap-1.5 mt-2 text-xs text-amber-700">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
-                              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
-                            </svg>
-                            <span className="font-medium">{(item._save_as || category) === "status_updates" ? "Will update:" : "Child of:"}</span> {item._linked_to.title}
-                            {item._linked_to.project_name && (
-                              <span className="inline-flex px-1 py-0.5 rounded text-[10px] bg-orange-100 text-orange-700 border border-orange-200 font-medium">
-                                from {item._linked_to.project_name}
-                              </span>
-                            )}
-                            <button
-                              onClick={() => unlinkItem(category, idx)}
-                              className="ml-1 text-amber-500 hover:text-amber-700 transition-colors"
-                              title="Unlink"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                <line x1="18" y1="6" x2="6" y2="18"/>
-                                <line x1="6" y1="6" x2="18" y2="18"/>
-                              </svg>
-                            </button>
-                          </div>
-                        )}
-                        {/* Match suggestions */}
-                        {!item._editing && matchResults[`${category}-${idx}`] && (
-                          (() => {
-                            const candidates = matchResults[`${category}-${idx}`].filter(
-                              (c) => !dismissedMatches.has(`${category}-${idx}-${c.id}`)
-                            );
-                            if (candidates.length === 0) return null;
-                            return (
-                              <div className="ml-4 mt-2 space-y-1.5">
-                                <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Possibly related</span>
-                                {candidates.map((candidate) => {
-                                  const isLinked = item._linked_to?.id === candidate.id;
-                                  const sb = statusBadge(candidate.status as ItemStatus);
-                                  return (
-                                    <div
-                                      key={candidate.id}
-                                      className={`flex items-center gap-2 rounded border border-dashed p-2 text-xs ${
-                                        isLinked ? "border-amber-400 bg-amber-50" : "border-gray-300 bg-white"
-                                      }`}
-                                    >
-                                      <div className="flex-1 min-w-0">
-                                        <p className="font-medium text-gray-800 truncate">{candidate.title}</p>
-                                        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                                          <span className={`inline-flex px-1 py-0.5 rounded text-[10px] ${priorityColor(candidate.priority as PriorityLevel)}`}>
-                                            {priorityLabel(candidate.priority as PriorityLevel)}
-                                          </span>
-                                          <span className={`inline-flex px-1 py-0.5 rounded text-[10px] ${sb.className}`}>
-                                            {sb.label}
-                                          </span>
-                                          <span className={`text-[10px] ${candidate.confidence === "high" ? "text-green-600" : "text-yellow-600"}`}>
-                                            {candidate.confidence}
-                                          </span>
-                                          <span className="text-gray-400 text-[10px]">{candidate.reason}</span>
-                                          {candidate.project_name && (
-                                            <span className="inline-flex px-1 py-0.5 rounded text-[10px] bg-orange-100 text-orange-700 border border-orange-200 font-medium">
-                                              {candidate.project_name}
-                                            </span>
-                                          )}
-                                        </div>
-                                      </div>
-                                      <button
-                                        onClick={() => linkItem(category, idx, candidate)}
-                                        className={`flex-shrink-0 transition-colors ${
-                                          isLinked ? "text-green-600" : "text-gray-300 hover:text-green-600"
-                                        }`}
-                                        title="Link as update"
-                                      >
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                          <polyline points="20 6 9 17 4 12"/>
-                                        </svg>
-                                      </button>
-                                      <button
-                                        onClick={() => dismissMatch(category, idx, candidate.id)}
-                                        className="flex-shrink-0 text-gray-300 hover:text-red-500 transition-colors"
-                                        title="Dismiss suggestion"
-                                      >
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                          <line x1="18" y1="6" x2="6" y2="18"/>
-                                          <line x1="6" y1="6" x2="18" y2="18"/>
-                                        </svg>
-                                      </button>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            );
-                          })()
-                        )}
-                        <div className="flex justify-end items-center gap-2 mt-2">
-                          {item._editing ? (
-                            <>
-                              <button
-                                onClick={() => cancelEdit(category, idx)}
-                                className="px-3 py-1 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded hover:bg-gray-50 transition-colors"
-                              >
-                                Cancel
-                              </button>
-                              <button
-                                onClick={() => saveEdit(category, idx)}
-                                className="px-3 py-1 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 transition-colors"
-                              >
-                                Save
-                              </button>
-                            </>
-                          ) : (
-                            <>
-                              {item.source_quote && (
-                                <button
-                                  onClick={() => scrollToSource(item.source_quote)}
-                                  className="text-gray-400 hover:text-blue-600 transition-colors"
-                                  title="View source in original text"
-                                >
-                                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                                    <circle cx="12" cy="12" r="3"/>
-                                  </svg>
-                                </button>
-                              )}
-                              <button
-                                onClick={() => startEdit(category, idx)}
-                                className="text-gray-400 hover:text-blue-600 transition-colors"
-                                title="Edit"
-                              >
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                                </svg>
-                              </button>
-                              <button
-                                onClick={() => acceptItem(category, idx)}
-                                className={`transition-colors ${
-                                  item._accepted === true
-                                    ? "text-green-600"
-                                    : "text-gray-300 hover:text-green-600"
-                                }`}
-                                title="Accept"
-                              >
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                  <polyline points="20 6 9 17 4 12"/>
-                                </svg>
-                              </button>
-                              <button
-                                onClick={() => rejectItem(category, idx)}
-                                className={`transition-colors ${
-                                  item._accepted === false
-                                    ? "text-red-500"
-                                    : "text-gray-300 hover:text-red-500"
-                                }`}
-                                title="Reject"
-                              >
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                  <line x1="18" y1="6" x2="6" y2="18"/>
-                                  <line x1="6" y1="6" x2="18" y2="18"/>
-                                </svg>
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )
-          )}
-
-          {totalItems === 0 && (
-            <p className="text-sm text-gray-500">
-              No entities were extracted from the text.
-            </p>
-          )}
         </div>
-      </div>
+      )}
+
+      {totalItems === 0 && (
+        <p className="text-sm text-gray-500">
+          No entities were extracted from the text.
+        </p>
+      )}
+
+      {/* Raw text / Import source — below the card */}
+      {intake.raw_text.startsWith("[Spreadsheet Import]") ? (
+        <div>
+          <h2 className="text-sm font-semibold text-gray-700 mb-2 uppercase tracking-wide">
+            Import Source
+          </h2>
+          <div className="bg-white rounded-lg border border-gray-200 p-4">
+            <div className="flex items-center gap-3">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600 flex-shrink-0">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <line x1="16" y1="13" x2="8" y2="13"/>
+                <line x1="16" y1="17" x2="8" y2="17"/>
+                <polyline points="10 9 9 9 8 9"/>
+              </svg>
+              <div>
+                <p className="text-sm font-medium text-gray-900">Spreadsheet Import</p>
+                <p className="text-xs text-gray-500 mt-0.5">{intake.raw_text}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div>
+          <h2 className="text-sm font-semibold text-gray-700 mb-2 uppercase tracking-wide">
+            Original Text
+          </h2>
+          <div ref={rawTextRef} className="bg-white rounded-lg border border-gray-200 p-4 max-h-[600px] overflow-y-auto">
+            <pre className="text-sm text-gray-700 whitespace-pre-wrap font-mono">{highlightedQuote ? renderHighlightedText(intake.raw_text, highlightedQuote) : intake.raw_text}</pre>
+          </div>
+        </div>
+      )}
 
       {totalAccepted > 0 && (
         <div className="fixed bottom-0 left-0 md:left-56 right-0 bg-gray-50 border-t border-gray-200 px-6 py-4 z-10">
-          <div className="max-w-6xl mx-auto flex justify-between items-center">
+          <div className="max-w-3xl mx-auto flex justify-between items-center">
             <p className="text-sm text-gray-600">
               {totalLinked > 0
                 ? `${totalNew} new, ${totalLinked} update${totalLinked !== 1 ? "s" : ""}`
