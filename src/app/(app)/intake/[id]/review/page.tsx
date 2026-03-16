@@ -414,7 +414,10 @@ export default function IntakeReviewPage() {
     loadData();
   }, [intakeId]);
 
+  const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   function acceptItem(category: EntityCategory, index: number, autoAdvance = false) {
+    if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current);
     setExtracted((prev) => ({
       ...prev,
       [category]: prev[category].map((item, i) =>
@@ -424,12 +427,13 @@ export default function IntakeReviewPage() {
     if (autoAdvance) {
       const items = extracted[category];
       if (index < items.length - 1) {
-        setActiveIndex(index + 1);
+        advanceTimerRef.current = setTimeout(() => setActiveIndex(index + 1), 400);
       }
     }
   }
 
   function rejectItem(category: EntityCategory, index: number, autoAdvance = false) {
+    if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current);
     setExtracted((prev) => ({
       ...prev,
       [category]: prev[category].map((item, i) =>
@@ -439,7 +443,7 @@ export default function IntakeReviewPage() {
     if (autoAdvance) {
       const items = extracted[category];
       if (index < items.length - 1) {
-        setActiveIndex(index + 1);
+        advanceTimerRef.current = setTimeout(() => setActiveIndex(index + 1), 400);
       }
     }
   }
@@ -1227,11 +1231,11 @@ export default function IntakeReviewPage() {
   function renderCard(category: EntityCategory, idx: number, item: ExtractedItem) {
     return (
       <div
-        className={`rounded-lg border p-3 transition-all ${
+        className={`rounded-lg border p-3 transition-all duration-300 ${
           item._accepted === true
-            ? "border-green-300 bg-green-50"
+            ? "border-green-300 bg-green-100"
             : item._accepted === false
-              ? "border-gray-200 bg-gray-100 opacity-50"
+              ? "border-gray-300 bg-gray-200 opacity-50"
               : categoryColors[category]
         }`}
       >
