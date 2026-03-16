@@ -85,7 +85,7 @@ Rules:
 - Extract only what's explicitly stated or clearly implied
 - Use full names when possible. When the text mentions someone by first name, last name, or nickname, match them to the Known People list and output the FULL name from the list. If multiple people share a first name, use context to disambiguate or output just the first name
 - Infer priority from language (urgent, ASAP, critical = high/critical; when possible = low)
-- Dates should be in YYYY-MM-DD format
+- Dates should be in YYYY-MM-DD format. IMPORTANT: Use the current year provided in the context, NOT 2025 or any training-data year
 - Keep titles concise but descriptive
 - ONE action per item. Never combine multiple tasks into a single action item. If a sentence describes multiple steps or assigns work to multiple people, split them into separate action items each with their own owner. Do NOT create summary/rollup items that restate what individual items already cover
 - action_items.status: "pending" = not yet started or no evidence of completion; "in_progress" = partially done or being worked on; "complete" = the action was fulfilled later in the thread (e.g. requested info was provided, task was done). Default to "pending" if unclear

@@ -108,14 +108,37 @@ export async function POST(request: Request) {
     const sourceHint = SOURCE_HINTS[source] || SOURCE_HINTS.manual;
 
     // Compose full system prompt (skip few-shot example for transcripts to reduce token count)
+    const today = new Date().toISOString().split("T")[0];
+    const currentYear = new Date().getFullYear();
     const fullPrompt =
       EXTRACT_SYSTEM_PROMPT +
+      `\n\nCRITICAL: Today's date is ${today}. The current year is ${currentYear}. All dates you generate MUST use ${currentYear} unless the text explicitly states a different year. NEVER use 2025.` +
       sourceHint +
       buildContextPrompt(ctx) +
       buildTermCorrectionsPrompt(ctx.termCorrections) +
       (skipFewShot ? "" : "\n\n" + FEW_SHOT_EXAMPLE);
 
     const result = await callDeepSeek({ system: fullPrompt, user: processedText });
+
+    // Post-process: fix dates with wrong year (common AI mistake)
+    if (result.ok) {
+      const data = result.data as Record<string, Record<string, unknown>[]>;
+      for (const items of Object.values(data)) {
+        if (!Array.isArray(items)) continue;
+        for (const item of items) {
+          for (const field of ["due_date", "decision_date", "date_reported"]) {
+            const val = item[field] as string | null;
+            if (val && /^\d{4}-\d{2}-\d{2}$/.test(val)) {
+              const year = parseInt(val.slice(0, 4));
+              // If the year is in the past and within 1 year of current, fix it
+              if (year < currentYear && currentYear - year <= 2) {
+                item[field] = `${currentYear}${val.slice(4)}`;
+              }
+            }
+          }
+        }
+      }
+    }
 
     if (!result.ok) {
       await supabase.from("intakes").update({ extraction_status: "failed" }).eq("id", intake_id);
