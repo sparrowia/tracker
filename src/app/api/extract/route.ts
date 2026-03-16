@@ -59,53 +59,61 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, data: extracted });
     }
 
-    // Pre-process: extract Fathom ACTION ITEMs deterministically and clean up transcript
+    // Pre-process: extract Fathom ACTION ITEMs deterministically and compress transcript
     let processedText = raw_text;
     const preExtracted: { action_items: Record<string, unknown>[] } = { action_items: [] };
 
-    // Detect Fathom transcript format (timestamps like "0:00 - Speaker Name" or "29:27 - Speaker")
+    // Detect Fathom/meeting transcript format (timestamps like "0:00 - Speaker Name")
     const isFathomTranscript = /^\d+:\d+\s*[-–—]\s*.+/m.test(raw_text);
+    let skipFewShot = false;
 
     if (isFathomTranscript) {
-      // Extract embedded ACTION ITEMs from Fathom
+      // Extract embedded ACTION ITEMs from Fathom deterministically
       const actionItemRegex = /^\s*ACTION ITEM:\s*(.+?)(?:\s*[-–—]\s*WATCH:.*)?$/gm;
       let match;
       while ((match = actionItemRegex.exec(raw_text)) !== null) {
-        preExtracted.action_items.push({
-          title: match[1].trim().replace(/\s*[-–—]\s*WATCH:.*$/, "").trim(),
-          priority: "medium",
-          status: "pending",
-          confidence: "high",
-          source_quote: match[0].trim().slice(0, 80),
-        });
+        const title = match[1].trim().replace(/\s*[-–—]\s*WATCH:.*$/, "").trim();
+        if (title) {
+          preExtracted.action_items.push({
+            title,
+            priority: "medium",
+            status: "pending",
+            confidence: "high",
+            source_quote: match[0].trim().slice(0, 80),
+          });
+        }
       }
 
-      // Strip ACTION ITEM lines and WATCH URLs from text sent to AI
+      // Aggressively compress the transcript for AI processing
       processedText = processedText
+        // Remove ACTION ITEM lines and WATCH URLs
         .replace(/^\s*ACTION ITEM:.*$/gm, "")
-        .replace(/\s*[-–—]\s*WATCH:\s*https?:\/\/\S+/g, "");
+        .replace(/\s*[-–—]\s*WATCH:\s*https?:\/\/\S+/g, "")
+        // Remove header / video URLs
+        .replace(/^VIEW RECORDING.*$/gm, "")
+        .replace(/https?:\/\/fathom\.video\S*/g, "")
+        .replace(/https?:\/\/\S+/g, "") // Strip all remaining URLs
+        // Remove "---" separator lines
+        .replace(/^-{2,}\s*$/gm, "")
+        // Collapse timestamp + speaker into compact format: "Speaker: text"
+        .replace(/^\d+:\d+\s*[-–—]\s*(.+)\n/gm, "$1: ");
 
-      // Strip the header (VIEW RECORDING line, video URL)
-      processedText = processedText.replace(/^VIEW RECORDING.*$/gm, "");
-      processedText = processedText.replace(/https?:\/\/fathom\.video\S*/g, "");
+      // Remove excessive whitespace
+      processedText = processedText.replace(/\n{3,}/g, "\n\n").replace(/  +/g, " ").trim();
 
-      // Condense: remove minute:second timestamps, keep "Speaker Name:" format
-      processedText = processedText.replace(/^\d+:\d+\s*[-–—]\s*/gm, "");
-
-      // Remove excessive blank lines
-      processedText = processedText.replace(/\n{3,}/g, "\n\n").trim();
+      // Skip few-shot example for transcripts — the source hint is sufficient and saves ~500 tokens
+      skipFewShot = true;
     }
 
     const sourceHint = SOURCE_HINTS[source] || SOURCE_HINTS.manual;
 
-    // Compose full system prompt
+    // Compose full system prompt (skip few-shot example for transcripts to reduce token count)
     const fullPrompt =
       EXTRACT_SYSTEM_PROMPT +
       sourceHint +
       buildContextPrompt(ctx) +
       buildTermCorrectionsPrompt(ctx.termCorrections) +
-      "\n\n" +
-      FEW_SHOT_EXAMPLE;
+      (skipFewShot ? "" : "\n\n" + FEW_SHOT_EXAMPLE);
 
     const result = await callDeepSeek({ system: fullPrompt, user: processedText });
 
