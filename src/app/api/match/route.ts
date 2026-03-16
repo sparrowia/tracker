@@ -113,50 +113,143 @@ export async function POST(request: Request) {
       return NextResponse.json({ matches: {} });
     }
 
-    const scopeNote = scopeProjectId
-      ? "Note: Items are scoped to the same project. Matching should be more aggressive within the same project context."
-      : scopeVendorId
-        ? "Note: Items are scoped to the same vendor. Matching should be more aggressive within the same vendor context."
-        : "";
+    // --- Phase 1: Text-based matching (fast, reliable) ---
+    const STOP_WORDS = new Set(["the", "a", "an", "to", "of", "in", "for", "on", "is", "it", "and", "or", "be", "do", "we", "us", "so", "if", "at", "by", "up", "as", "no", "not", "with", "that", "this", "from", "will", "can", "has", "have", "been", "are", "was", "were"]);
 
-    const userContent = `${scopeNote ? scopeNote + "\n\n" : ""}NEWLY EXTRACTED:\n${extractedLines.join("\n")}\n\nEXISTING ITEMS:\n${existingLines.join("\n")}`;
-
-    const result = await callDeepSeek<{ matches: Record<string, { existing_id: string; confidence: string; reason: string }[]> }>({
-      system: MATCH_SYSTEM_PROMPT,
-      user: userContent,
-    });
-
-    if (!result.ok) {
-      return NextResponse.json({ matches: {} });
+    function tokenize(text: string): string[] {
+      return text.toLowerCase()
+        .replace(/[^a-z0-9\s]/g, " ")
+        .split(/\s+/)
+        .filter((w) => w.length > 1 && !STOP_WORDS.has(w));
     }
 
-    const rawMatches = result.data.matches || {};
+    function wordOverlapScore(tokensA: string[], tokensB: string[]): number {
+      if (tokensA.length === 0 || tokensB.length === 0) return 0;
+      const setB = new Set(tokensB);
+      const overlap = tokensA.filter((w) => setB.has(w)).length;
+      return overlap / Math.max(tokensA.length, tokensB.length);
+    }
 
-    // Enrich matches with existing item data
-    const enriched: Record<string, { existing_id: string; existing_table: string; title: string; status: string; priority: string; raid_type?: string; project_name?: string; confidence: string; reason: string }[]> = {};
+    function substringMatch(extracted: string, existing: string): boolean {
+      const eLower = extracted.toLowerCase();
+      const xLower = existing.toLowerCase();
+      // Check if any significant word from existing appears as a substring in extracted title
+      const xWords = tokenize(existing).filter((w) => w.length >= 4);
+      return xWords.some((w) => eLower.includes(w)) || xLower.includes(eLower.split(" ")[0] || "___");
+    }
 
-    for (const [key, candidates] of Object.entries(rawMatches)) {
-      const enrichedCandidates = [];
-      for (const c of candidates) {
-        const existing = existingMap.get(c.existing_id);
-        if (existing) {
-          // Flag if from a different project than the intake
-          const fromDifferentProject = scopeProjectId && existing.project_id && existing.project_id !== scopeProjectId;
-          enrichedCandidates.push({
-            existing_id: c.existing_id,
-            existing_table: existing.table,
-            title: existing.title,
-            status: existing.status,
-            priority: existing.priority,
-            raid_type: existing.raid_type,
-            project_name: fromDifferentProject ? existing.project_name : undefined,
-            confidence: c.confidence,
-            reason: c.reason,
-          });
+    type EnrichedMatch = { existing_id: string; existing_table: string; title: string; status: string; priority: string; raid_type?: string; project_name?: string; confidence: string; reason: string };
+    const enriched: Record<string, EnrichedMatch[]> = {};
+    const textMatchedKeys = new Set<string>();
+
+    const existingEntries = Array.from(existingMap.entries());
+
+    for (const cat of categories) {
+      const items = extracted[cat] || [];
+      items.forEach((item, idx) => {
+        const key = `${cat}-${idx}`;
+        const extractedTitle = (item.title || item.subject || "").trim();
+        if (!extractedTitle) return;
+
+        const extractedTokens = tokenize(extractedTitle);
+        const extractedNotes = tokenize(item.notes || item.impact || item.impact_description || item.details || "");
+        const allExtractedTokens = [...extractedTokens, ...extractedNotes];
+        const candidates: EnrichedMatch[] = [];
+
+        for (const [existingId, existing] of existingEntries) {
+          const existingTokens = tokenize(existing.title);
+
+          // Score: word overlap on title
+          const titleScore = wordOverlapScore(extractedTokens, existingTokens);
+          // Score: word overlap including notes
+          const broadScore = wordOverlapScore(allExtractedTokens, existingTokens);
+          // Substring match bonus
+          const hasSubstring = substringMatch(extractedTitle, existing.title);
+
+          const finalScore = Math.max(titleScore, broadScore * 0.8) + (hasSubstring ? 0.15 : 0);
+
+          if (finalScore >= 0.25) {
+            const fromDifferentProject = scopeProjectId && existing.project_id && existing.project_id !== scopeProjectId;
+            const confidence = finalScore >= 0.5 ? "high" : "medium";
+            const reason = titleScore >= 0.4 ? "title match"
+              : hasSubstring ? "keyword match"
+              : "related terms";
+
+            candidates.push({
+              existing_id: existingId,
+              existing_table: existing.table,
+              title: existing.title,
+              status: existing.status,
+              priority: existing.priority,
+              raid_type: existing.raid_type,
+              project_name: fromDifferentProject ? existing.project_name : undefined,
+              confidence,
+              reason,
+            });
+          }
         }
-      }
-      if (enrichedCandidates.length > 0) {
-        enriched[key] = enrichedCandidates;
+
+        // Sort by score (re-compute for sort), take top 3
+        if (candidates.length > 0) {
+          candidates.sort((a, b) => {
+            const scoreA = wordOverlapScore(extractedTokens, tokenize(a.title)) + (substringMatch(extractedTitle, a.title) ? 0.15 : 0);
+            const scoreB = wordOverlapScore(extractedTokens, tokenize(b.title)) + (substringMatch(extractedTitle, b.title) ? 0.15 : 0);
+            return scoreB - scoreA;
+          });
+          enriched[key] = candidates.slice(0, 3);
+          textMatchedKeys.add(key);
+        }
+      });
+    }
+
+    // --- Phase 2: AI matching for remaining unmatched items (if any) ---
+    const unmatchedLines = extractedLines.filter((line) => {
+      const key = line.split(":")[0];
+      return !textMatchedKeys.has(key);
+    });
+
+    if (unmatchedLines.length > 0 && existingLines.length > 0) {
+      try {
+        const scopeNote = scopeProjectId
+          ? "Note: Items are scoped to the same project."
+          : scopeVendorId ? "Note: Items are scoped to the same vendor." : "";
+
+        const userContent = `${scopeNote ? scopeNote + "\n\n" : ""}NEWLY EXTRACTED:\n${unmatchedLines.join("\n")}\n\nEXISTING ITEMS:\n${existingLines.join("\n")}`;
+
+        const result = await callDeepSeek<{ matches: Record<string, { existing_id: string; confidence: string; reason: string }[]> }>({
+          system: MATCH_SYSTEM_PROMPT,
+          user: userContent,
+        });
+
+        if (result.ok) {
+          const rawMatches = result.data.matches || {};
+          for (const [key, candidates] of Object.entries(rawMatches)) {
+            if (enriched[key]) continue; // text match already found something
+            const aiCandidates: EnrichedMatch[] = [];
+            for (const c of candidates) {
+              const existing = existingMap.get(c.existing_id);
+              if (existing) {
+                const fromDifferentProject = scopeProjectId && existing.project_id && existing.project_id !== scopeProjectId;
+                aiCandidates.push({
+                  existing_id: c.existing_id,
+                  existing_table: existing.table,
+                  title: existing.title,
+                  status: existing.status,
+                  priority: existing.priority,
+                  raid_type: existing.raid_type,
+                  project_name: fromDifferentProject ? existing.project_name : undefined,
+                  confidence: c.confidence,
+                  reason: c.reason,
+                });
+              }
+            }
+            if (aiCandidates.length > 0) {
+              enriched[key] = aiCandidates;
+            }
+          }
+        }
+      } catch {
+        // AI matching is supplementary — silently fail
       }
     }
 
