@@ -205,6 +205,10 @@ export default function IntakeReviewPage() {
   const [activeTab, setActiveTab] = useState<EntityCategory | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const [editingTitleKey, setEditingTitleKey] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<MatchCandidate[]>([]);
+  const [searchOpen, setSearchOpen] = useState<string | false>(false);
+  const [searching, setSearching] = useState(false);
 
   // Set initial tab when extracted data changes
   useEffect(() => {
@@ -531,6 +535,36 @@ export default function IntakeReviewPage() {
         i === index ? { ...item, _linked_to: null, _link_action: undefined } : item
       ),
     }));
+  }
+
+  async function searchExistingItems(query: string) {
+    if (!query.trim() || !orgId) return;
+    setSearching(true);
+    const q = query.trim().toLowerCase();
+    const results: MatchCandidate[] = [];
+
+    // Search action_items, blockers, raid_entries by title (case-insensitive)
+    const [{ data: actions }, { data: blockers }, { data: raids }] = await Promise.all([
+      supabase.from("action_items").select("id, title, status, priority, project:projects(name)").eq("org_id", orgId).ilike("title", `%${q}%`).limit(10),
+      supabase.from("blockers").select("id, title, status, priority, project:projects(name)").eq("org_id", orgId).ilike("title", `%${q}%`).limit(10),
+      supabase.from("raid_entries").select("id, title, status, priority, raid_type, project:projects(name)").eq("org_id", orgId).ilike("title", `%${q}%`).limit(10),
+    ]);
+
+    for (const a of (actions || [])) {
+      const pn = Array.isArray(a.project) ? a.project[0]?.name : (a.project as { name: string } | null)?.name;
+      results.push({ table: "action_items", id: a.id, title: a.title, status: a.status, priority: a.priority, confidence: "high", reason: "manual search", project_name: pn || undefined });
+    }
+    for (const b of (blockers || [])) {
+      const pn = Array.isArray(b.project) ? b.project[0]?.name : (b.project as { name: string } | null)?.name;
+      results.push({ table: "blockers", id: b.id, title: b.title, status: b.status, priority: b.priority, confidence: "high", reason: "manual search", project_name: pn || undefined });
+    }
+    for (const r of (raids || [])) {
+      const pn = Array.isArray(r.project) ? r.project[0]?.name : (r.project as { name: string } | null)?.name;
+      results.push({ table: "raid_entries", id: r.id, title: r.title, status: r.status, priority: r.priority, raid_type: r.raid_type, confidence: "high", reason: "manual search", project_name: pn || undefined });
+    }
+
+    setSearchResults(results);
+    setSearching(false);
   }
 
   function dismissMatch(category: EntityCategory, index: number, existingId: string) {
@@ -1696,6 +1730,80 @@ export default function IntakeReviewPage() {
               </div>
             );
           })()
+        )}
+        {/* Manual search for related items */}
+        {!item._editing && (
+          <div className="mt-2 pt-2 border-t border-gray-100">
+            {searchOpen === `${category}-${idx}` ? (
+              <div className="space-y-1.5">
+                <div className="flex gap-1.5">
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") searchExistingItems(searchQuery); if (e.key === "Escape") { setSearchOpen(false); setSearchQuery(""); setSearchResults([]); } }}
+                    placeholder="Search existing items..."
+                    autoFocus
+                    className="flex-1 text-xs rounded border border-gray-300 px-2 py-1 focus:border-blue-500 focus:outline-none"
+                  />
+                  <button
+                    onClick={() => searchExistingItems(searchQuery)}
+                    disabled={searching || !searchQuery.trim()}
+                    className="px-2 py-1 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {searching ? "..." : "Search"}
+                  </button>
+                  <button
+                    onClick={() => { setSearchOpen(false); setSearchQuery(""); setSearchResults([]); }}
+                    className="px-2 py-1 text-xs text-gray-500 hover:text-gray-700"
+                  >
+                    Cancel
+                  </button>
+                </div>
+                {searchResults.length > 0 && (
+                  <div className="space-y-1 max-h-40 overflow-y-auto">
+                    {searchResults.map((result) => {
+                      const isLinked = item._linked_to?.id === result.id;
+                      const sb = statusBadge(result.status as ItemStatus);
+                      return (
+                        <div key={result.id} className={`flex items-center gap-2 rounded border p-1.5 text-xs ${isLinked ? "border-amber-400 bg-amber-50" : "border-gray-200 bg-white"}`}>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-gray-800 truncate">{result.title}</p>
+                            <div className="flex items-center gap-1 mt-0.5">
+                              <span className={`inline-flex px-1 py-0.5 rounded text-[10px] ${priorityColor(result.priority as PriorityLevel)}`}>
+                                {priorityLabel(result.priority as PriorityLevel)}
+                              </span>
+                              <span className={`inline-flex px-1 py-0.5 rounded text-[10px] ${sb.className}`}>{sb.label}</span>
+                              {result.raid_type && <span className="text-[10px] text-gray-400">{result.raid_type}</span>}
+                              {result.project_name && <span className="text-[10px] text-orange-600">{result.project_name}</span>}
+                            </div>
+                          </div>
+                          <div className="flex gap-1 flex-shrink-0">
+                            <button onClick={() => { linkItem(category, idx, result, "update"); setSearchOpen(false); setSearchQuery(""); setSearchResults([]); }}
+                              className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600 hover:bg-blue-50 hover:text-blue-700">Update</button>
+                            <button onClick={() => { linkItem(category, idx, result, "replace"); setSearchOpen(false); setSearchQuery(""); setSearchResults([]); }}
+                              className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600 hover:bg-amber-50 hover:text-amber-700">Replace</button>
+                            <button onClick={() => { linkItem(category, idx, result, "child"); setSearchOpen(false); setSearchQuery(""); setSearchResults([]); }}
+                              className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600 hover:bg-green-50 hover:text-green-700">Child</button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {searchResults.length === 0 && searchQuery && !searching && (
+                  <p className="text-[10px] text-gray-400">No results. Try a different keyword.</p>
+                )}
+              </div>
+            ) : (
+              <button
+                onClick={() => { setSearchOpen(`${category}-${idx}`); setSearchQuery(""); setSearchResults([]); }}
+                className="text-[10px] text-blue-600 hover:text-blue-700 font-medium"
+              >
+                + Link to existing item
+              </button>
+            )}
+          </div>
         )}
         <div className="flex justify-end items-center gap-2 mt-2">
           {item._editing ? (
