@@ -48,6 +48,7 @@ interface ExtractedItem {
   _project_id?: string | null;
   _vendor_id?: string | null;
   _linked_to?: MatchCandidate | null;
+  _link_action?: "update" | "replace" | "child";
   _save_as?: EntityCategory;
 }
 
@@ -514,11 +515,11 @@ export default function IntakeReviewPage() {
     }));
   }
 
-  function linkItem(category: EntityCategory, index: number, candidate: MatchCandidate) {
+  function linkItem(category: EntityCategory, index: number, candidate: MatchCandidate, action: "update" | "replace" | "child") {
     setExtracted((prev) => ({
       ...prev,
       [category]: prev[category].map((item, i) =>
-        i === index ? { ...item, _linked_to: candidate, _accepted: true } : item
+        i === index ? { ...item, _linked_to: candidate, _link_action: action, _accepted: true } : item
       ),
     }));
   }
@@ -527,7 +528,7 @@ export default function IntakeReviewPage() {
     setExtracted((prev) => ({
       ...prev,
       [category]: prev[category].map((item, i) =>
-        i === index ? { ...item, _linked_to: null } : item
+        i === index ? { ...item, _linked_to: null, _link_action: undefined } : item
       ),
     }));
   }
@@ -644,13 +645,13 @@ export default function IntakeReviewPage() {
       const byEffectiveType: Record<EntityCategory, ExtractedItem[]> = {
         action_items: [], decisions: [], issues: [], risks: [], blockers: [], status_updates: [],
       };
-      // Linked items get created as children/cross-references, not updates
-      const linkedItems: { item: ExtractedItem; cat: EntityCategory; linkedTo: MatchCandidate }[] = [];
+      // Linked items — action determined by _link_action
+      const linkedItems: { item: ExtractedItem; cat: EntityCategory; linkedTo: MatchCandidate; action: "update" | "replace" | "child" }[] = [];
       for (const [cat, items] of Object.entries(extracted) as [EntityCategory, ExtractedItem[]][]) {
         for (const item of items) {
           if (item._accepted !== true) continue;
           if (item._linked_to) {
-            linkedItems.push({ item, cat, linkedTo: item._linked_to });
+            linkedItems.push({ item, cat, linkedTo: item._linked_to, action: item._link_action || "child" });
             continue;
           }
           const effectiveType = item._save_as || cat;
@@ -804,12 +805,11 @@ export default function IntakeReviewPage() {
         throw batchErr;
       }
 
-      // Create linked items as children of existing items (preserving both)
+      // Process linked items based on _link_action: update, replace, or child
       const errors: string[] = [];
-      for (const { item, cat, linkedTo } of linkedItems) {
+      for (const { item, cat, linkedTo, action } of linkedItems) {
         const effectiveCat = item._save_as || cat;
         const today = new Date().toISOString().split("T")[0];
-        const parentRef = `Related to: ${linkedTo.title}`;
 
         // Validate that the linked parent item actually exists in the DB
         const { data: parentExists } = await supabase
@@ -819,7 +819,7 @@ export default function IntakeReviewPage() {
           .maybeSingle();
 
         if (!parentExists) {
-          // Parent doesn't exist — create as standalone item instead (batch inserts already ran, so insert inline)
+          // Parent doesn't exist — create as standalone item instead
           console.warn(`[Confirm] Linked parent "${linkedTo.title}" (${linkedTo.id}) not found in ${linkedTo.table}, creating as standalone`);
           try {
             if (effectiveCat === "action_items") {
@@ -849,8 +849,6 @@ export default function IntakeReviewPage() {
               if (effectiveCat === "issues") {
                 if (item.reporter_name) descParts.push(`Reporter: ${item.reporter_name}`);
                 if (item.notes) descParts.push(item.notes);
-                if (item.updates) descParts.push(`--- Updates ---\n${item.updates}`);
-                if (item.attachments) descParts.push(`--- Screenshots/Videos ---\n${item.attachments}`);
               } else if (effectiveCat === "decisions") {
                 if (item.rationale) descParts.push(item.rationale);
               } else {
@@ -859,15 +857,12 @@ export default function IntakeReviewPage() {
               if (!descParts.length && (item.notes || item.details)) descParts.push(item.notes || item.details || "");
               const { error: err } = await supabase.from("raid_entries").insert({
                 org_id: orgId, raid_type: raidType, display_id: `${prefix}${(count || 0) + 1}`,
-                title: item.title || item.subject,
-                description: descParts.join("\n\n") || null,
+                title: item.title || item.subject, description: descParts.join("\n\n") || null,
                 impact: (effectiveCat === "issues" || effectiveCat === "risks") ? (item.impact || item.impact_description || null) : undefined,
                 owner_id: findPersonId(item.made_by || item.owner_name),
-                reporter_id: effectiveCat === "issues" ? (findPersonId(item.reporter_name) || null) : undefined,
                 project_id: item._project_id || null, vendor_id: item._vendor_id || null,
-                decision_date: effectiveCat === "decisions" ? (item.decision_date || null) : undefined,
-                first_flagged_at: item.decision_date || item.date_reported || today,
                 priority: item.priority || "medium", created_by: profileId,
+                first_flagged_at: item.decision_date || item.date_reported || today,
               });
               if (err) errors.push(`Create standalone ${item.title}: ${err.message}`);
             }
@@ -878,42 +873,94 @@ export default function IntakeReviewPage() {
         }
 
         try {
-          // Status updates: update status on parent + add details as a comment by "UPDATES"
-          if (effectiveCat === "status_updates") {
+          // --- UPDATE action: merge non-empty fields into existing, add notes as comment ---
+          if (action === "update" || effectiveCat === "status_updates") {
             const payload: Record<string, unknown> = {};
-            if (item.new_status) payload.status = item.new_status;
-            const { error: err } = await supabase.from(linkedTo.table).update(payload).eq("id", linkedTo.id);
-            if (err) errors.push(`Status update ${linkedTo.title}: ${err.message}`);
+            const ownerId = findPersonId(item.owner_name || item.made_by);
 
-            // Add details as a comment authored by the "UPDATES" system person
-            const statusDetails = item.details || item.notes || null;
-            if (statusDetails) {
-              // Find or create the UPDATES person
-              let updatesPersonId: string | null = null;
-              const { data: existing } = await supabase
-                .from("people").select("id").eq("org_id", orgId).eq("full_name", "UPDATES").maybeSingle();
-              if (existing) {
-                updatesPersonId = existing.id;
-              } else {
-                const { data: created } = await supabase
-                  .from("people").insert({ org_id: orgId, full_name: "UPDATES", is_internal: true }).select("id").single();
-                if (created) updatesPersonId = created.id;
-              }
+            if (linkedTo.table === "action_items") {
+              if (ownerId) payload.owner_id = ownerId;
+              if (item.priority) payload.priority = item.priority;
+              if (item.due_date) payload.due_date = item.due_date;
+              if (item.status || item.new_status) payload.status = item.new_status || item.status;
+            } else if (linkedTo.table === "blockers") {
+              if (ownerId) payload.owner_id = ownerId;
+              if (item.priority) payload.priority = item.priority;
+              if (item.status || item.new_status) payload.status = item.new_status || item.status;
+            } else if (linkedTo.table === "raid_entries") {
+              if (ownerId) payload.owner_id = ownerId;
+              if (item.priority) payload.priority = item.priority;
+              if (item.status || item.new_status) payload.status = item.new_status || item.status;
+            }
 
+            if (Object.keys(payload).length > 0) {
+              const { error: err } = await supabase.from(linkedTo.table).update(payload).eq("id", linkedTo.id);
+              if (err) errors.push(`Update ${linkedTo.title}: ${err.message}`);
+            }
+
+            // Add extracted notes/details as a comment
+            const noteText = item.notes || item.details || item.rationale || item.impact || item.impact_description || item.mitigation || null;
+            if (noteText) {
+              // Find or create the person who authored this
+              const authorPersonId = findPersonId(item.owner_name || item.made_by);
               const commentPayload: Record<string, unknown> = {
-                org_id: orgId,
-                body: statusDetails,
-                author_id: updatesPersonId,
+                org_id: orgId, body: noteText, author_id: authorPersonId,
               };
               if (linkedTo.table === "action_items") commentPayload.action_item_id = linkedTo.id;
               else if (linkedTo.table === "blockers") commentPayload.blocker_id = linkedTo.id;
               else if (linkedTo.table === "raid_entries") commentPayload.raid_entry_id = linkedTo.id;
-
               const { error: commentErr } = await supabase.from("comments").insert(commentPayload);
               if (commentErr) errors.push(`Comment on ${linkedTo.title}: ${commentErr.message}`);
             }
             continue;
           }
+
+          // --- REPLACE action: overwrite existing item with extracted values ---
+          if (action === "replace") {
+            const ownerId = findPersonId(item.owner_name || item.made_by);
+            const noteText = item.notes || item.details || item.rationale || item.impact_description || item.mitigation || null;
+
+            if (linkedTo.table === "action_items") {
+              const { error: err } = await supabase.from("action_items").update({
+                title: item.title || item.subject,
+                owner_id: ownerId,
+                priority: item.priority || "medium",
+                status: item.status || item.new_status || "pending",
+                due_date: item.due_date || null,
+                notes: noteText,
+                vendor_id: item._vendor_id || null,
+                project_id: item._project_id || null,
+              }).eq("id", linkedTo.id);
+              if (err) errors.push(`Replace ${linkedTo.title}: ${err.message}`);
+            } else if (linkedTo.table === "blockers") {
+              const { error: err } = await supabase.from("blockers").update({
+                title: item.title || item.subject,
+                owner_id: ownerId,
+                priority: item.priority || "high",
+                status: item.status || item.new_status || "pending",
+                impact_description: item.impact_description || item.impact || noteText,
+                vendor_id: item._vendor_id || null,
+                project_id: item._project_id || null,
+              }).eq("id", linkedTo.id);
+              if (err) errors.push(`Replace ${linkedTo.title}: ${err.message}`);
+            } else if (linkedTo.table === "raid_entries") {
+              const { error: err } = await supabase.from("raid_entries").update({
+                title: item.title || item.subject,
+                owner_id: ownerId,
+                priority: item.priority || "medium",
+                status: item.status || item.new_status || "pending",
+                description: noteText,
+                impact: item.impact || item.impact_description || null,
+                vendor_id: item._vendor_id || null,
+                project_id: item._project_id || null,
+              }).eq("id", linkedTo.id);
+              if (err) errors.push(`Replace ${linkedTo.title}: ${err.message}`);
+            }
+            continue;
+          }
+
+          // --- CHILD action: create as new child/subtask linked to existing ---
+          const parentRef = `Related to: ${linkedTo.title}`;
 
           // For all other types: create as a new item, with parent link where possible
           if (effectiveCat === "action_items") {
@@ -1506,22 +1553,29 @@ export default function IntakeReviewPage() {
             )}
           </div>
         )}
-        {/* Linked indicator */}
+        {/* Linked indicator with action label */}
         {item._linked_to && (
           <div className="flex items-center gap-1.5 mt-2 text-xs text-amber-700">
             <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
               <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
             </svg>
-            <span className="font-medium">{(item._save_as || category) === "status_updates" ? "Will update:" : "Child of:"}</span> {item._linked_to.title}
+            <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium ${
+              item._link_action === "update" ? "bg-blue-100 text-blue-700" :
+              item._link_action === "replace" ? "bg-amber-100 text-amber-700" :
+              "bg-green-100 text-green-700"
+            }`}>
+              {item._link_action === "update" ? "Will update" : item._link_action === "replace" ? "Will replace" : "Add as child"}
+            </span>
+            <span className="truncate">{item._linked_to.title}</span>
             {item._linked_to.project_name && (
-              <span className="inline-flex px-1 py-0.5 rounded text-[10px] bg-orange-100 text-orange-700 border border-orange-200 font-medium">
-                from {item._linked_to.project_name}
+              <span className="inline-flex px-1 py-0.5 rounded text-[10px] bg-orange-100 text-orange-700 border border-orange-200 font-medium flex-shrink-0">
+                {item._linked_to.project_name}
               </span>
             )}
             <button
               onClick={() => unlinkItem(category, idx)}
-              className="ml-1 text-amber-500 hover:text-amber-700 transition-colors"
+              className="ml-1 text-amber-500 hover:text-amber-700 transition-colors flex-shrink-0"
               title="Unlink"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -1544,6 +1598,7 @@ export default function IntakeReviewPage() {
                 <div className="mt-1.5 space-y-0">
                   {candidates.map((candidate, cIdx) => {
                     const isLinked = item._linked_to?.id === candidate.id;
+                    const linkAction = isLinked ? item._link_action : undefined;
                     const sb = statusBadge(candidate.status as ItemStatus);
                     const isLast = cIdx === candidates.length - 1;
                     return (
@@ -1557,47 +1612,82 @@ export default function IntakeReviewPage() {
                           {!isLast && <div className="w-px bg-gray-300 flex-1" />}
                         </div>
                         {/* Related card */}
-                        <div className={`flex-1 flex items-center gap-2 rounded border p-2 text-xs mb-1 ${
+                        <div className={`flex-1 rounded border p-2 text-xs mb-1 ${
                           isLinked ? "border-amber-400 bg-amber-50" : "border-gray-200 bg-white"
                         }`}>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-gray-800 truncate">{candidate.title}</p>
-                            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                              <span className={`inline-flex px-1 py-0.5 rounded text-[10px] ${priorityColor(candidate.priority as PriorityLevel)}`}>
-                                {priorityLabel(candidate.priority as PriorityLevel)}
-                              </span>
-                              <span className={`inline-flex px-1 py-0.5 rounded text-[10px] ${sb.className}`}>
-                                {sb.label}
-                              </span>
-                              <span className="text-gray-400 text-[10px]">{candidate.reason}</span>
-                              {candidate.project_name && (
-                                <span className="inline-flex px-1 py-0.5 rounded text-[10px] bg-orange-100 text-orange-700 border border-orange-200 font-medium">
-                                  {candidate.project_name}
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-gray-800 truncate">{candidate.title}</p>
+                              <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                                <span className={`inline-flex px-1 py-0.5 rounded text-[10px] ${priorityColor(candidate.priority as PriorityLevel)}`}>
+                                  {priorityLabel(candidate.priority as PriorityLevel)}
                                 </span>
-                              )}
+                                <span className={`inline-flex px-1 py-0.5 rounded text-[10px] ${sb.className}`}>
+                                  {sb.label}
+                                </span>
+                                <span className="text-gray-400 text-[10px]">{candidate.reason}</span>
+                                {candidate.project_name && (
+                                  <span className="inline-flex px-1 py-0.5 rounded text-[10px] bg-orange-100 text-orange-700 border border-orange-200 font-medium">
+                                    {candidate.project_name}
+                                  </span>
+                                )}
+                              </div>
                             </div>
+                            <button
+                              onClick={() => dismissMatch(category, idx, candidate.id)}
+                              className="flex-shrink-0 text-gray-300 hover:text-red-500 transition-colors"
+                              title="Dismiss suggestion"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <line x1="18" y1="6" x2="6" y2="18"/>
+                                <line x1="6" y1="6" x2="18" y2="18"/>
+                              </svg>
+                            </button>
                           </div>
-                          <button
-                            onClick={() => linkItem(category, idx, candidate)}
-                            className={`flex-shrink-0 transition-colors ${
-                              isLinked ? "text-green-600" : "text-gray-300 hover:text-green-600"
-                            }`}
-                            title="Link as update"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                              <polyline points="20 6 9 17 4 12"/>
-                            </svg>
-                          </button>
-                          <button
-                            onClick={() => dismissMatch(category, idx, candidate.id)}
-                            className="flex-shrink-0 text-gray-300 hover:text-red-500 transition-colors"
-                            title="Dismiss suggestion"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                              <line x1="18" y1="6" x2="6" y2="18"/>
-                              <line x1="6" y1="6" x2="18" y2="18"/>
-                            </svg>
-                          </button>
+                          {/* Action buttons */}
+                          <div className="flex items-center gap-1.5 mt-2 pt-1.5 border-t border-gray-100">
+                            <button
+                              onClick={() => linkItem(category, idx, candidate, "update")}
+                              className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
+                                linkAction === "update"
+                                  ? "bg-blue-600 text-white"
+                                  : "bg-gray-100 text-gray-600 hover:bg-blue-50 hover:text-blue-700"
+                              }`}
+                              title="Merge new info into existing item (fills blanks, adds notes as comment)"
+                            >
+                              Update
+                            </button>
+                            <button
+                              onClick={() => linkItem(category, idx, candidate, "replace")}
+                              className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
+                                linkAction === "replace"
+                                  ? "bg-amber-600 text-white"
+                                  : "bg-gray-100 text-gray-600 hover:bg-amber-50 hover:text-amber-700"
+                              }`}
+                              title="Overwrite existing item with extracted values"
+                            >
+                              Replace
+                            </button>
+                            <button
+                              onClick={() => linkItem(category, idx, candidate, "child")}
+                              className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
+                                linkAction === "child"
+                                  ? "bg-green-600 text-white"
+                                  : "bg-gray-100 text-gray-600 hover:bg-green-50 hover:text-green-700"
+                              }`}
+                              title="Create as new child/subtask of existing item"
+                            >
+                              Add as Child
+                            </button>
+                            {isLinked && (
+                              <button
+                                onClick={() => unlinkItem(category, idx)}
+                                className="ml-auto text-[10px] text-gray-400 hover:text-red-500 transition-colors"
+                              >
+                                Unlink
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     );
@@ -1839,7 +1929,12 @@ export default function IntakeReviewPage() {
           <div className="max-w-3xl mx-auto flex justify-between items-center">
             <p className="text-sm text-gray-600">
               {totalLinked > 0
-                ? `${totalNew} new, ${totalLinked} update${totalLinked !== 1 ? "s" : ""}`
+                ? [
+                    totalNew > 0 && `${totalNew} new`,
+                    allAccepted.filter((i) => i._link_action === "update").length > 0 && `${allAccepted.filter((i) => i._link_action === "update").length} update${allAccepted.filter((i) => i._link_action === "update").length !== 1 ? "s" : ""}`,
+                    allAccepted.filter((i) => i._link_action === "replace").length > 0 && `${allAccepted.filter((i) => i._link_action === "replace").length} replace`,
+                    allAccepted.filter((i) => i._link_action === "child").length > 0 && `${allAccepted.filter((i) => i._link_action === "child").length} child`,
+                  ].filter(Boolean).join(", ")
                 : `${totalAccepted} items will be created`}
             </p>
             <div className="flex gap-3">
