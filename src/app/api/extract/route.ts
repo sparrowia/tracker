@@ -59,6 +59,43 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, data: extracted });
     }
 
+    // Pre-process: extract Fathom ACTION ITEMs deterministically and clean up transcript
+    let processedText = raw_text;
+    const preExtracted: { action_items: Record<string, unknown>[] } = { action_items: [] };
+
+    // Detect Fathom transcript format (timestamps like "0:00 - Speaker Name" or "29:27 - Speaker")
+    const isFathomTranscript = /^\d+:\d+\s*[-–—]\s*.+/m.test(raw_text);
+
+    if (isFathomTranscript) {
+      // Extract embedded ACTION ITEMs from Fathom
+      const actionItemRegex = /^\s*ACTION ITEM:\s*(.+?)(?:\s*[-–—]\s*WATCH:.*)?$/gm;
+      let match;
+      while ((match = actionItemRegex.exec(raw_text)) !== null) {
+        preExtracted.action_items.push({
+          title: match[1].trim().replace(/\s*[-–—]\s*WATCH:.*$/, "").trim(),
+          priority: "medium",
+          status: "pending",
+          confidence: "high",
+          source_quote: match[0].trim().slice(0, 80),
+        });
+      }
+
+      // Strip ACTION ITEM lines and WATCH URLs from text sent to AI
+      processedText = processedText
+        .replace(/^\s*ACTION ITEM:.*$/gm, "")
+        .replace(/\s*[-–—]\s*WATCH:\s*https?:\/\/\S+/g, "");
+
+      // Strip the header (VIEW RECORDING line, video URL)
+      processedText = processedText.replace(/^VIEW RECORDING.*$/gm, "");
+      processedText = processedText.replace(/https?:\/\/fathom\.video\S*/g, "");
+
+      // Condense: remove minute:second timestamps, keep "Speaker Name:" format
+      processedText = processedText.replace(/^\d+:\d+\s*[-–—]\s*/gm, "");
+
+      // Remove excessive blank lines
+      processedText = processedText.replace(/\n{3,}/g, "\n\n").trim();
+    }
+
     const sourceHint = SOURCE_HINTS[source] || SOURCE_HINTS.manual;
 
     // Compose full system prompt
@@ -70,15 +107,31 @@ export async function POST(request: Request) {
       "\n\n" +
       FEW_SHOT_EXAMPLE;
 
-    const result = await callDeepSeek({ system: fullPrompt, user: raw_text });
+    const result = await callDeepSeek({ system: fullPrompt, user: processedText });
 
     if (!result.ok) {
       await supabase.from("intakes").update({ extraction_status: "failed" }).eq("id", intake_id);
       return NextResponse.json({ error: result.error }, { status: result.status });
     }
 
+    // Merge pre-extracted Fathom items with AI results
+    const extracted = result.data as Record<string, { source_quote?: string; title?: string }[]>;
+    if (preExtracted.action_items.length > 0) {
+      if (!extracted.action_items) extracted.action_items = [];
+      // Add pre-extracted items, dedup by title
+      const existingTitles = new Set(
+        (extracted.action_items || []).map((i) => (i.title || "").toLowerCase().trim())
+      );
+      for (const item of preExtracted.action_items) {
+        const title = ((item.title as string) || "").toLowerCase().trim();
+        if (!existingTitles.has(title)) {
+          extracted.action_items.push(item as { source_quote?: string; title?: string });
+          existingTitles.add(title);
+        }
+      }
+    }
+
     // Post-process: validate and repair source_quotes
-    const extracted = result.data as Record<string, { source_quote?: string }[]>;
     const lowerText = raw_text.toLowerCase();
     for (const items of Object.values(extracted)) {
       if (!Array.isArray(items)) continue;
