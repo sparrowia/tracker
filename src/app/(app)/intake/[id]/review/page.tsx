@@ -1244,81 +1244,130 @@ export default function IntakeReviewPage() {
             )}
           </div>
         ) : (
-          /* Read-only mode */
-          <div>
-            <p className="text-sm font-medium text-gray-900">
+          /* Read-only detail view */
+          <div className="space-y-2">
+            <p className="text-sm font-semibold text-gray-900">
               {item.title || item.subject || ""}
             </p>
-            <div className="flex gap-2 mt-1 flex-wrap">
-              {item.owner_name && (
-                <span className="text-xs text-gray-500">Owner: {item.owner_name}</span>
+
+            {/* Property grid */}
+            <div className="grid grid-cols-[100px_1fr] gap-x-3 gap-y-1 text-xs">
+              {/* Owner — inline editable */}
+              {(category === "action_items" || category === "issues" || category === "blockers") && (
+                <>
+                  <span className="text-gray-500 py-0.5">Owner</span>
+                  <select
+                    value={item.owner_name || ""}
+                    onChange={(e) => updateItem(category, idx, "owner_name", e.target.value)}
+                    className="text-xs text-gray-900 bg-white rounded border border-gray-200 px-1.5 py-0.5 focus:border-blue-500 focus:outline-none"
+                  >
+                    <option value="">— Unassigned —</option>
+                    {people.map((pr) => (
+                      <option key={pr.id} value={pr.full_name}>{pr.full_name}</option>
+                    ))}
+                  </select>
+                </>
+              )}
+              {category === "decisions" && (
+                <>
+                  <span className="text-gray-500 py-0.5">Made By</span>
+                  <select
+                    value={item.made_by || ""}
+                    onChange={(e) => updateItem(category, idx, "made_by", e.target.value)}
+                    className="text-xs text-gray-900 bg-white rounded border border-gray-200 px-1.5 py-0.5 focus:border-blue-500 focus:outline-none"
+                  >
+                    <option value="">— Unassigned —</option>
+                    {people.map((pr) => (
+                      <option key={pr.id} value={pr.full_name}>{pr.full_name}</option>
+                    ))}
+                  </select>
+                </>
               )}
               {item.reporter_name && (
-                <span className="text-xs text-gray-500">Reporter: {item.reporter_name}</span>
-              )}
-              {item.made_by && (
-                <span className="text-xs text-gray-500">By: {item.made_by}</span>
+                <>
+                  <span className="text-gray-500">Reporter</span>
+                  <span className="text-gray-700">{item.reporter_name}</span>
+                </>
               )}
               {item.priority && (
-                <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border ${priorityColor(item.priority)}`}>
-                  {priorityLabel(item.priority)}
-                </span>
+                <>
+                  <span className="text-gray-500">Priority</span>
+                  <span className={`inline-flex px-1.5 py-0.5 rounded border w-fit ${priorityColor(item.priority)}`}>
+                    {priorityLabel(item.priority)}
+                  </span>
+                </>
               )}
-              {item.status && item.status !== "pending" && (
-                <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border ${
-                  item.status === "complete" ? "border-green-300 bg-green-50 text-green-700" : "border-blue-300 bg-blue-50 text-blue-700"
-                }`}>
-                  {item.status === "complete" ? "Complete" : "In Progress"}
-                </span>
-              )}
-              {item.confidence && item.confidence !== "high" && (
-                <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border ${
-                  item.confidence === "low" ? "border-red-300 bg-red-50 text-red-700" : "border-yellow-300 bg-yellow-50 text-yellow-700"
-                }`}>
-                  {item.confidence} confidence
-                </span>
+              {item.status && (
+                <>
+                  <span className="text-gray-500">Status</span>
+                  <span className={`inline-flex px-1.5 py-0.5 rounded w-fit ${statusBadge(item.status as ItemStatus).className}`}>
+                    {statusBadge(item.status as ItemStatus).label}
+                  </span>
+                </>
               )}
               {item.new_status && (
-                <span className="inline-flex px-1.5 py-0.5 text-xs rounded border border-gray-300 bg-gray-100 text-gray-700">
-                  {item.new_status.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase())}
-                </span>
+                <>
+                  <span className="text-gray-500">New Status</span>
+                  <span className="inline-flex px-1.5 py-0.5 rounded border border-gray-300 bg-gray-100 text-gray-700 w-fit">
+                    {item.new_status.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase())}
+                  </span>
+                </>
+              )}
+              {item.confidence && item.confidence !== "high" && (
+                <>
+                  <span className="text-gray-500">Confidence</span>
+                  <span className={`inline-flex px-1.5 py-0.5 rounded border w-fit ${
+                    item.confidence === "low" ? "border-red-300 bg-red-50 text-red-700" : "border-yellow-300 bg-yellow-50 text-yellow-700"
+                  }`}>
+                    {item.confidence}
+                  </span>
+                </>
               )}
               {(item.due_date || item.decision_date || item.date_reported) && (
-                <span className="text-xs text-gray-500">
-                  {item.due_date ? `Due: ${item.due_date}` : item.date_reported ? `Reported: ${item.date_reported}` : `Date: ${item.decision_date}`}
-                </span>
+                <>
+                  <span className="text-gray-500">{item.due_date ? "Due Date" : item.date_reported ? "Reported" : "Date"}</span>
+                  <span className="text-gray-700">{item.due_date || item.date_reported || item.decision_date}</span>
+                </>
               )}
+              {item._project_id && (() => {
+                const proj = projects.find((p) => p.id === item._project_id);
+                return proj ? (
+                  <>
+                    <span className="text-gray-500">Project</span>
+                    <span className="text-gray-700">{proj.name}</span>
+                  </>
+                ) : null;
+              })()}
+              {item._vendor_id && (() => {
+                const vend = vendors.find((v) => v.id === item._vendor_id);
+                return vend ? (
+                  <>
+                    <span className="text-gray-500">Vendor</span>
+                    <span className="text-gray-700">{vend.name}</span>
+                  </>
+                ) : null;
+              })()}
             </div>
-            {(item._project_id || item._vendor_id) && (
-              <div className="flex gap-2 mt-1 flex-wrap">
-                {item._project_id && (() => {
-                  const proj = projects.find((p) => p.id === item._project_id);
-                  return proj ? <span className="text-xs text-gray-500">Project: {proj.name}</span> : null;
-                })()}
-                {item._vendor_id && (() => {
-                  const vend = vendors.find((v) => v.id === item._vendor_id);
-                  return vend ? <span className="text-xs text-gray-500">Vendor: {vend.name}</span> : null;
-                })()}
+
+            {/* Detail text fields */}
+            {(item.notes || item.impact || item.impact_description || item.rationale || item.details || item.mitigation) && (
+              <div className="border-t border-gray-200 pt-2 mt-2">
+                <p className="text-xs text-gray-600 whitespace-pre-line">
+                  {item.notes || item.impact || item.impact_description || item.rationale || item.details || item.mitigation}
+                </p>
               </div>
             )}
-            {(item.notes || item.impact || item.impact_description || item.rationale || item.details || item.mitigation) && (
-              <p className="text-xs text-gray-600 mt-1 whitespace-pre-line">
-                {item.notes || item.impact || item.impact_description || item.rationale || item.details || item.mitigation}
-              </p>
-            )}
             {item.attachments && (
-              <p className="text-xs text-blue-600 mt-1 break-all">
-                {item.attachments}
-              </p>
+              <p className="text-xs text-blue-600 break-all">{item.attachments}</p>
             )}
             {item.updates && (
-              <div className="text-xs text-gray-500 mt-1">
+              <div className="text-xs text-gray-500">
                 <span className="font-medium">Updates:</span>
                 <p className="whitespace-pre-line">{item.updates}</p>
               </div>
             )}
             {item._save_as && item._save_as !== category && (
-              <p className="text-xs text-blue-600 mt-1.5 font-medium">
+              <p className="text-xs text-blue-600 font-medium">
                 → Saving as {categoryLabels[item._save_as]}
               </p>
             )}
@@ -1349,7 +1398,7 @@ export default function IntakeReviewPage() {
             </button>
           </div>
         )}
-        {/* Match suggestions */}
+        {/* Match suggestions — tree lines connecting to parent card */}
         {!item._editing && matchResults[`${category}-${idx}`] && (
           (() => {
             const candidates = matchResults[`${category}-${idx}`].filter(
@@ -1357,62 +1406,70 @@ export default function IntakeReviewPage() {
             );
             if (candidates.length === 0) return null;
             return (
-              <div className="ml-4 mt-2 space-y-1.5">
+              <div className="mt-3 pt-2 border-t border-gray-200">
                 <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Possibly related</span>
-                {candidates.map((candidate) => {
-                  const isLinked = item._linked_to?.id === candidate.id;
-                  const sb = statusBadge(candidate.status as ItemStatus);
-                  return (
-                    <div
-                      key={candidate.id}
-                      className={`flex items-center gap-2 rounded border border-dashed p-2 text-xs ${
-                        isLinked ? "border-amber-400 bg-amber-50" : "border-gray-300 bg-white"
-                      }`}
-                    >
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-gray-800 truncate">{candidate.title}</p>
-                        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                          <span className={`inline-flex px-1 py-0.5 rounded text-[10px] ${priorityColor(candidate.priority as PriorityLevel)}`}>
-                            {priorityLabel(candidate.priority as PriorityLevel)}
-                          </span>
-                          <span className={`inline-flex px-1 py-0.5 rounded text-[10px] ${sb.className}`}>
-                            {sb.label}
-                          </span>
-                          <span className={`text-[10px] ${candidate.confidence === "high" ? "text-green-600" : "text-yellow-600"}`}>
-                            {candidate.confidence}
-                          </span>
-                          <span className="text-gray-400 text-[10px]">{candidate.reason}</span>
-                          {candidate.project_name && (
-                            <span className="inline-flex px-1 py-0.5 rounded text-[10px] bg-orange-100 text-orange-700 border border-orange-200 font-medium">
-                              {candidate.project_name}
-                            </span>
-                          )}
+                <div className="mt-1.5 space-y-0">
+                  {candidates.map((candidate, cIdx) => {
+                    const isLinked = item._linked_to?.id === candidate.id;
+                    const sb = statusBadge(candidate.status as ItemStatus);
+                    const isLast = cIdx === candidates.length - 1;
+                    return (
+                      <div key={candidate.id} className="flex">
+                        {/* Tree connector */}
+                        <div className="flex flex-col items-center w-6 flex-shrink-0">
+                          <div className={`w-px bg-gray-300 ${isLast ? "h-3" : "flex-1"}`} />
+                          <div className="flex items-center">
+                            <div className="w-3 h-px bg-gray-300" />
+                          </div>
+                          {!isLast && <div className="w-px bg-gray-300 flex-1" />}
+                        </div>
+                        {/* Related card */}
+                        <div className={`flex-1 flex items-center gap-2 rounded border p-2 text-xs mb-1 ${
+                          isLinked ? "border-amber-400 bg-amber-50" : "border-gray-200 bg-white"
+                        }`}>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-gray-800 truncate">{candidate.title}</p>
+                            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                              <span className={`inline-flex px-1 py-0.5 rounded text-[10px] ${priorityColor(candidate.priority as PriorityLevel)}`}>
+                                {priorityLabel(candidate.priority as PriorityLevel)}
+                              </span>
+                              <span className={`inline-flex px-1 py-0.5 rounded text-[10px] ${sb.className}`}>
+                                {sb.label}
+                              </span>
+                              <span className="text-gray-400 text-[10px]">{candidate.reason}</span>
+                              {candidate.project_name && (
+                                <span className="inline-flex px-1 py-0.5 rounded text-[10px] bg-orange-100 text-orange-700 border border-orange-200 font-medium">
+                                  {candidate.project_name}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => linkItem(category, idx, candidate)}
+                            className={`flex-shrink-0 transition-colors ${
+                              isLinked ? "text-green-600" : "text-gray-300 hover:text-green-600"
+                            }`}
+                            title="Link as update"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                          </button>
+                          <button
+                            onClick={() => dismissMatch(category, idx, candidate.id)}
+                            className="flex-shrink-0 text-gray-300 hover:text-red-500 transition-colors"
+                            title="Dismiss suggestion"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <line x1="18" y1="6" x2="6" y2="18"/>
+                              <line x1="6" y1="6" x2="18" y2="18"/>
+                            </svg>
+                          </button>
                         </div>
                       </div>
-                      <button
-                        onClick={() => linkItem(category, idx, candidate)}
-                        className={`flex-shrink-0 transition-colors ${
-                          isLinked ? "text-green-600" : "text-gray-300 hover:text-green-600"
-                        }`}
-                        title="Link as update"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="20 6 9 17 4 12"/>
-                        </svg>
-                      </button>
-                      <button
-                        onClick={() => dismissMatch(category, idx, candidate.id)}
-                        className="flex-shrink-0 text-gray-300 hover:text-red-500 transition-colors"
-                        title="Dismiss suggestion"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                          <line x1="18" y1="6" x2="6" y2="18"/>
-                          <line x1="6" y1="6" x2="18" y2="18"/>
-                        </svg>
-                      </button>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
             );
           })()
@@ -1537,20 +1594,20 @@ export default function IntakeReviewPage() {
           {/* Card navigation + single card */}
           {activeTab && currentTabItems.length > 0 && (
             <div className="space-y-3">
-              {/* Navigation bar */}
-              <div className="flex items-center justify-between">
+              {/* Navigation bar — right-aligned with arrows flanking counter */}
+              <div className="flex items-center justify-end gap-1">
                 <button
                   onClick={() => setActiveIndex((i) => Math.max(0, i - 1))}
                   disabled={activeIndex === 0}
                   className="p-1 rounded text-gray-500 hover:text-gray-700 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                   title="Previous"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="15 18 9 12 15 6"/>
                   </svg>
                 </button>
-                <span className="text-sm text-gray-600 font-medium">
-                  {activeIndex + 1} of {currentTabItems.length}
+                <span className="text-sm text-gray-500 tabular-nums px-1">
+                  {activeIndex + 1} / {currentTabItems.length}
                 </span>
                 <button
                   onClick={() => setActiveIndex((i) => Math.min(currentTabItems.length - 1, i + 1))}
@@ -1558,7 +1615,7 @@ export default function IntakeReviewPage() {
                   className="p-1 rounded text-gray-500 hover:text-gray-700 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                   title="Next"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="9 18 15 12 9 6"/>
                   </svg>
                 </button>
