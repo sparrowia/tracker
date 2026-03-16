@@ -92,20 +92,21 @@ export async function POST(request: Request) {
       return (item.project as { name: string }).name || undefined;
     }
 
+    const closedStatuses = new Set(["complete", "closed", "mitigated"]);
     for (const a of (actions || [])) {
-      const closed = a.status === "complete" ? " [CLOSED]" : "";
-      existingLines.push(`[A] ${a.id}: "${a.title}" (${a.status}, ${a.priority})${closed}`);
+      if (closedStatuses.has(a.status)) continue;
+      existingLines.push(`[A] ${a.id}: "${a.title}" (${a.status}, ${a.priority})`);
       existingMap.set(a.id, { title: a.title, status: a.status, priority: a.priority, table: "action_items", project_id: a.project_id, project_name: projectName(a) });
     }
     for (const b of (blockers || [])) {
-      const closed = b.resolved_at ? " [CLOSED]" : "";
-      existingLines.push(`[B] ${b.id}: "${b.title}" (${b.status}, ${b.priority})${closed}`);
+      if (b.resolved_at) continue;
+      existingLines.push(`[B] ${b.id}: "${b.title}" (${b.status}, ${b.priority})`);
       existingMap.set(b.id, { title: b.title, status: b.status, priority: b.priority, table: "blockers", project_id: b.project_id, project_name: projectName(b) });
     }
     for (const r of (raids || [])) {
+      if (closedStatuses.has(r.status)) continue;
       const prefix = r.raid_type === "risk" ? "R" : r.raid_type === "issue" ? "I" : r.raid_type === "assumption" ? "AS" : "D";
-      const closed = r.status === "complete" ? " [CLOSED]" : "";
-      existingLines.push(`[${prefix}] ${r.id}: "${r.title}" (${r.status}, ${r.priority})${closed}`);
+      existingLines.push(`[${prefix}] ${r.id}: "${r.title}" (${r.status}, ${r.priority})`);
       existingMap.set(r.id, { title: r.title, status: r.status, priority: r.priority, table: "raid_entries", raid_type: r.raid_type, project_id: r.project_id, project_name: projectName(r) });
     }
 
@@ -142,7 +143,8 @@ export async function POST(request: Request) {
     const enriched: Record<string, EnrichedMatch[]> = {};
     const textMatchedKeys = new Set<string>();
 
-    const existingEntries = Array.from(existingMap.entries());
+    const CLOSED_STATUSES = new Set(["complete", "closed", "mitigated"]);
+    const existingEntries = Array.from(existingMap.entries()).filter(([, e]) => !CLOSED_STATUSES.has(e.status));
 
     for (const cat of categories) {
       const items = extracted[cat] || [];
