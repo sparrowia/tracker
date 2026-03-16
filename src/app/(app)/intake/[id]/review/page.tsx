@@ -48,7 +48,7 @@ interface ExtractedItem {
   _project_id?: string | null;
   _vendor_id?: string | null;
   _linked_to?: MatchCandidate | null;
-  _link_action?: "update" | "replace" | "child";
+  _link_action?: "update" | "replace" | "child" | "parent";
   _save_as?: EntityCategory;
 }
 
@@ -523,7 +523,7 @@ export default function IntakeReviewPage() {
     }));
   }
 
-  function linkItem(category: EntityCategory, index: number, candidate: MatchCandidate, action: "update" | "replace" | "child") {
+  function linkItem(category: EntityCategory, index: number, candidate: MatchCandidate, action: "update" | "replace" | "child" | "parent") {
     setExtracted((prev) => ({
       ...prev,
       [category]: prev[category].map((item, i) =>
@@ -684,7 +684,7 @@ export default function IntakeReviewPage() {
         action_items: [], decisions: [], issues: [], risks: [], blockers: [], status_updates: [],
       };
       // Linked items — action determined by _link_action
-      const linkedItems: { item: ExtractedItem; cat: EntityCategory; linkedTo: MatchCandidate; action: "update" | "replace" | "child" }[] = [];
+      const linkedItems: { item: ExtractedItem; cat: EntityCategory; linkedTo: MatchCandidate; action: "update" | "replace" | "child" | "parent" }[] = [];
       for (const [cat, items] of Object.entries(extracted) as [EntityCategory, ExtractedItem[]][]) {
         for (const item of items) {
           if (item._accepted !== true) continue;
@@ -993,6 +993,65 @@ export default function IntakeReviewPage() {
                 project_id: item._project_id || null,
               }).eq("id", linkedTo.id);
               if (err) errors.push(`Replace ${linkedTo.title}: ${err.message}`);
+            }
+            continue;
+          }
+
+          // --- PARENT action: create extracted as new parent, re-parent existing under it ---
+          if (action === "parent") {
+            const ownerId = findPersonId(item.owner_name || item.made_by);
+            const noteText = item.notes || item.details || item.rationale || item.impact_description || item.mitigation || null;
+
+            if (linkedTo.table === "raid_entries") {
+              // RAID entries support parent_id natively
+              const raidType = effectiveCat === "decisions" ? "decision" : effectiveCat === "issues" ? "issue" : effectiveCat === "risks" ? "risk" : "issue";
+              const prefix = raidType === "decision" ? "D" : raidType === "issue" ? "I" : "R";
+              const { count } = await supabase.from("raid_entries")
+                .select("*", { count: "exact", head: true }).eq("org_id", orgId).eq("raid_type", raidType);
+              const { data: newParent, error: err } = await supabase.from("raid_entries").insert({
+                org_id: orgId, raid_type: raidType, display_id: `${prefix}${(count || 0) + 1}`,
+                title: item.title || item.subject, description: noteText,
+                impact: item.impact || item.impact_description || null,
+                owner_id: ownerId, project_id: item._project_id || null, vendor_id: item._vendor_id || null,
+                priority: item.priority || "medium", first_flagged_at: today, created_by: profileId,
+              }).select("id").single();
+              if (err) { errors.push(`Create parent ${item.title}: ${err.message}`); }
+              else if (newParent) {
+                // Re-parent the existing item under the new one
+                const { error: reErr } = await supabase.from("raid_entries").update({ parent_id: newParent.id }).eq("id", linkedTo.id);
+                if (reErr) errors.push(`Re-parent ${linkedTo.title}: ${reErr.message}`);
+              }
+            } else if (linkedTo.table === "action_items") {
+              // Action items don't have parent_id — create new item with cross-reference notes
+              const { data: newItem, error: err } = await supabase.from("action_items").insert({
+                org_id: orgId, title: item.title || item.subject,
+                owner_id: ownerId, vendor_id: item._vendor_id || null,
+                project_id: item._project_id || null, priority: item.priority || "medium",
+                status: item.status || "pending", due_date: item.due_date || null,
+                first_flagged_at: today, notes: [noteText, `Child: ${linkedTo.title}`].filter(Boolean).join("\n\n"),
+                created_by: profileId,
+              }).select("id").single();
+              if (err) { errors.push(`Create parent ${item.title}: ${err.message}`); }
+              else if (newItem) {
+                // Add parent reference to existing item's notes
+                const { data: existing } = await supabase.from("action_items").select("notes").eq("id", linkedTo.id).single();
+                const updatedNotes = [existing?.notes, `Parent: ${item.title || item.subject}`].filter(Boolean).join("\n\n");
+                await supabase.from("action_items").update({ notes: updatedNotes }).eq("id", linkedTo.id).then(() => {});
+              }
+            } else if (linkedTo.table === "blockers") {
+              const { data: newItem, error: err } = await supabase.from("blockers").insert({
+                org_id: orgId, title: item.title || item.subject,
+                owner_id: ownerId, vendor_id: item._vendor_id || null,
+                project_id: item._project_id || null, priority: item.priority || "high",
+                impact_description: item.impact_description || item.impact || noteText,
+                first_flagged_at: today, created_by: profileId,
+              }).select("id").single();
+              if (err) { errors.push(`Create parent ${item.title}: ${err.message}`); }
+              else if (newItem) {
+                const { data: existing } = await supabase.from("blockers").select("impact_description").eq("id", linkedTo.id).single();
+                const updatedDesc = [existing?.impact_description, `Parent: ${item.title || item.subject}`].filter(Boolean).join("\n\n");
+                await supabase.from("blockers").update({ impact_description: updatedDesc }).eq("id", linkedTo.id).then(() => {});
+              }
             }
             continue;
           }
@@ -1601,9 +1660,10 @@ export default function IntakeReviewPage() {
             <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium ${
               item._link_action === "update" ? "bg-blue-100 text-blue-700" :
               item._link_action === "replace" ? "bg-amber-100 text-amber-700" :
+              item._link_action === "parent" ? "bg-purple-100 text-purple-700" :
               "bg-green-100 text-green-700"
             }`}>
-              {item._link_action === "update" ? "Will update" : item._link_action === "replace" ? "Will replace" : "Add as child"}
+              {item._link_action === "update" ? "Will update" : item._link_action === "replace" ? "Will replace" : item._link_action === "parent" ? "New parent" : "Add as child"}
             </span>
             <span className="truncate">{item._linked_to.title}</span>
             {item._linked_to.project_name && (
@@ -1715,7 +1775,18 @@ export default function IntakeReviewPage() {
                               }`}
                               title="Create as new child/subtask of existing item"
                             >
-                              Add as Child
+                              Child ↓
+                            </button>
+                            <button
+                              onClick={() => linkItem(category, idx, candidate, "parent")}
+                              className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
+                                linkAction === "parent"
+                                  ? "bg-purple-600 text-white"
+                                  : "bg-gray-100 text-gray-600 hover:bg-purple-50 hover:text-purple-700"
+                              }`}
+                              title="Create extracted item as new parent; re-parent existing item under it"
+                            >
+                              Parent ↑
                             </button>
                             {isLinked && (
                               <button
@@ -1788,7 +1859,9 @@ export default function IntakeReviewPage() {
                             <button onClick={() => { linkItem(category, idx, result, "replace"); setSearchOpen(false); setSearchQuery(""); setSearchResults([]); }}
                               className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600 hover:bg-amber-50 hover:text-amber-700">Replace</button>
                             <button onClick={() => { linkItem(category, idx, result, "child"); setSearchOpen(false); setSearchQuery(""); setSearchResults([]); }}
-                              className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600 hover:bg-green-50 hover:text-green-700">Child</button>
+                              className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600 hover:bg-green-50 hover:text-green-700">Child ↓</button>
+                            <button onClick={() => { linkItem(category, idx, result, "parent"); setSearchOpen(false); setSearchQuery(""); setSearchResults([]); }}
+                              className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600 hover:bg-purple-50 hover:text-purple-700">Parent ↑</button>
                           </div>
                         </div>
                       );
@@ -2046,6 +2119,7 @@ export default function IntakeReviewPage() {
                     allAccepted.filter((i) => i._link_action === "update").length > 0 && `${allAccepted.filter((i) => i._link_action === "update").length} update${allAccepted.filter((i) => i._link_action === "update").length !== 1 ? "s" : ""}`,
                     allAccepted.filter((i) => i._link_action === "replace").length > 0 && `${allAccepted.filter((i) => i._link_action === "replace").length} replace`,
                     allAccepted.filter((i) => i._link_action === "child").length > 0 && `${allAccepted.filter((i) => i._link_action === "child").length} child`,
+                    allAccepted.filter((i) => i._link_action === "parent").length > 0 && `${allAccepted.filter((i) => i._link_action === "parent").length} parent`,
                   ].filter(Boolean).join(", ")
                 : `${totalAccepted} items will be created`}
             </p>
