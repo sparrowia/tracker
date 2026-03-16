@@ -117,21 +117,32 @@ Source format: Email thread
 - Follow-up messages asking "Do you need any additional information?" indicate the original action is still pending at that point in time — check if a later message resolves it`,
 
   meeting_notes: `
-Source format: Meeting notes
+Source format: Meeting notes or transcript
 - Notes may reference multiple speakers — attribute actions to the person mentioned
 - "We agreed" or "The team decided" = decisions
 - "Next steps" or "follow-ups" sections contain action items
 - Items marked with owners (e.g. "[John]" or "John to do X") should use that person as owner
-- Distinguish between updates on existing work (status_updates) and new tasks (action_items)`,
+- Distinguish between updates on existing work (status_updates) and new tasks (action_items)
+- If the text contains timestamps and speaker names (e.g. "29:27 — Chase Bradshaw"), treat it as a meeting transcript:
+  - Speaker names are the people in the meeting — match them to Known People
+  - When someone says "I'll do X" or "I can handle that", they are the owner of that action
+  - When someone says "Can you do X?" the person they're addressing is the owner
+  - Verbal commitments ("let's plan for", "we should", "I'll send") are action items
+  - Distinguish between discussion/context and actual commitments`,
 
   fathom_transcript: `
-Source format: Fathom meeting transcript
-- Format is typically "[Speaker Name] HH:MM:SS" followed by what they said
-- Speaker names are the people in the meeting — match them to Known People
-- When someone says "I'll do X" or "I can handle that", they are the owner of that action
-- When someone says "Can you do X?" the person they're addressing is the owner
-- Verbal commitments ("let's plan for", "we should", "I'll send") are action items
-- Distinguish between discussion/context and actual commitments`,
+Source format: Meeting notes or transcript
+- Notes may reference multiple speakers — attribute actions to the person mentioned
+- "We agreed" or "The team decided" = decisions
+- "Next steps" or "follow-ups" sections contain action items
+- Items marked with owners (e.g. "[John]" or "John to do X") should use that person as owner
+- Distinguish between updates on existing work (status_updates) and new tasks (action_items)
+- If the text contains timestamps and speaker names (e.g. "29:27 — Chase Bradshaw"), treat it as a meeting transcript:
+  - Speaker names are the people in the meeting — match them to Known People
+  - When someone says "I'll do X" or "I can handle that", they are the owner of that action
+  - When someone says "Can you do X?" the person they're addressing is the owner
+  - Verbal commitments ("let's plan for", "we should", "I'll send") are action items
+  - Distinguish between discussion/context and actual commitments`,
 
   manual: `
 Source format: Manual entry (free-form text)
