@@ -223,6 +223,48 @@ export default function IntakeReviewPage() {
     }
   }, [activeTab, extracted, activeIndex]);
 
+  // Keyboard shortcuts for fast triage
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      // Don't trigger when typing in inputs/textareas/selects
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (!activeTab) return;
+      const items = extracted[activeTab];
+      if (!items || items.length === 0) return;
+      const item = items[activeIndex];
+      if (!item) return;
+
+      switch (e.key) {
+        case "ArrowLeft":
+          e.preventDefault();
+          if (activeIndex > 0) setActiveIndex(activeIndex - 1);
+          break;
+        case "ArrowRight":
+          e.preventDefault();
+          if (activeIndex < items.length - 1) setActiveIndex(activeIndex + 1);
+          break;
+        case "a":
+        case "A":
+          e.preventDefault();
+          acceptItem(activeTab, activeIndex, true);
+          break;
+        case "x":
+        case "X":
+          e.preventDefault();
+          rejectItem(activeTab, activeIndex, true);
+          break;
+        case "e":
+        case "E":
+          e.preventDefault();
+          if (!item._editing) startEdit(activeTab, activeIndex);
+          break;
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [activeTab, activeIndex, extracted]);
+
   const rawTextRef = useRef<HTMLDivElement>(null);
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const editSnapshotsRef = useRef<Map<string, ExtractedItem>>(new Map());
@@ -366,20 +408,41 @@ export default function IntakeReviewPage() {
     loadData();
   }, [intakeId]);
 
-  function acceptItem(category: EntityCategory, index: number) {
+  function acceptItem(category: EntityCategory, index: number, autoAdvance = false) {
     setExtracted((prev) => ({
       ...prev,
       [category]: prev[category].map((item, i) =>
         i === index ? { ...item, _accepted: item._accepted === true ? undefined : true } : item
       ),
     }));
+    if (autoAdvance) {
+      const items = extracted[category];
+      if (index < items.length - 1) {
+        setActiveIndex(index + 1);
+      }
+    }
   }
 
-  function rejectItem(category: EntityCategory, index: number) {
+  function rejectItem(category: EntityCategory, index: number, autoAdvance = false) {
     setExtracted((prev) => ({
       ...prev,
       [category]: prev[category].map((item, i) =>
         i === index ? { ...item, _accepted: item._accepted === false ? undefined : false } : item
+      ),
+    }));
+    if (autoAdvance) {
+      const items = extracted[category];
+      if (index < items.length - 1) {
+        setActiveIndex(index + 1);
+      }
+    }
+  }
+
+  function acceptAllInCategory(category: EntityCategory) {
+    setExtracted((prev) => ({
+      ...prev,
+      [category]: prev[category].map((item) =>
+        item._accepted === false ? item : { ...item, _accepted: true }
       ),
     }));
   }
@@ -1515,26 +1578,26 @@ export default function IntakeReviewPage() {
                 </svg>
               </button>
               <button
-                onClick={() => acceptItem(category, idx)}
+                onClick={() => acceptItem(category, idx, true)}
                 className={`transition-colors ${
                   item._accepted === true
                     ? "text-green-600"
                     : "text-gray-300 hover:text-green-600"
                 }`}
-                title="Accept"
+                title="Accept (A)"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="20 6 9 17 4 12"/>
                 </svg>
               </button>
               <button
-                onClick={() => rejectItem(category, idx)}
+                onClick={() => rejectItem(category, idx, true)}
                 className={`transition-colors ${
                   item._accepted === false
                     ? "text-red-500"
                     : "text-gray-300 hover:text-red-500"
                 }`}
-                title="Reject"
+                title="Reject (X)"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="18" y1="6" x2="6" y2="18"/>
@@ -1594,32 +1657,56 @@ export default function IntakeReviewPage() {
           {/* Card navigation + single card */}
           {activeTab && currentTabItems.length > 0 && (
             <div className="space-y-3">
-              {/* Navigation bar — right-aligned with arrows flanking counter */}
-              <div className="flex items-center justify-end gap-1">
-                <button
-                  onClick={() => setActiveIndex((i) => Math.max(0, i - 1))}
-                  disabled={activeIndex === 0}
-                  className="p-1 rounded text-gray-500 hover:text-gray-700 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                  title="Previous"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="15 18 9 12 15 6"/>
-                  </svg>
-                </button>
-                <span className="text-sm text-gray-500 tabular-nums px-1">
-                  {activeIndex + 1} / {currentTabItems.length}
-                </span>
-                <button
-                  onClick={() => setActiveIndex((i) => Math.min(currentTabItems.length - 1, i + 1))}
-                  disabled={activeIndex >= currentTabItems.length - 1}
-                  className="p-1 rounded text-gray-500 hover:text-gray-700 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                  title="Next"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="9 18 15 12 9 6"/>
-                  </svg>
-                </button>
+              {/* Toolbar: Accept All + nav */}
+              <div className="flex items-center justify-between">
+                {/* Accept All */}
+                {(() => {
+                  const unreviewed = currentTabItems.filter((i) => i._accepted === undefined).length;
+                  const allAccepted = currentTabItems.every((i) => i._accepted === true || i._accepted === false);
+                  return unreviewed > 0 ? (
+                    <button
+                      onClick={() => activeTab && acceptAllInCategory(activeTab)}
+                      className="px-2.5 py-1 text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded hover:bg-green-100 transition-colors"
+                    >
+                      Accept All ({unreviewed})
+                    </button>
+                  ) : (
+                    <span className="text-xs text-gray-400">{allAccepted ? "All reviewed" : ""}</span>
+                  );
+                })()}
+
+                {/* Nav arrows + counter */}
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setActiveIndex((i) => Math.max(0, i - 1))}
+                    disabled={activeIndex === 0}
+                    className="p-1 rounded text-gray-500 hover:text-gray-700 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    title="Previous (←)"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="15 18 9 12 15 6"/>
+                    </svg>
+                  </button>
+                  <span className="text-sm text-gray-500 tabular-nums px-1">
+                    {activeIndex + 1} / {currentTabItems.length}
+                  </span>
+                  <button
+                    onClick={() => setActiveIndex((i) => Math.min(currentTabItems.length - 1, i + 1))}
+                    disabled={activeIndex >= currentTabItems.length - 1}
+                    className="p-1 rounded text-gray-500 hover:text-gray-700 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    title="Next (→)"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="9 18 15 12 9 6"/>
+                    </svg>
+                  </button>
+                </div>
               </div>
+
+              {/* Keyboard hint */}
+              <p className="text-[10px] text-gray-400 text-right">
+                A accept &middot; X reject &middot; E edit &middot; ← → navigate
+              </p>
 
               {/* The card */}
               {currentItem && renderCard(activeTab, activeIndex, currentItem)}
