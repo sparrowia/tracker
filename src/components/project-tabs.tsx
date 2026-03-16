@@ -2073,7 +2073,7 @@ function IntakePanel({
       intake = insertedIntake;
 
       // Split long text into chunks to avoid Vercel function timeouts
-      const CHUNK_CHAR_LIMIT = 4000;
+      const CHUNK_CHAR_LIMIT = 8000;
       const chunks: string[] = [];
       if (combinedText.length <= CHUNK_CHAR_LIMIT) {
         chunks.push(combinedText);
@@ -2092,35 +2092,66 @@ function IntakePanel({
       }
 
       const resolvedVendorId = vendorId && vendorId !== "none" ? vendorId : null;
+      const MAX_RETRIES = 2;
 
-      async function extractChunk(chunkText: string, chunkIndex: number) {
-        if (chunks.length > 1) setProgressStep(`Extracting (part ${chunkIndex + 1}/${chunks.length})...`);
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 120_000);
-        const response = await fetch("/api/extract", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            intake_id: intake!.id,
-            raw_text: chunkText,
-            vendor_id: resolvedVendorId,
-            project_id: project.id,
-          }),
-          signal: controller.signal,
-        });
-        clearTimeout(timeout);
-        if (!response.ok) {
-          const err = await response.json();
-          throw new Error(err.error || "Extraction failed");
+      async function extractChunkWithRetry(chunkText: string, chunkIndex: number): Promise<{ data?: Record<string, unknown[]> }> {
+        for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+          try {
+            setProgressStep(
+              chunks.length > 1
+                ? `Extracting part ${chunkIndex + 1} of ${chunks.length}${attempt > 0 ? ` (retry ${attempt})` : ""}...`
+                : `Extracting items${attempt > 0 ? ` (retry ${attempt})` : ""}...`
+            );
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 270_000);
+            const response = await fetch("/api/extract", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                intake_id: intake!.id,
+                raw_text: chunkText,
+                vendor_id: resolvedVendorId,
+                project_id: project.id,
+              }),
+              signal: controller.signal,
+            });
+            clearTimeout(timeout);
+            if (!response.ok) {
+              let errorMsg = "Extraction failed";
+              try {
+                const err = await response.json();
+                errorMsg = err.error || errorMsg;
+              } catch {
+                const text = await response.text().catch(() => "");
+                if (response.status === 504 || text.includes("FUNCTION_INVOCATION_TIMEOUT")) {
+                  if (attempt < MAX_RETRIES) continue;
+                  errorMsg = `Part ${chunkIndex + 1} timed out after ${MAX_RETRIES + 1} attempts.`;
+                } else {
+                  errorMsg = `Server error (${response.status}). Please try again.`;
+                }
+              }
+              throw new Error(errorMsg);
+            }
+            return response.json();
+          } catch (err) {
+            const isTimeout = err instanceof Error && (err.name === "AbortError" || err.message.includes("timed out"));
+            if (isTimeout && attempt < MAX_RETRIES) {
+              await new Promise((r) => setTimeout(r, 2000));
+              continue;
+            }
+            throw err;
+          }
         }
-        return response.json();
+        throw new Error("Extraction failed after retries");
       }
 
-      if (chunks.length === 1) {
-        await extractChunk(chunks[0], 0);
-      } else {
-        const results = await Promise.all(chunks.map((c, i) => extractChunk(c, i)));
-        // Merge chunk results
+      // Process chunks sequentially
+      const results: { data?: Record<string, unknown[]> }[] = [];
+      for (let i = 0; i < chunks.length; i++) {
+        results.push(await extractChunkWithRetry(chunks[i], i));
+      }
+
+      if (chunks.length > 1) {
         const mergedData: Record<string, unknown[]> = {
           action_items: [], decisions: [], issues: [], risks: [], blockers: [], status_updates: [], contacts: [],
         };
@@ -2131,7 +2162,6 @@ function IntakePanel({
             if (Array.isArray(items)) mergedData[key].push(...items);
           }
         }
-        // Deduplicate by title
         for (const key of Object.keys(mergedData)) {
           const items = mergedData[key] as { title?: string; subject?: string }[];
           const seen = new Set<string>();
