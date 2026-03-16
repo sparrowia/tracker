@@ -203,6 +203,7 @@ export default function IntakeReviewPage() {
   const [dismissedMatches, setDismissedMatches] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState<EntityCategory | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [editingTitleKey, setEditingTitleKey] = useState<string | null>(null);
 
   // Set initial tab when extracted data changes
   useEffect(() => {
@@ -1309,9 +1310,25 @@ export default function IntakeReviewPage() {
         ) : (
           /* Read-only detail view with inline-editable key fields */
           <div className="space-y-2">
-            <p className="text-sm font-semibold text-gray-900">
-              {item.title || item.subject || ""}
-            </p>
+            {editingTitleKey === `${category}-${idx}` ? (
+              <input
+                type="text"
+                value={item.title || item.subject || ""}
+                onChange={(e) => updateItem(category, idx, category === "status_updates" ? "subject" : "title", e.target.value)}
+                onBlur={() => setEditingTitleKey(null)}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === "Escape") setEditingTitleKey(null); }}
+                autoFocus
+                className="text-sm font-semibold text-gray-900 w-full border-b border-blue-400 focus:outline-none bg-transparent pb-0.5"
+              />
+            ) : (
+              <p
+                className="text-sm font-semibold text-gray-900 cursor-pointer hover:text-blue-700 transition-colors"
+                onClick={() => setEditingTitleKey(`${category}-${idx}`)}
+                title="Click to edit title"
+              >
+                {item.title || item.subject || ""}
+              </p>
+            )}
 
             {/* Property grid — key fields are inline-editable */}
             <div className="grid grid-cols-[100px_1fr] gap-x-3 gap-y-1.5 text-xs">
