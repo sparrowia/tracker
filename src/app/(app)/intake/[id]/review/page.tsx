@@ -1307,14 +1307,44 @@ export default function IntakeReviewPage() {
             )}
           </div>
         ) : (
-          /* Read-only detail view */
+          /* Read-only detail view with inline-editable key fields */
           <div className="space-y-2">
             <p className="text-sm font-semibold text-gray-900">
               {item.title || item.subject || ""}
             </p>
 
-            {/* Property grid */}
-            <div className="grid grid-cols-[100px_1fr] gap-x-3 gap-y-1 text-xs">
+            {/* Property grid — key fields are inline-editable */}
+            <div className="grid grid-cols-[100px_1fr] gap-x-3 gap-y-1.5 text-xs">
+              {/* Type — reassign to different category */}
+              {category !== "status_updates" && (
+                <>
+                  <span className="text-gray-500 py-0.5">Type</span>
+                  <select
+                    value={item._save_as || category}
+                    onChange={(e) => {
+                      const newType = e.target.value as EntityCategory;
+                      setExtracted((prev) => ({
+                        ...prev,
+                        [category]: prev[category].map((it, i) =>
+                          i === idx
+                            ? {
+                                ...it,
+                                _save_as: newType === category ? undefined : newType,
+                                _linked_to: newType !== (it._save_as || category) ? null : it._linked_to,
+                                _edited: true,
+                              }
+                            : it
+                        ),
+                      }));
+                    }}
+                    className="text-xs text-gray-900 bg-white rounded border border-gray-200 px-1.5 py-0.5 focus:border-blue-500 focus:outline-none"
+                  >
+                    {reassignableCategories.map((cat) => (
+                      <option key={cat} value={cat}>{categoryLabels[cat]}</option>
+                    ))}
+                  </select>
+                </>
+              )}
               {/* Owner — inline editable */}
               {(category === "action_items" || category === "issues" || category === "blockers") && (
                 <>
@@ -1352,14 +1382,19 @@ export default function IntakeReviewPage() {
                   <span className="text-gray-700">{item.reporter_name}</span>
                 </>
               )}
-              {item.priority && (
-                <>
-                  <span className="text-gray-500">Priority</span>
-                  <span className={`inline-flex px-1.5 py-0.5 rounded border w-fit ${priorityColor(item.priority)}`}>
-                    {priorityLabel(item.priority)}
-                  </span>
-                </>
-              )}
+              {/* Priority — inline editable */}
+              <>
+                <span className="text-gray-500 py-0.5">Priority</span>
+                <select
+                  value={item.priority || "medium"}
+                  onChange={(e) => updateItem(category, idx, "priority", e.target.value)}
+                  className="text-xs text-gray-900 bg-white rounded border border-gray-200 px-1.5 py-0.5 focus:border-blue-500 focus:outline-none w-fit"
+                >
+                  {priorityOptions.map((p) => (
+                    <option key={p} value={p}>{priorityLabel(p)}</option>
+                  ))}
+                </select>
+              </>
               {item.status && (
                 <>
                   <span className="text-gray-500">Status</span>
@@ -1376,6 +1411,30 @@ export default function IntakeReviewPage() {
                   </span>
                 </>
               )}
+              {/* Due Date — inline editable, always shown for action items/blockers */}
+              {(category === "action_items" || category === "blockers" || item.due_date) && (
+                <>
+                  <span className="text-gray-500 py-0.5">Due Date</span>
+                  <input
+                    type="date"
+                    value={item.due_date || ""}
+                    onChange={(e) => updateItem(category, idx, "due_date", e.target.value)}
+                    className="text-xs text-gray-900 bg-white rounded border border-gray-200 px-1.5 py-0.5 focus:border-blue-500 focus:outline-none w-fit"
+                  />
+                </>
+              )}
+              {item.decision_date && (
+                <>
+                  <span className="text-gray-500">Decision Date</span>
+                  <span className="text-gray-700">{item.decision_date}</span>
+                </>
+              )}
+              {item.date_reported && (
+                <>
+                  <span className="text-gray-500">Reported</span>
+                  <span className="text-gray-700">{item.date_reported}</span>
+                </>
+              )}
               {item.confidence && item.confidence !== "high" && (
                 <>
                   <span className="text-gray-500">Confidence</span>
@@ -1384,12 +1443,6 @@ export default function IntakeReviewPage() {
                   }`}>
                     {item.confidence}
                   </span>
-                </>
-              )}
-              {(item.due_date || item.decision_date || item.date_reported) && (
-                <>
-                  <span className="text-gray-500">{item.due_date ? "Due Date" : item.date_reported ? "Reported" : "Date"}</span>
-                  <span className="text-gray-700">{item.due_date || item.date_reported || item.decision_date}</span>
                 </>
               )}
               {item._project_id && (() => {
