@@ -4,8 +4,10 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRole } from "@/components/role-context";
 import { canCreate, canDelete, canEditWikiPage } from "@/lib/permissions";
-import { WikiEditor } from "@/components/wiki-editor";
+import dynamic from "next/dynamic";
 import type { WikiPage } from "@/lib/types";
+
+const WikiEditor = dynamic(() => import("@/components/wiki-editor").then(m => m.WikiEditor), { ssr: false });
 import { cn } from "@/lib/utils";
 import {
   ChevronRight,
