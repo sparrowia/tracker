@@ -768,14 +768,10 @@ export function AgendaView({
               <div className="px-5 pb-3">
                 <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Next Steps</span>
                 <textarea
-                  value={detail.next_steps || ""}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setDetailFields((prev) => ({ ...prev, [item.entity_id]: { ...prev[item.entity_id], next_steps: v } }));
-                  }}
+                  defaultValue={detail.next_steps || ""}
                   onBlur={(e) => {
                     const v = e.target.value;
-                    if (v !== (detail.next_steps || "")) saveField(item, "next_steps", v);
+                    saveField(item, "next_steps", v);
                   }}
                   placeholder="Next steps..."
                   rows={2}

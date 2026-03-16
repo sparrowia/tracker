@@ -1758,14 +1758,9 @@ function ActionItemsPanel({
                   <div className="px-5 pb-3">
                     <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Next Steps</span>
                     <textarea
-                      value={a.next_steps || ""}
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        setActions((prev) => prev.map((act) => act.id === a.id ? { ...act, next_steps: v } : act));
-                      }}
+                      defaultValue={a.next_steps || ""}
                       onBlur={(e) => {
-                        const v = e.target.value;
-                        if (v !== (a.next_steps || "")) saveField(a.id, "next_steps", v);
+                        saveField(a.id, "next_steps", e.target.value);
                       }}
                       placeholder="Next steps..."
                       rows={2}
