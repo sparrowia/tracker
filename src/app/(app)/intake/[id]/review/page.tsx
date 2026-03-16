@@ -203,6 +203,26 @@ export default function IntakeReviewPage() {
   const [dismissedMatches, setDismissedMatches] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState<EntityCategory | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
+
+  // Set initial tab when extracted data changes
+  useEffect(() => {
+    if (activeTab !== null) return;
+    const cats = (Object.entries(extracted) as [EntityCategory, ExtractedItem[]][])
+      .filter(([, items]) => items.length > 0)
+      .map(([cat]) => cat);
+    if (cats.length > 0) {
+      setActiveTab(cats[0]);
+    }
+  }, [extracted, activeTab]);
+
+  // Clamp activeIndex when tab or items change
+  useEffect(() => {
+    const items = activeTab ? extracted[activeTab] : [];
+    if (activeIndex >= items.length && items.length > 0) {
+      setActiveIndex(items.length - 1);
+    }
+  }, [activeTab, extracted, activeIndex]);
+
   const rawTextRef = useRef<HTMLDivElement>(null);
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const editSnapshotsRef = useRef<Map<string, ExtractedItem>>(new Map());
@@ -1038,23 +1058,9 @@ export default function IntakeReviewPage() {
     .filter(([, items]) => items.length > 0)
     .map(([cat]) => cat);
 
-  // Set initial tab when data loads
-  useEffect(() => {
-    if (activeTab === null && activeCats.length > 0) {
-      setActiveTab(activeCats[0]);
-    }
-  }, [activeCats.length]);
-
   // Current tab items
   const currentTabItems = activeTab ? extracted[activeTab] : [];
   const currentItem = currentTabItems[activeIndex] || null;
-
-  // Clamp activeIndex when switching tabs
-  useEffect(() => {
-    if (activeIndex >= currentTabItems.length && currentTabItems.length > 0) {
-      setActiveIndex(currentTabItems.length - 1);
-    }
-  }, [activeTab, currentTabItems.length]);
 
   if (loading) {
     return (
