@@ -214,7 +214,7 @@ export default function CommentThread({ raidEntryId, actionItemId, blockerId, or
             onKeyDown={handleKeyDown}
             placeholder="Add a comment..."
             rows={2}
-            className="flex-1 rounded border border-gray-300 bg-yellow-50/25 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
+            className="flex-1 rounded border border-gray-300 bg-white px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
           />
         </div>
 
@@ -250,7 +250,7 @@ export default function CommentThread({ raidEntryId, actionItemId, blockerId, or
           />
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 border border-gray-300 rounded px-2 py-1 transition-colors"
+            className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 border border-gray-300 bg-white rounded px-2 py-1 transition-colors"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
