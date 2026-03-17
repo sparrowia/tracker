@@ -720,7 +720,7 @@ export function AgendaView({
             : item.entity_type.startsWith("raid_") ? { raidEntryId: item.entity_id }
             : null;
           return (
-          <div className="bg-white border-b border-gray-200" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-yellow-50/60 border-b border-gray-200" onClick={(e) => e.stopPropagation()}>
             {/* Editable title */}
             <div className="px-5 pt-4 pb-3 text-base font-semibold text-gray-900 bg-amber-50/60">
               <InlineText

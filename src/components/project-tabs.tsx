@@ -1080,7 +1080,7 @@ function BlockersPanel({
 
               {/* Expanded detail — inline editable */}
               {isExpanded && (
-                <div className="bg-white border-b border-gray-200" onClick={(e) => e.stopPropagation()}>
+                <div className="bg-yellow-50/60 border-b border-gray-200" onClick={(e) => e.stopPropagation()}>
                   {/* Title section */}
                   <div className="px-5 pt-4 pb-3 text-base font-semibold text-gray-900 bg-amber-50/60">
                     <InlineText value={b.title} onSave={(v) => saveField(b.id, "title", v)} />
@@ -1715,7 +1715,7 @@ function ActionItemsPanel({
 
               {/* Expanded detail — inline editable */}
               {isExpanded && (
-                <div className="bg-white border-b border-gray-200" onClick={(e) => e.stopPropagation()}>
+                <div className="bg-yellow-50/60 border-b border-gray-200" onClick={(e) => e.stopPropagation()}>
                   {/* Title section */}
                   <div className="px-5 pt-4 pb-3 text-base font-semibold text-gray-900 bg-amber-50/60">
                     <InlineText value={a.title} onSave={(v) => saveField(a.id, "title", v)} />
