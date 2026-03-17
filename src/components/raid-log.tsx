@@ -807,7 +807,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
               <div className="flex items-center gap-4">
                 <button
                   onClick={() => setTitleSort((prev) => prev === "asc" ? "desc" : prev === "desc" ? null : "asc")}
-                  className="flex-1 flex items-center gap-1 text-left text-[10px] font-medium text-gray-400 uppercase tracking-wide hover:text-gray-600 transition-colors"
+                  className="flex-1 flex items-center gap-1 text-left text-[10px] font-medium text-gray-400 uppercase tracking-wide hover:text-gray-600 transition-colors pl-[140px]"
                 >
                   Issue Name
                   {titleSort === "asc" && <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg>}
