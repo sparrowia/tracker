@@ -206,6 +206,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
   const [filterStatus, setFilterStatus] = useState<ItemStatus | "">("");
   const [filterOwner, setFilterOwner] = useState("");
   const [filterAge, setFilterAge] = useState("");
+  const [titleSort, setTitleSort] = useState<"asc" | "desc" | null>(null);
   const colPickerRef = useRef<HTMLDivElement>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const lastSelectedRef = useRef<string | null>(null);
@@ -804,7 +805,14 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
           <div>
             <div className="bg-gray-50 px-3 py-1 border-b border-gray-300">
               <div className="flex items-center gap-4">
-                <div className="flex-1" />
+                <button
+                  onClick={() => setTitleSort((prev) => prev === "asc" ? "desc" : prev === "desc" ? null : "asc")}
+                  className="flex-1 flex items-center gap-1 text-left text-[10px] font-medium text-gray-400 uppercase tracking-wide hover:text-gray-600 transition-colors"
+                >
+                  Issue Name
+                  {titleSort === "asc" && <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg>}
+                  {titleSort === "desc" && <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>}
+                </button>
                 {RAID_COLUMNS.filter((c) => visibleCols.includes(c.key)).map((col) => (
                   <span key={col.key} className={`text-[10px] font-medium text-gray-400 uppercase tracking-wide ${col.width} text-right`}>
                     {col.label}
@@ -815,6 +823,10 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
             {(() => {
               // Build ordered list: parents followed by their children
               const parentItems = items.filter((e) => !e.parent_id).sort((a, b) => {
+                if (titleSort) {
+                  const cmp = a.title.localeCompare(b.title);
+                  return titleSort === "asc" ? cmp : -cmp;
+                }
                 // Closed risks go to the bottom
                 const aClosed = a.status === "closed" ? 1 : 0;
                 const bClosed = b.status === "closed" ? 1 : 0;
