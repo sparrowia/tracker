@@ -898,10 +898,17 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                               });
                             }
                           } else {
+                            // Get children of this entry
+                            const childIds = items.filter((e) => e.parent_id === entry.id).map((e) => e.id);
                             setSelectedIds((prev) => {
                               const next = new Set(prev);
-                              if (next.has(entry.id)) next.delete(entry.id);
-                              else next.add(entry.id);
+                              if (next.has(entry.id)) {
+                                next.delete(entry.id);
+                                for (const cid of childIds) next.delete(cid);
+                              } else {
+                                next.add(entry.id);
+                                for (const cid of childIds) next.add(cid);
+                              }
                               return next;
                             });
                           }
