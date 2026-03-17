@@ -190,7 +190,7 @@ export default function CommentThread({ raidEntryId, actionItemId, blockerId, or
   }
 
   return (
-    <div className="px-5 py-3 border-t border-gray-100">
+    <div className="px-5 py-3 border-t border-gray-100 bg-yellow-50/25">
       <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">
         Comments ({comments.length})
       </span>
@@ -214,7 +214,7 @@ export default function CommentThread({ raidEntryId, actionItemId, blockerId, or
             onKeyDown={handleKeyDown}
             placeholder="Add a comment..."
             rows={2}
-            className="flex-1 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
+            className="flex-1 rounded border border-gray-300 bg-yellow-50/25 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
           />
         </div>
 
