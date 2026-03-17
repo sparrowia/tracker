@@ -335,12 +335,12 @@ export default function TimelinePage() {
 
       {/* Hidden create modals */}
       {creatingFrom && creatingMilestone && createType === "project" && (
-        <div className="hidden">
+        <div className="[&>button:first-child]:hidden">
           <AddProjectButton openExternal defaultValues={{ name: creatingMilestone.title, description: creatingMilestone.description || undefined, target_completion: creatingMilestone.target_date }} onCreated={(id) => handleEntityCreated(creatingFrom, "project", id)} onSaved={() => { setCreatingFrom(null); setCreateType(null); }} />
         </div>
       )}
       {creatingFrom && creatingMilestone && createType === "initiative" && (
-        <div className="hidden">
+        <div className="[&>button:first-child]:hidden">
           <AddInitiativeButton openExternal defaultValues={{ name: creatingMilestone.title, description: creatingMilestone.description || undefined, target_completion: creatingMilestone.target_date }} onCreated={(id) => handleEntityCreated(creatingFrom, "initiative", id)} onSaved={() => { setCreatingFrom(null); setCreateType(null); }} />
         </div>
       )}
