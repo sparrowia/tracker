@@ -1104,14 +1104,14 @@ function BlockersPanel({
 
               {/* Expanded detail — inline editable */}
               {isExpanded && (
-                <div className="bg-yellow-50/50 border-b border-gray-200" onClick={(e) => e.stopPropagation()}>
+                <div className="bg-yellow-50/25 border-b border-gray-200" onClick={(e) => e.stopPropagation()}>
                   {/* Title section */}
-                  <div className="px-5 pt-4 pb-3 text-base font-semibold text-gray-900 bg-yellow-50/50">
+                  <div className="px-5 pt-4 pb-3 text-base font-semibold text-gray-900 bg-yellow-50/25">
                     <InlineText value={b.title} onSave={(v) => saveField(b.id, "title", v)} />
                   </div>
 
                   {/* Description & Impact */}
-                  <div className="grid grid-cols-2 gap-4 px-5 py-3 border-t border-gray-200 bg-yellow-50/50">
+                  <div className="grid grid-cols-2 gap-4 px-5 py-3 border-t border-gray-200 bg-yellow-50/25">
                     <div className="rounded border border-gray-200 bg-white p-3">
                       <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Description</span>
                       <InlineText value={b.description || ""} onSave={(v) => saveField(b.id, "description", v)} multiline placeholder="Add description..." />
@@ -1211,7 +1211,7 @@ function BlockersPanel({
                   </div>
 
                   {/* Comments */}
-                  <div className="bg-white">
+                  <div className="bg-yellow-50/25">
                     <CommentThread
                       blockerId={b.id}
                       orgId={orgId}
@@ -1796,14 +1796,14 @@ function ActionItemsPanel({
 
               {/* Expanded detail — inline editable */}
               {isExpanded && (
-                <div className="bg-yellow-50/50 border-b border-gray-200" onClick={(e) => e.stopPropagation()}>
+                <div className="bg-yellow-50/25 border-b border-gray-200" onClick={(e) => e.stopPropagation()}>
                   {/* Title section */}
-                  <div className="px-5 pt-4 pb-3 text-base font-semibold text-gray-900 bg-yellow-50/50">
+                  <div className="px-5 pt-4 pb-3 text-base font-semibold text-gray-900 bg-yellow-50/25">
                     <InlineText value={a.title} onSave={(v) => saveField(a.id, "title", v)} />
                   </div>
 
                   {/* Description & Notes */}
-                  <div className="grid grid-cols-2 gap-4 px-5 py-3 border-t border-gray-200 bg-yellow-50/50">
+                  <div className="grid grid-cols-2 gap-4 px-5 py-3 border-t border-gray-200 bg-yellow-50/25">
                     <div className="rounded border border-gray-200 bg-white p-3">
                       <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Description</span>
                       <InlineText value={a.description || ""} onSave={(v) => saveField(a.id, "description", v)} multiline placeholder="Add description..." />
@@ -1836,7 +1836,7 @@ function ActionItemsPanel({
                   </div>
 
                   {/* Next Steps */}
-                  <div className="px-5 pb-3 bg-yellow-50/50">
+                  <div className="px-5 pb-3 bg-yellow-50/25">
                     <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Next Steps</span>
                     <textarea
                       defaultValue={a.next_steps || ""}
@@ -1931,7 +1931,7 @@ function ActionItemsPanel({
                   </div>
 
                   {/* Comments */}
-                  <div className="bg-white">
+                  <div className="bg-yellow-50/25">
                     <CommentThread
                       actionItemId={a.id}
                       orgId={orgId}

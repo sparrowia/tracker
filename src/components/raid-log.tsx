@@ -1016,14 +1016,14 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
 
                   {/* Expanded detail — inline editable */}
                   {isExpanded && (
-                    <div className="bg-yellow-50/50 border-b border-gray-200" onClick={(e) => e.stopPropagation()}>
+                    <div className="bg-yellow-50/25 border-b border-gray-200" onClick={(e) => e.stopPropagation()}>
                       {/* Editable title */}
-                      <div className="px-5 pt-4 pb-3 text-base font-semibold text-gray-900 bg-yellow-50/50">
+                      <div className="px-5 pt-4 pb-3 text-base font-semibold text-gray-900 bg-yellow-50/25">
                         <InlineText value={entry.title} onSave={(v) => { if (v.trim()) saveField(entry.id, "title", v.trim()); }} placeholder="Title..." />
                       </div>
 
                       {/* Description & Notes — side by side */}
-                      <div className="grid grid-cols-2 gap-4 px-5 py-3 border-t border-gray-200 bg-yellow-50/50">
+                      <div className="grid grid-cols-2 gap-4 px-5 py-3 border-t border-gray-200 bg-yellow-50/25">
                         <div className="rounded border border-gray-200 bg-white p-3">
                           <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Description</span>
                           <InlineText value={entry.description || ""} onSave={(v) => saveField(entry.id, "description", v)} multiline placeholder="Add description..." />
@@ -1250,7 +1250,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                       </div>
 
                       {/* Comments */}
-                      <div className="bg-white">
+                      <div className="bg-yellow-50/25">
                         <CommentThread
                           raidEntryId={entry.id}
                           orgId={project.org_id}
