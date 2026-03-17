@@ -720,9 +720,9 @@ export function AgendaView({
             : item.entity_type.startsWith("raid_") ? { raidEntryId: item.entity_id }
             : null;
           return (
-          <div className="bg-yellow-50 border-b border-gray-200" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-yellow-50/50 border-b border-gray-200" onClick={(e) => e.stopPropagation()}>
             {/* Editable title */}
-            <div className="px-5 pt-4 pb-3 text-base font-semibold text-gray-900 bg-yellow-50">
+            <div className="px-5 pt-4 pb-3 text-base font-semibold text-gray-900 bg-yellow-50/50">
               <InlineText
                 value={item.title}
                 onSave={(v) => saveField(item, "title", v)}
@@ -731,7 +731,7 @@ export function AgendaView({
             </div>
 
             {/* Description & Notes */}
-            <div className="grid grid-cols-2 gap-4 px-5 py-3 border-t border-gray-200 bg-yellow-50">
+            <div className="grid grid-cols-2 gap-4 px-5 py-3 border-t border-gray-200 bg-yellow-50/50">
               <div className="rounded border border-gray-200 p-3">
                 <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Description</span>
                 <InlineText
