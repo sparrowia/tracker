@@ -1447,29 +1447,37 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
             <option value="medium">Medium</option>
             <option value="low">Low</option>
           </select>
-          <select
-            defaultValue=""
-            onChange={(e) => {
-              if (!e.target.value) return;
-              const val = e.target.value;
-              for (const id of selectedIds) { saveField(id, "status", val); }
-              e.target.value = "";
-            }}
-            className="bg-gray-700 text-white text-xs rounded border border-gray-600 px-2 py-1 focus:outline-none focus:border-blue-400"
-          >
-            <option value="">Status</option>
-            <option value="pending">Pending</option>
-            <option value="in_progress">In Progress</option>
-            <option value="complete">Complete</option>
-            <option value="needs_verification">Needs Verification</option>
-            <option value="paused">Paused</option>
-            <option value="at_risk">At Risk</option>
-            <option value="blocked">Blocked</option>
-            <option value="identified">Identified</option>
-            <option value="assessing">Assessing</option>
-            <option value="mitigated">Mitigated</option>
-            <option value="closed">Closed</option>
-          </select>
+          {(() => {
+            const selectedTypes = new Set(entries.filter(e => selectedIds.has(e.id)).map(e => e.raid_type));
+            const hasRisk = selectedTypes.has("risk");
+            const hasDecision = selectedTypes.has("decision");
+            const hasOther = selectedTypes.has("issue") || selectedTypes.has("assumption");
+            const bulkStatusOptions: ItemStatus[] = [
+              ...(hasOther || hasDecision ? ["pending" as ItemStatus] : []),
+              ...(hasOther || hasRisk ? ["in_progress" as ItemStatus] : []),
+              ...(hasOther || hasDecision ? ["complete" as ItemStatus] : []),
+              ...(hasOther ? ["needs_verification" as ItemStatus, "paused" as ItemStatus, "at_risk" as ItemStatus, "blocked" as ItemStatus] : []),
+              ...(hasRisk ? ["identified" as ItemStatus, "assessing" as ItemStatus, "mitigated" as ItemStatus, "closed" as ItemStatus] : []),
+            ];
+            const uniqueStatuses = [...new Set(bulkStatusOptions)];
+            return (
+              <select
+                defaultValue=""
+                onChange={(e) => {
+                  if (!e.target.value) return;
+                  const val = e.target.value;
+                  for (const id of selectedIds) { saveField(id, "status", val); }
+                  e.target.value = "";
+                }}
+                className="bg-gray-700 text-white text-xs rounded border border-gray-600 px-2 py-1 focus:outline-none focus:border-blue-400"
+              >
+                <option value="">Status</option>
+                {uniqueStatuses.map(s => (
+                  <option key={s} value={s}>{s.replace(/_/g, " ").replace(/^\w/, c => c.toUpperCase())}</option>
+                ))}
+              </select>
+            );
+          })()}
           <select
             defaultValue=""
             onChange={(e) => {
