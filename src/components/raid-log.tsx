@@ -207,6 +207,8 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
   const [filterOwner, setFilterOwner] = useState("");
   const [filterAge, setFilterAge] = useState("");
   const [titleSort, setTitleSort] = useState<"asc" | "desc" | null>(null);
+  const [prioritySort, setPrioritySort] = useState<"asc" | "desc" | null>(null);
+  const [statusSort, setStatusSort] = useState<"asc" | "desc" | null>(null);
   const colPickerRef = useRef<HTMLDivElement>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const lastSelectedRef = useRef<string | null>(null);
@@ -806,26 +808,56 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
             <div className="bg-gray-50 px-3 py-1 border-b border-gray-300">
               <div className="flex items-center gap-4">
                 <button
-                  onClick={() => setTitleSort((prev) => prev === "asc" ? "desc" : prev === "desc" ? null : "asc")}
+                  onClick={() => { setTitleSort((prev) => prev === "asc" ? "desc" : prev === "desc" ? null : "asc"); setPrioritySort(null); setStatusSort(null); }}
                   className="flex-1 flex items-center gap-1 text-left text-[10px] font-medium text-gray-400 uppercase tracking-wide hover:text-gray-600 transition-colors pl-[140px]"
                 >
                   Issue Name
                   {titleSort === "asc" && <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg>}
                   {titleSort === "desc" && <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>}
                 </button>
-                {RAID_COLUMNS.filter((c) => visibleCols.includes(c.key)).map((col) => (
-                  <span key={col.key} className={`text-[10px] font-medium text-gray-400 uppercase tracking-wide ${col.width} text-right`}>
-                    {col.label}
-                  </span>
-                ))}
+                {RAID_COLUMNS.filter((c) => visibleCols.includes(c.key)).map((col) => {
+                  if (col.key === "priority") {
+                    const upArrow = <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg>;
+                    const downArrow = <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>;
+                    return (
+                      <button key={col.key} onClick={() => { setPrioritySort((p) => p === "asc" ? "desc" : p === "desc" ? null : "asc"); setTitleSort(null); setStatusSort(null); }} className={`flex items-center justify-end gap-1 text-[10px] font-medium uppercase tracking-wide hover:text-gray-600 transition-colors ${col.width} ${prioritySort ? "text-blue-500" : "text-gray-400"}`}>
+                        {col.label}{prioritySort === "asc" && upArrow}{prioritySort === "desc" && downArrow}
+                      </button>
+                    );
+                  }
+                  if (col.key === "status") {
+                    const upArrow = <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg>;
+                    const downArrow = <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>;
+                    return (
+                      <button key={col.key} onClick={() => { setStatusSort((p) => p === "asc" ? "desc" : p === "desc" ? null : "asc"); setTitleSort(null); setPrioritySort(null); }} className={`flex items-center justify-end gap-1 text-[10px] font-medium uppercase tracking-wide hover:text-gray-600 transition-colors ${col.width} ${statusSort ? "text-blue-500" : "text-gray-400"}`}>
+                        {col.label}{statusSort === "asc" && upArrow}{statusSort === "desc" && downArrow}
+                      </button>
+                    );
+                  }
+                  return (
+                    <span key={col.key} className={`text-[10px] font-medium text-gray-400 uppercase tracking-wide ${col.width} text-right`}>
+                      {col.label}
+                    </span>
+                  );
+                })}
               </div>
             </div>
             {(() => {
               // Build ordered list: parents followed by their children
+              const priorityOrder: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+              const statusOrder: Record<string, number> = { blocked: 0, at_risk: 1, identified: 2, pending: 3, in_progress: 4, assessing: 5, needs_verification: 6, paused: 7, mitigated: 8, complete: 9, closed: 10 };
               const parentItems = items.filter((e) => !e.parent_id).sort((a, b) => {
                 if (titleSort) {
                   const cmp = a.title.localeCompare(b.title);
                   return titleSort === "asc" ? cmp : -cmp;
+                }
+                if (prioritySort) {
+                  const cmp = (priorityOrder[a.priority] ?? 99) - (priorityOrder[b.priority] ?? 99);
+                  return prioritySort === "asc" ? cmp : -cmp;
+                }
+                if (statusSort) {
+                  const cmp = (statusOrder[a.status] ?? 99) - (statusOrder[b.status] ?? 99);
+                  return statusSort === "asc" ? cmp : -cmp;
                 }
                 // Closed risks go to the bottom
                 const aClosed = a.status === "closed" ? 1 : 0;
