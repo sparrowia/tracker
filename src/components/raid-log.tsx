@@ -1460,6 +1460,11 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
             <option value="">Status</option>
             <option value="pending">Pending</option>
             <option value="in_progress">In Progress</option>
+            <option value="complete">Complete</option>
+            <option value="needs_verification">Needs Verification</option>
+            <option value="paused">Paused</option>
+            <option value="at_risk">At Risk</option>
+            <option value="blocked">Blocked</option>
             <option value="identified">Identified</option>
             <option value="assessing">Assessing</option>
             <option value="mitigated">Mitigated</option>
