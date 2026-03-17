@@ -207,6 +207,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
   const [filterOwner, setFilterOwner] = useState("");
   const [filterAge, setFilterAge] = useState("");
   const colPickerRef = useRef<HTMLDivElement>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [movingId, setMovingId] = useState<string | null>(null);
   const [moveProjects, setMoveProjects] = useState<{ id: string; name: string; slug: string }[]>([]);
   const [moveTargetId, setMoveTargetId] = useState("");
@@ -862,7 +863,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                 <Fragment key={entry.id}>
                   {/* Collapsed row */}
                   <div
-                    className={`border-b last:border-b-0 cursor-pointer relative overflow-hidden ${isResolving ? "bg-green-100 opacity-0 border-transparent" : isDragging ? "opacity-40 bg-white border-gray-400" : isDropNest ? "bg-blue-50 border-blue-300" : isClosed ? "bg-gray-50 hover:bg-gray-100 border-gray-400" : "bg-white hover:bg-gray-50 border-gray-400"}`}
+                    className={`border-b last:border-b-0 cursor-pointer relative overflow-hidden ${isResolving ? "bg-green-100 opacity-0 border-transparent" : isDragging ? "opacity-40 bg-white border-gray-400" : isDropNest ? "bg-blue-50 border-blue-300" : selectedIds.has(entry.id) ? "bg-blue-50 border-gray-400" : isClosed ? "bg-gray-50 hover:bg-gray-100 border-gray-400" : "bg-white hover:bg-gray-50 border-gray-400"}`}
                     style={{ transition: isResolving ? "all 350ms ease-out" : undefined, paddingLeft: isChild ? "2rem" : "0.75rem", paddingRight: "0.75rem", ...(isResolving ? { maxHeight: 0, paddingTop: 0, paddingBottom: 0, overflow: "hidden" } : { maxHeight: 200, paddingTop: "0.5rem", paddingBottom: "0.5rem" }) }}
                     onClick={() => toggleExpand(entry.id)}
                     draggable={entry.raid_type !== "decision"}
@@ -876,6 +877,28 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                     {isDropAbove && <div className="absolute top-0 left-0 right-0 h-0.5 bg-blue-500 -translate-y-px z-10" />}
                     {isDropBelow && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500 translate-y-px z-10" />}
                     <div className={`flex items-center gap-4 min-w-0 ${isClosed ? "opacity-50" : ""}`}>
+                      {/* Select hitbox — left of circle/arrow */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedIds((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(entry.id)) next.delete(entry.id);
+                            else next.add(entry.id);
+                            return next;
+                          });
+                        }}
+                        className={`w-[18px] h-[18px] rounded flex items-center justify-center flex-shrink-0 transition-colors ${
+                          selectedIds.has(entry.id)
+                            ? "bg-blue-600 text-white"
+                            : "text-transparent hover:text-gray-300 hover:bg-gray-100"
+                        }`}
+                        title={selectedIds.has(entry.id) ? "Deselect" : "Select"}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                      </button>
                       {isChild && (
                         <span className="text-gray-300 flex-shrink-0 -ml-2 mr--2">↳</span>
                       )}
@@ -1360,6 +1383,109 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
               <button onClick={confirmMove} disabled={!moveTargetId} className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed">Move</button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Floating bulk toolbar */}
+      {selectedIds.size > 0 && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-30 bg-gray-800 text-white rounded-lg shadow-2xl px-4 py-3 flex items-center gap-3 text-sm">
+          <span className="font-medium">{selectedIds.size} selected</span>
+          <div className="w-px h-5 bg-gray-600" />
+          <select
+            defaultValue=""
+            onChange={(e) => {
+              if (!e.target.value) return;
+              const val = e.target.value;
+              for (const id of selectedIds) { saveField(id, "priority", val); }
+              e.target.value = "";
+            }}
+            className="bg-gray-700 text-white text-xs rounded border border-gray-600 px-2 py-1 focus:outline-none focus:border-blue-400"
+          >
+            <option value="">Priority</option>
+            <option value="critical">Critical</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+          </select>
+          <select
+            defaultValue=""
+            onChange={(e) => {
+              if (!e.target.value) return;
+              const val = e.target.value;
+              for (const id of selectedIds) { saveField(id, "status", val); }
+              e.target.value = "";
+            }}
+            className="bg-gray-700 text-white text-xs rounded border border-gray-600 px-2 py-1 focus:outline-none focus:border-blue-400"
+          >
+            <option value="">Status</option>
+            <option value="pending">Pending</option>
+            <option value="in_progress">In Progress</option>
+            <option value="identified">Identified</option>
+            <option value="assessing">Assessing</option>
+            <option value="mitigated">Mitigated</option>
+            <option value="closed">Closed</option>
+          </select>
+          <select
+            defaultValue=""
+            onChange={(e) => {
+              if (!e.target.value) return;
+              const val = e.target.value;
+              for (const id of selectedIds) { saveField(id, "owner_id", val); }
+              e.target.value = "";
+            }}
+            className="bg-gray-700 text-white text-xs rounded border border-gray-600 px-2 py-1 focus:outline-none focus:border-blue-400 max-w-[140px]"
+          >
+            <option value="">Owner</option>
+            {people.map((p) => (
+              <option key={p.id} value={p.id}>{p.full_name}</option>
+            ))}
+          </select>
+          <div className="w-px h-5 bg-gray-600" />
+          {/* Nest as children of... */}
+          <select
+            defaultValue=""
+            onChange={(e) => {
+              if (!e.target.value) return;
+              const parentId = e.target.value;
+              for (const id of selectedIds) {
+                if (id === parentId) continue;
+                supabase.from("raid_entries").update({ parent_id: parentId }).eq("id", id).then(() => {});
+                setEntries((prev) => prev.map((en) => en.id === id ? { ...en, parent_id: parentId } : en));
+              }
+              setSelectedIds(new Set());
+              e.target.value = "";
+            }}
+            className="bg-gray-700 text-white text-xs rounded border border-gray-600 px-2 py-1 focus:outline-none focus:border-blue-400 max-w-[160px]"
+          >
+            <option value="">Nest under...</option>
+            {entries.filter((e) => !selectedIds.has(e.id) && e.raid_type === activeTab).map((e) => (
+              <option key={e.id} value={e.id}>{e.title.slice(0, 40)}</option>
+            ))}
+          </select>
+          <button
+            onClick={() => {
+              // Make first selected the parent, rest become children
+              const ids = Array.from(selectedIds);
+              if (ids.length < 2) return;
+              const parentId = ids[0];
+              for (let i = 1; i < ids.length; i++) {
+                supabase.from("raid_entries").update({ parent_id: parentId }).eq("id", ids[i]).then(() => {});
+                setEntries((prev) => prev.map((en) => en.id === ids[i] ? { ...en, parent_id: parentId } : en));
+              }
+              setSelectedIds(new Set());
+            }}
+            className="bg-gray-700 text-xs rounded border border-gray-600 px-2 py-1 hover:bg-gray-600 transition-colors"
+            title="First selected becomes parent, rest become children"
+          >
+            Group
+          </button>
+          <div className="w-px h-5 bg-gray-600" />
+          <button
+            onClick={() => setSelectedIds(new Set())}
+            className="text-gray-400 hover:text-white transition-colors text-xs"
+          >
+            Clear
+          </button>
         </div>
       )}
     </div>

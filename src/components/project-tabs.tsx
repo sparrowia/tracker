@@ -777,6 +777,7 @@ function BlockersPanel({
     : blockers;
 
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [callNotesId, setCallNotesId] = useState<string | null>(null);
   const [callNotes, setCallNotes] = useState("");
   const [savingNotes, setSavingNotes] = useState(false);
@@ -1038,10 +1039,18 @@ function BlockersPanel({
             <Fragment key={b.id}>
               {/* Collapsed row */}
               <div
-                className="bg-white px-3 py-2 border-b border-gray-200 last:border-b-0 cursor-pointer hover:bg-red-50/40"
+                className={`px-3 py-2 border-b border-gray-200 last:border-b-0 cursor-pointer ${selectedIds.has(b.id) ? "bg-blue-50" : "bg-white hover:bg-red-50/40"}`}
                 onClick={() => toggleExpand(b.id)}
               >
                 <div className="flex items-center gap-4 min-w-0">
+                  {/* Select hitbox */}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setSelectedIds((prev) => { const next = new Set(prev); if (next.has(b.id)) next.delete(b.id); else next.add(b.id); return next; }); }}
+                    className={`w-[18px] h-[18px] rounded flex items-center justify-center flex-shrink-0 transition-colors ${selectedIds.has(b.id) ? "bg-blue-600 text-white" : "text-transparent hover:text-gray-300 hover:bg-gray-100"}`}
+                    title={selectedIds.has(b.id) ? "Deselect" : "Select"}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                  </button>
                   {/* Complete button */}
                   <button
                     onClick={(e) => { e.stopPropagation(); handleResolve(b.id); }}
@@ -1214,6 +1223,30 @@ function BlockersPanel({
           );
         })}
       </div>
+      {/* Floating bulk toolbar */}
+      {selectedIds.size > 0 && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-30 bg-gray-800 text-white rounded-lg shadow-2xl px-4 py-3 flex items-center gap-3 text-sm">
+          <span className="font-medium">{selectedIds.size} selected</span>
+          <div className="w-px h-5 bg-gray-600" />
+          <select defaultValue="" onChange={(e) => { if (!e.target.value) return; for (const id of selectedIds) saveField(id, "priority", e.target.value); e.target.value = ""; }}
+            className="bg-gray-700 text-white text-xs rounded border border-gray-600 px-2 py-1 focus:outline-none">
+            <option value="">Priority</option>
+            <option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option>
+          </select>
+          <select defaultValue="" onChange={(e) => { if (!e.target.value) return; for (const id of selectedIds) saveField(id, "status", e.target.value); e.target.value = ""; }}
+            className="bg-gray-700 text-white text-xs rounded border border-gray-600 px-2 py-1 focus:outline-none">
+            <option value="">Status</option>
+            <option value="pending">Pending</option><option value="in_progress">In Progress</option><option value="complete">Complete</option><option value="blocked">Blocked</option>
+          </select>
+          <select defaultValue="" onChange={(e) => { if (!e.target.value) return; for (const id of selectedIds) saveField(id, "owner_id", e.target.value); e.target.value = ""; }}
+            className="bg-gray-700 text-white text-xs rounded border border-gray-600 px-2 py-1 focus:outline-none max-w-[140px]">
+            <option value="">Owner</option>
+            {people.map((p) => (<option key={p.id} value={p.id}>{p.full_name}</option>))}
+          </select>
+          <div className="w-px h-5 bg-gray-600" />
+          <button onClick={() => setSelectedIds(new Set())} className="text-gray-400 hover:text-white transition-colors text-xs">Clear</button>
+        </div>
+      )}
     </div>
   );
 }
@@ -1289,6 +1322,7 @@ function ActionItemsPanel({
 }) {
   const { role, profileId, userPersonId } = useRole();
   const [actions, setActions] = useState<ActionRow[]>(initialActions);
+  const [selectedActionIds, setSelectedActionIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!registerAdder) return;
@@ -1673,10 +1707,18 @@ function ActionItemsPanel({
             <Fragment key={a.id}>
               {/* Collapsed row */}
               <div
-                className="bg-white px-3 py-2 border-b border-gray-200 last:border-b-0 cursor-pointer hover:bg-gray-50"
+                className={`px-3 py-2 border-b border-gray-200 last:border-b-0 cursor-pointer ${selectedActionIds.has(a.id) ? "bg-blue-50" : "bg-white hover:bg-gray-50"}`}
                 onClick={() => toggleExpand(a.id)}
               >
                 <div className="flex items-center gap-4 min-w-0">
+                  {/* Select hitbox */}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setSelectedActionIds((prev) => { const next = new Set(prev); if (next.has(a.id)) next.delete(a.id); else next.add(a.id); return next; }); }}
+                    className={`w-[18px] h-[18px] rounded flex items-center justify-center flex-shrink-0 transition-colors ${selectedActionIds.has(a.id) ? "bg-blue-600 text-white" : "text-transparent hover:text-gray-300 hover:bg-gray-100"}`}
+                    title={selectedActionIds.has(a.id) ? "Deselect" : "Select"}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                  </button>
                   {/* Complete button */}
                   <button
                     onClick={(e) => { e.stopPropagation(); handleResolve(a.id); }}
@@ -1879,6 +1921,30 @@ function ActionItemsPanel({
       </div>
         </>
       ) : null}
+      {/* Floating bulk toolbar */}
+      {selectedActionIds.size > 0 && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-30 bg-gray-800 text-white rounded-lg shadow-2xl px-4 py-3 flex items-center gap-3 text-sm">
+          <span className="font-medium">{selectedActionIds.size} selected</span>
+          <div className="w-px h-5 bg-gray-600" />
+          <select defaultValue="" onChange={(e) => { if (!e.target.value) return; for (const id of selectedActionIds) saveField(id, "priority", e.target.value); e.target.value = ""; }}
+            className="bg-gray-700 text-white text-xs rounded border border-gray-600 px-2 py-1 focus:outline-none">
+            <option value="">Priority</option>
+            {actionPriorityOptions.map((p) => (<option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</option>))}
+          </select>
+          <select defaultValue="" onChange={(e) => { if (!e.target.value) return; for (const id of selectedActionIds) saveField(id, "status", e.target.value); e.target.value = ""; }}
+            className="bg-gray-700 text-white text-xs rounded border border-gray-600 px-2 py-1 focus:outline-none">
+            <option value="">Status</option>
+            {actionStatusOptions.map((s) => (<option key={s} value={s}>{s.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase())}</option>))}
+          </select>
+          <select defaultValue="" onChange={(e) => { if (!e.target.value) return; for (const id of selectedActionIds) saveField(id, "owner_id", e.target.value); e.target.value = ""; }}
+            className="bg-gray-700 text-white text-xs rounded border border-gray-600 px-2 py-1 focus:outline-none max-w-[140px]">
+            <option value="">Owner</option>
+            {people.map((p) => (<option key={p.id} value={p.id}>{p.full_name}</option>))}
+          </select>
+          <div className="w-px h-5 bg-gray-600" />
+          <button onClick={() => setSelectedActionIds(new Set())} className="text-gray-400 hover:text-white transition-colors text-xs">Clear</button>
+        </div>
+      )}
     </div>
   );
 }
