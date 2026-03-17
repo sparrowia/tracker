@@ -1507,6 +1507,19 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
           </button>
           <div className="w-px h-5 bg-gray-600" />
           <button
+            onClick={async () => {
+              if (!confirm(`Delete ${selectedIds.size} item${selectedIds.size !== 1 ? "s" : ""}?`)) return;
+              const ids = Array.from(selectedIds);
+              await supabase.from("raid_entries").delete().in("id", ids);
+              setEntries((prev) => prev.filter((e) => !selectedIds.has(e.id)));
+              setSelectedIds(new Set());
+              if (expandedId && selectedIds.has(expandedId)) setExpandedId(null);
+            }}
+            className="text-red-400 hover:text-red-300 transition-colors text-xs font-medium"
+          >
+            Delete
+          </button>
+          <button
             onClick={() => setSelectedIds(new Set())}
             className="text-gray-400 hover:text-white transition-colors text-xs"
           >

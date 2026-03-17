@@ -1259,6 +1259,13 @@ function BlockersPanel({
             {people.map((p) => (<option key={p.id} value={p.id}>{p.full_name}</option>))}
           </select>
           <div className="w-px h-5 bg-gray-600" />
+          <button onClick={async () => {
+            if (!confirm(`Delete ${selectedIds.size} blocker${selectedIds.size !== 1 ? "s" : ""}?`)) return;
+            await supabase.from("blockers").delete().in("id", Array.from(selectedIds));
+            setBlockers((prev) => prev.filter((b) => !selectedIds.has(b.id)));
+            setSelectedIds(new Set());
+            if (expandedId && selectedIds.has(expandedId)) setExpandedId(null);
+          }} className="text-red-400 hover:text-red-300 transition-colors text-xs font-medium">Delete</button>
           <button onClick={() => setSelectedIds(new Set())} className="text-gray-400 hover:text-white transition-colors text-xs">Clear</button>
         </div>
       )}
@@ -1972,6 +1979,13 @@ function ActionItemsPanel({
             {people.map((p) => (<option key={p.id} value={p.id}>{p.full_name}</option>))}
           </select>
           <div className="w-px h-5 bg-gray-600" />
+          <button onClick={async () => {
+            if (!confirm(`Delete ${selectedActionIds.size} action item${selectedActionIds.size !== 1 ? "s" : ""}?`)) return;
+            await supabase.from("action_items").delete().in("id", Array.from(selectedActionIds));
+            setActions((prev) => prev.filter((a) => !selectedActionIds.has(a.id)));
+            setSelectedActionIds(new Set());
+            if (expandedId && selectedActionIds.has(expandedId)) setExpandedId(null);
+          }} className="text-red-400 hover:text-red-300 transition-colors text-xs font-medium">Delete</button>
           <button onClick={() => setSelectedActionIds(new Set())} className="text-gray-400 hover:text-white transition-colors text-xs">Clear</button>
         </div>
       )}
