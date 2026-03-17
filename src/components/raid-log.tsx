@@ -208,6 +208,8 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
   const [filterAge, setFilterAge] = useState("");
   const colPickerRef = useRef<HTMLDivElement>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const lastSelectedRef = useRef<string | null>(null);
+  const visibleIdsRef = useRef<string[]>([]);
   const [movingId, setMovingId] = useState<string | null>(null);
   const [moveProjects, setMoveProjects] = useState<{ id: string; name: string; slug: string }[]>([]);
   const [moveTargetId, setMoveTargetId] = useState("");
@@ -845,6 +847,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                   ordered.push({ entry: e, isChild: true });
                 }
               }
+              visibleIdsRef.current = ordered.map((o) => o.entry.id);
               return ordered;
             })().map(({ entry, isChild }) => {
               const isExpanded = expandedId === entry.id;
@@ -877,23 +880,39 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                     {isDropAbove && <div className="absolute top-0 left-0 right-0 h-0.5 bg-blue-500 -translate-y-px z-10" />}
                     {isDropBelow && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500 translate-y-px z-10" />}
                     <div className={`flex items-center gap-4 min-w-0 ${isClosed ? "opacity-50" : ""}`}>
-                      {/* Select hitbox — left of circle/arrow */}
+                      {/* Select hitbox — left of circle/arrow, shift+click for range */}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          setSelectedIds((prev) => {
-                            const next = new Set(prev);
-                            if (next.has(entry.id)) next.delete(entry.id);
-                            else next.add(entry.id);
-                            return next;
-                          });
+                          if (e.shiftKey && lastSelectedRef.current) {
+                            // Range select
+                            const ids = visibleIdsRef.current;
+                            const from = ids.indexOf(lastSelectedRef.current);
+                            const to = ids.indexOf(entry.id);
+                            if (from !== -1 && to !== -1) {
+                              const [start, end] = from < to ? [from, to] : [to, from];
+                              setSelectedIds((prev) => {
+                                const next = new Set(prev);
+                                for (let i = start; i <= end; i++) next.add(ids[i]);
+                                return next;
+                              });
+                            }
+                          } else {
+                            setSelectedIds((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(entry.id)) next.delete(entry.id);
+                              else next.add(entry.id);
+                              return next;
+                            });
+                          }
+                          lastSelectedRef.current = entry.id;
                         }}
                         className={`w-[18px] h-[18px] rounded flex items-center justify-center flex-shrink-0 transition-colors ${
                           selectedIds.has(entry.id)
                             ? "bg-blue-600 text-white"
                             : "text-transparent hover:text-gray-300 hover:bg-gray-100"
                         }`}
-                        title={selectedIds.has(entry.id) ? "Deselect" : "Select"}
+                        title={selectedIds.has(entry.id) ? "Deselect" : "Select (Shift+click for range)"}
                       >
                         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                           <polyline points="20 6 9 17 4 12" />

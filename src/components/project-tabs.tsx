@@ -778,6 +778,7 @@ function BlockersPanel({
 
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const lastSelectedBlockerRef = useRef<string | null>(null);
   const [callNotesId, setCallNotesId] = useState<string | null>(null);
   const [callNotes, setCallNotes] = useState("");
   const [savingNotes, setSavingNotes] = useState(false);
@@ -1043,11 +1044,25 @@ function BlockersPanel({
                 onClick={() => toggleExpand(b.id)}
               >
                 <div className="flex items-center gap-4 min-w-0">
-                  {/* Select hitbox */}
+                  {/* Select hitbox — shift+click for range */}
                   <button
-                    onClick={(e) => { e.stopPropagation(); setSelectedIds((prev) => { const next = new Set(prev); if (next.has(b.id)) next.delete(b.id); else next.add(b.id); return next; }); }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const blockerIds = filteredBlockers.map((x) => x.id);
+                      if (e.shiftKey && lastSelectedBlockerRef.current) {
+                        const from = blockerIds.indexOf(lastSelectedBlockerRef.current);
+                        const to = blockerIds.indexOf(b.id);
+                        if (from !== -1 && to !== -1) {
+                          const [start, end] = from < to ? [from, to] : [to, from];
+                          setSelectedIds((prev) => { const next = new Set(prev); for (let i = start; i <= end; i++) next.add(blockerIds[i]); return next; });
+                        }
+                      } else {
+                        setSelectedIds((prev) => { const next = new Set(prev); if (next.has(b.id)) next.delete(b.id); else next.add(b.id); return next; });
+                      }
+                      lastSelectedBlockerRef.current = b.id;
+                    }}
                     className={`w-[18px] h-[18px] rounded flex items-center justify-center flex-shrink-0 transition-colors ${selectedIds.has(b.id) ? "bg-blue-600 text-white" : "text-transparent hover:text-gray-300 hover:bg-gray-100"}`}
-                    title={selectedIds.has(b.id) ? "Deselect" : "Select"}
+                    title={selectedIds.has(b.id) ? "Deselect" : "Select (Shift for range)"}
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
                   </button>
@@ -1323,6 +1338,7 @@ function ActionItemsPanel({
   const { role, profileId, userPersonId } = useRole();
   const [actions, setActions] = useState<ActionRow[]>(initialActions);
   const [selectedActionIds, setSelectedActionIds] = useState<Set<string>>(new Set());
+  const lastSelectedActionRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!registerAdder) return;
@@ -1711,11 +1727,25 @@ function ActionItemsPanel({
                 onClick={() => toggleExpand(a.id)}
               >
                 <div className="flex items-center gap-4 min-w-0">
-                  {/* Select hitbox */}
+                  {/* Select hitbox — shift+click for range */}
                   <button
-                    onClick={(e) => { e.stopPropagation(); setSelectedActionIds((prev) => { const next = new Set(prev); if (next.has(a.id)) next.delete(a.id); else next.add(a.id); return next; }); }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const actionIds = filteredActions.map((x) => x.id);
+                      if (e.shiftKey && lastSelectedActionRef.current) {
+                        const from = actionIds.indexOf(lastSelectedActionRef.current);
+                        const to = actionIds.indexOf(a.id);
+                        if (from !== -1 && to !== -1) {
+                          const [start, end] = from < to ? [from, to] : [to, from];
+                          setSelectedActionIds((prev) => { const next = new Set(prev); for (let i = start; i <= end; i++) next.add(actionIds[i]); return next; });
+                        }
+                      } else {
+                        setSelectedActionIds((prev) => { const next = new Set(prev); if (next.has(a.id)) next.delete(a.id); else next.add(a.id); return next; });
+                      }
+                      lastSelectedActionRef.current = a.id;
+                    }}
                     className={`w-[18px] h-[18px] rounded flex items-center justify-center flex-shrink-0 transition-colors ${selectedActionIds.has(a.id) ? "bg-blue-600 text-white" : "text-transparent hover:text-gray-300 hover:bg-gray-100"}`}
-                    title={selectedActionIds.has(a.id) ? "Deselect" : "Select"}
+                    title={selectedActionIds.has(a.id) ? "Deselect" : "Select (Shift for range)"}
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
                   </button>
