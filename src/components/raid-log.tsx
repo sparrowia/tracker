@@ -1016,7 +1016,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
 
                   {/* Expanded detail — inline editable */}
                   {isExpanded && (
-                    <div className="bg-yellow-50/60 border-b border-gray-200" onClick={(e) => e.stopPropagation()}>
+                    <div className="bg-white border-b border-gray-200" onClick={(e) => e.stopPropagation()}>
                       {/* Editable title */}
                       <div className="px-5 pt-4 pb-3 text-base font-semibold text-gray-900 bg-amber-50/60">
                         <InlineText value={entry.title} onSave={(v) => { if (v.trim()) saveField(entry.id, "title", v.trim()); }} placeholder="Title..." />
@@ -1024,11 +1024,11 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
 
                       {/* Description & Notes — side by side */}
                       <div className="grid grid-cols-2 gap-4 px-5 py-3 border-t border-gray-200">
-                        <div className="rounded border border-gray-200 p-3">
+                        <div className="rounded border border-gray-200 bg-white p-3">
                           <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Description</span>
                           <InlineText value={entry.description || ""} onSave={(v) => saveField(entry.id, "description", v)} multiline placeholder="Add description..." />
                         </div>
-                        <div className="rounded border border-gray-200 p-3">
+                        <div className="rounded border border-gray-200 bg-white p-3">
                           <div className="flex items-center justify-between mb-0.5">
                             <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Notes</span>
                           </div>
@@ -1066,13 +1066,13 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                             }}
                             placeholder="Next steps..."
                             rows={2}
-                            className="w-full rounded border border-gray-200 px-2 py-1 text-sm font-bold focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none mt-1"
+                            className="w-full rounded border border-gray-200 bg-white px-2 py-1 text-sm font-bold focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none mt-1"
                           />
                         </div>
                       )}
 
                       {/* Properties grid */}
-                      <div className="border-t border-gray-200">
+                      <div className="border-t border-gray-200 bg-white">
                         {entry.raid_type === "decision" ? (
                           /* Simplified decision detail panel */
                           <div className="grid grid-cols-[120px_1fr_120px_1fr] items-stretch">
@@ -1250,11 +1250,13 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                       </div>
 
                       {/* Comments */}
-                      <CommentThread
-                        raidEntryId={entry.id}
-                        orgId={project.org_id}
-                        people={people}
-                      />
+                      <div className="bg-white">
+                        <CommentThread
+                          raidEntryId={entry.id}
+                          orgId={project.org_id}
+                          people={people}
+                        />
+                      </div>
 
                       {/* Actions bar */}
                       <div className="flex justify-end items-center gap-3 px-5 py-2 border-t border-gray-200">
