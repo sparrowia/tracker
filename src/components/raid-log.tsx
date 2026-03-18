@@ -88,15 +88,16 @@ function InlineText({ value, onSave, placeholder, multiline }: { value: string; 
 
   if (!editing) {
     if (multiline && value) {
-      // Render with line breaks and basic markdown (bold)
+      // Render with line breaks, bold markdown, and clickable URLs
       const html = value
         .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
         .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+        .replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-blue-600 underline hover:text-blue-800 break-all">$1</a>')
         .replace(/\n/g, "<br />");
       return (
         <div
-          className="text-gray-900 text-sm mt-0.5 hover:bg-gray-100 rounded cursor-pointer px-1 -mx-1 py-0.5"
-          onClick={(e) => { e.stopPropagation(); setEditing(true); }}
+          className="text-gray-900 text-sm mt-0.5 hover:bg-gray-100 rounded cursor-pointer px-1 -mx-1 py-0.5 break-words overflow-hidden"
+          onClick={(e) => { if ((e.target as HTMLElement).tagName === "A") return; e.stopPropagation(); setEditing(true); }}
           dangerouslySetInnerHTML={{ __html: html }}
         />
       );
