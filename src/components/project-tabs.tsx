@@ -991,8 +991,8 @@ function BlockersPanel({
   }
 
   return (
-    <div className="bg-white rounded-lg border border-gray-300 overflow-hidden">
-      <div className="bg-red-800 px-4 py-2.5 flex items-center justify-between">
+    <div className="bg-white rounded-lg border border-gray-300">
+      <div className="bg-red-800 px-4 py-2.5 flex items-center justify-between rounded-t-lg">
         <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Active Blockers ({searchFilter ? `${filteredBlockers.length}/${blockers.length}` : blockers.length})</h2>
         <div className="relative" ref={colPickerRef}>
           <button
@@ -1620,8 +1620,8 @@ function ActionItemsPanel({
   }
 
   return (
-    <div className="bg-white rounded-lg border border-gray-300 overflow-hidden">
-      <div className="bg-gray-800 px-4 py-2.5 flex items-center justify-between">
+    <div className="bg-white rounded-lg border border-gray-300">
+      <div className="bg-gray-800 px-4 py-2.5 flex items-center justify-between rounded-t-lg">
         <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Action Items ({filteredActions.length})</h2>
         <div className="flex items-center gap-3">
           <div className="relative" ref={colPickerRef}>
