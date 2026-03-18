@@ -61,6 +61,7 @@ src/
 │       └── match/            # Entity matching/search
 ├── components/
 │   ├── agenda-view.tsx       # Asana-style agenda with priority groups
+│   ├── vendor-agenda-view.tsx # Vendor-specific agenda (same layout as agenda-view)
 │   ├── project-tabs.tsx      # Tab nav + staging area for AI suggestions
 │   ├── raid-log.tsx          # RAID quadrants with subtasks, drag-and-drop, archived view
 │   ├── comment-thread.tsx    # Reusable comment thread with file attachments
@@ -70,6 +71,7 @@ src/
 │   ├── add-project-button.tsx
 │   ├── add-initiative-button.tsx
 │   ├── owner-picker.tsx      # Person selection dropdown
+│   ├── wiki-editor.tsx       # Wiki page editor (block-based)
 │   ├── undo-toast.tsx        # Undo notification
 │   ├── sidebar.tsx           # Left nav
 │   └── topbar.tsx            # Top bar
@@ -111,6 +113,8 @@ src/
 | `meetings` | Meeting records |
 | `activity_log` | Audit trail |
 | `term_corrections` | AI extraction glossary (wrong_term → correct_term) |
+| `milestones` | Company timeline milestones with parent/child grouping |
+| `wiki_pages` | Block-based wiki pages with parent/child hierarchy |
 
 ### Junction Tables
 `project_vendors`, `meeting_projects`, `meeting_attendees`, `intake_entities`, `correction_log`
@@ -140,17 +144,21 @@ All tables have row-level security policies scoped to `org_id` via the `user_org
 
 1. **Vendor Accountability** — track action items + blockers per vendor with age and escalation counts
 2. **Project RAID Log** — four-quadrant Risk/Assumption/Issue/Decision matrix with configurable columns, filters, property-table detail view, subtasks (parent-child via `parent_id`), and drag-and-drop reordering/nesting (sort_order persisted)
-3. **Meeting Agenda** — toggle items for meeting inclusion via bell icon; auto-ranked by priority/severity/age/escalation score
-4. **AI Call Notes** — paste meeting notes on any item; DeepSeek updates fields + suggests new items in a staging area
-5. **AI Intake** — paste raw text, upload images (OCR), drop PDFs, or import spreadsheets; DeepSeek extracts structured items with 90s timeout and error recovery
-6. **PDF Intake** — drag-and-drop PDF files on both standalone intake and project intake panel; client-side text extraction via pdfjs-dist with position-based spacing
-7. **Asana Parser** — deterministic parser for Asana PDF exports; bypasses AI entirely for structured text extraction (separator-based block splitting, field parsing, person matching)
-8. **Intelligent Scoring** — RPC-based agenda ranking: `priority_score + severity_score + escalation_count*10 + min(age,30)*2`
-9. **Comments & Attachments** — threaded comments on RAID entries, action items, and blockers with file attachment support (Supabase Storage). Author auto-detected from logged-in user. Newest-first display with Cmd+Enter posting.
-10. **RAID Archived View** — "Archived" link below RAID type tabs shows all resolved items sorted by resolution date. Type label replaces ID, reopen button on each row. Resolve animation: green flash + collapse (350ms ease-out).
-11. **Vendor Picker** — all org vendors shown in RAID/Actions/Blockers detail panels with inline "+ Add Vendor" creation (like OwnerPicker for people)
-12. **RAID Subtasks** — self-referencing `parent_id` on raid_entries. Disclosure triangle toggles children visible/hidden. Children indented with ↳ arrow. Parent dropdown in detail panel.
-13. **RAID Drag-and-Drop** — native HTML5 drag-and-drop for reordering and nesting. Top/bottom 25% = reorder (blue line indicator), middle 50% = nest as subtask (blue highlight). Sort order via `sort_order` integer column with midpoint gaps.
+3. **RAID Column Sorting** — Issue Name, Priority, and Status column headers are clickable sort toggles (asc → desc → off). Only one sort active at a time; clicking one resets the others. Priority order: Critical→High→Medium→Low. Status order: Blocked→At Risk→Identified→Pending→In Progress→Assessing→Needs Verification→Paused→Mitigated→Complete→Closed.
+4. **RAID Bulk Actions** — multi-select via checkbox or Shift+click range select; floating toolbar for bulk Priority, Status, Owner, Nest, Group, Delete. Status dropdown is dynamically derived from the raid_types of selected items (risks get risk statuses, issues/assumptions get issue statuses, decisions get decision statuses, mixed selections show union).
+5. **Meeting Agenda** — toggle items for meeting inclusion via bell icon; auto-ranked by priority/severity/age/escalation score
+6. **AI Call Notes** — paste meeting notes on any item; DeepSeek updates fields + suggests new items in a staging area
+7. **AI Intake** — paste raw text, upload images (OCR), drop PDFs, or import spreadsheets; DeepSeek extracts structured items with 90s timeout and error recovery
+8. **PDF Intake** — drag-and-drop PDF files on both standalone intake and project intake panel; client-side text extraction via pdfjs-dist with position-based spacing
+9. **Asana Parser** — deterministic parser for Asana PDF exports; bypasses AI entirely for structured text extraction (separator-based block splitting, field parsing, person matching)
+10. **Intelligent Scoring** — RPC-based agenda ranking: `priority_score + severity_score + escalation_count*10 + min(age,30)*2`
+11. **Comments & Attachments** — threaded comments on RAID entries, action items, and blockers with file attachment support (Supabase Storage). Author auto-detected from logged-in user. Newest-first display with Cmd+Enter posting.
+12. **RAID Archived View** — "Archived" link below RAID type tabs shows all resolved items sorted by resolution date. Type label replaces ID, reopen button on each row. Resolve animation: green flash + collapse (350ms ease-out).
+13. **Vendor Picker** — all org vendors shown in RAID/Actions/Blockers detail panels with inline "+ Add Vendor" creation (like OwnerPicker for people)
+14. **RAID Subtasks** — self-referencing `parent_id` on raid_entries. Disclosure triangle toggles children visible/hidden. Children indented with ↳ arrow. Parent dropdown in detail panel.
+15. **RAID Drag-and-Drop** — native HTML5 drag-and-drop for reordering and nesting. Top/bottom 25% = reorder (blue line indicator), middle 50% = nest as subtask (blue highlight). Sort order via `sort_order` integer column with midpoint gaps.
+16. **Company Timeline** — three-view timeline (Timeline, Calendar, Gantt) with milestone parent/child grouping, linked and proposed project/initiative milestones, "create from proposed" flow.
+17. **Wiki** — block-based wiki pages with parent/child hierarchy, hosted at `/wiki`.
 
 ## UI Design System
 
@@ -162,10 +170,11 @@ All tables have row-level security policies scoped to `org_id` via the `user_org
 - **Responsible column:** blue initials avatar (`bg-blue-100 text-blue-700`) + full name
 - **Priority badges:** colored pills via `priorityColor()` in `lib/utils.ts`
 - **Agenda view:** Asana-style collapsible priority groups with dark bar headers
-- **Expanded detail:** Property-table layout — label/value grid (`items-stretch` for aligned borders, `border-gray-200`), Impact as Low/Medium/High select, full-width description below, actions bar at bottom. No duplicate title. Consistent across RAID log, blockers, and action items.
+- **Expanded detail panels:** `bg-yellow-50/25` panel background throughout (title bar, description/notes grid, next steps, comments section). Inner content boxes (description, notes, next steps textarea, properties grid, comment textarea, Attach button) use `bg-white` for contrast. Property-table layout — label/value grid (`items-stretch` for aligned borders, `border-gray-200`), Impact as Low/Medium/High select. No duplicate title. Consistent across RAID log, blockers, action items, and agenda view.
 - **Reporter column:** Purple initials avatar (`bg-purple-100 text-purple-700`) to distinguish from blue owner avatar
-- **Comments section:** Below description in expanded detail panels. Author avatar + name + relative time, delete on hover, file attachment chips.
+- **Comments section:** `bg-yellow-50/25` background matching panel tint. Comment textarea and Attach button are `bg-white`. Author avatar + name + relative time, delete on hover, file attachment chips.
 - **Resolve animation:** Green flash (`bg-green-100`) + fade out + collapse via inline `transition: all 350ms ease-out`
+- **Sortable column headers:** Issue Name, Priority, Status in RAID log are clickable toggles showing up/down arrow indicators; active sort highlighted blue. Only one sort active at a time.
 
 ## Migrations
 
@@ -186,6 +195,24 @@ All in `supabase/migrations/`:
 | `20260306000001_comments.sql` | Comments + comment_attachments tables, RLS, Supabase Storage bucket |
 | `20260306000002_raid_subtasks.sql` | Self-referencing `parent_id` on raid_entries for subtask nesting |
 | `20260306000003_raid_sort_order.sql` | `sort_order` integer column on raid_entries for drag-and-drop reordering |
+| `20260310000001_rbac_and_invitations.sql` | RBAC roles, invitations table, RLS policies, helper functions |
+| `20260310000002_update_handle_new_user.sql` | Update new user trigger to read role/vendor_id from invite metadata |
+| `20260310000003_remove_duplicate_intake_entries.sql` | Data cleanup for duplicate intake records |
+| `20260310000004_agenda_exclude_resolved.sql` | Exclude resolved items from agenda RPCs |
+| `20260310000005_agenda_drop_resolved_at_check.sql` | Fix resolved_at filter in agenda RPC |
+| `20260310000006_agenda_add_owner_vendor_ids.sql` | Add owner_id + vendor_id to agenda RPC output |
+| `20260310000007_agenda_add_status_due_date.sql` | Add status + due_date to agenda RPC output |
+| `20260310000008_vendor_agenda_project_id.sql` | Add project_id to vendor agenda RPC output |
+| `20260310000009_add_stage_column.sql` | Add `stage` column to action_items and raid_entries |
+| `20260310000010_project_documents.sql` | project_documents table for AI-generated section content |
+| `20260311000001_user_visible_projects.sql` | `user_visible_project_ids` RPC for role-scoped dashboard |
+| `20260311000002_performance_indexes.sql` | Indexes on raid_entries, action_items, blockers, projects, people |
+| `20260311000003_fix_fake_projects.sql` | Data cleanup for test/fake project records |
+| `20260312000001_raid_notes_column.sql` | Add `notes` column to raid_entries |
+| `20260312000002_next_steps_column.sql` | Add `next_steps` column to raid_entries and action_items |
+| `20260313000001_milestones.sql` | Milestones table for company timeline |
+| `20260313000002_milestones_parent_id.sql` | Self-referencing `parent_id` on milestones for grouping |
+| `20260316000001_wiki_pages.sql` | Wiki pages table with parent/child hierarchy and block content |
 
 ## Deployment
 
@@ -205,6 +232,6 @@ All docs live in this repo: [github.com/sparrowia/tracker](https://github.com/sp
 | [`CLAUDE.md`](https://github.com/sparrowia/tracker/blob/main/CLAUDE.md) | AI assistant instructions, conventions, and guardrails |
 | [`src/lib/types.ts`](https://github.com/sparrowia/tracker/blob/main/src/lib/types.ts) | All TypeScript interfaces and enums |
 | [`src/lib/utils.ts`](https://github.com/sparrowia/tracker/blob/main/src/lib/utils.ts) | Formatting helpers (priority colors, status badges, dates) |
-| [`supabase/migrations/`](https://github.com/sparrowia/tracker/tree/main/supabase/migrations) | Full database schema history (13 migrations) |
+| [`supabase/migrations/`](https://github.com/sparrowia/tracker/tree/main/supabase/migrations) | Full database schema history (31 migrations) |
 | [`.env.local.example`](https://github.com/sparrowia/tracker/blob/main/.env.local.example) | Required environment variables |
 | [`PROMPT.md`](https://github.com/sparrowia/tracker/blob/main/PROMPT.md) | Bootstrap prompt for AI assistants |
