@@ -141,6 +141,7 @@ export interface Project {
   target_completion: string | null;
   notes: string | null;
   initiative_id: string | null;
+  public_issue_form: boolean;
   created_by: string | null;
   created_at: string;
   updated_at: string;

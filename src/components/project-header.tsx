@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { healthColor, healthLabel, formatDateShort } from "@/lib/utils";
+import { useRole } from "@/components/role-context";
+import { isAdmin } from "@/lib/permissions";
 import type { Project, ProjectHealth, Vendor } from "@/lib/types";
 import Link from "next/link";
 
@@ -26,6 +28,10 @@ export default function ProjectHeader({ project, vendors }: ProjectHeaderProps) 
     notes: p.notes || "",
   });
   const [saving, setSaving] = useState(false);
+  const [publicIssueForm, setPublicIssueForm] = useState(project.public_issue_form ?? false);
+  const [togglingForm, setTogglingForm] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const { role } = useRole();
   const supabase = createClient();
 
   function startEdit() {
@@ -60,6 +66,27 @@ export default function ProjectHeader({ project, vendors }: ProjectHeaderProps) 
       window.dispatchEvent(new CustomEvent("sidebar:refresh"));
     }
     setSaving(false);
+  }
+
+  async function togglePublicIssueForm() {
+    setTogglingForm(true);
+    const newVal = !publicIssueForm;
+    const { error } = await supabase
+      .from("projects")
+      .update({ public_issue_form: newVal })
+      .eq("id", p.id);
+    if (!error) {
+      setPublicIssueForm(newVal);
+    }
+    setTogglingForm(false);
+  }
+
+  function copyPublicLink() {
+    const url = `${window.location.origin}/issues/${p.slug}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
   }
 
   if (editing) {
@@ -189,6 +216,49 @@ export default function ProjectHeader({ project, vendors }: ProjectHeaderProps) 
         {p.target_completion && <span>Target: {formatDateShort(p.target_completion)}</span>}
       </div>
       {p.notes && <p className="text-sm text-gray-500 mt-2">{p.notes}</p>}
+      {isAdmin(role) && (
+        <div className="flex items-center gap-3 mt-3">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <button
+              type="button"
+              onClick={togglePublicIssueForm}
+              disabled={togglingForm}
+              className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${
+                publicIssueForm ? "bg-blue-600" : "bg-gray-300"
+              } ${togglingForm ? "opacity-50" : ""}`}
+            >
+              <span
+                className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${
+                  publicIssueForm ? "translate-x-4.5" : "translate-x-0.5"
+                }`}
+              />
+            </button>
+            <span className="text-xs text-gray-600">Public Issue Form</span>
+          </label>
+          {publicIssueForm && (
+            <button
+              onClick={copyPublicLink}
+              className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100"
+            >
+              {copied ? (
+                <>
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                  Copied!
+                </>
+              ) : (
+                <>
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                  </svg>
+                  Copy link
+                </>
+              )}
+            </button>
+          )}
+        </div>
+      )}
       {vendors.length > 0 && (
         <div className="flex gap-2 mt-3">
           {vendors.map((v) => (
