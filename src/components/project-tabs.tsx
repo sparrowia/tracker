@@ -1364,13 +1364,16 @@ function ActionItemsPanel({
   useEffect(() => { onCountChange?.(actions.length); }, [actions.length, onCountChange]);
 
   const actionSearchLower = searchFilter.toLowerCase();
-  const filteredActions = searchFilter
+  const allFilteredActions = searchFilter
     ? actions.filter((a) => {
         const text = [a.title, a.notes, a.description, a.owner?.full_name, a.vendor?.name].filter(Boolean).join(" ").toLowerCase();
         return text.includes(actionSearchLower);
       })
     : actions;
+  const filteredActions = allFilteredActions.filter((a) => a.status !== "complete");
+  const archivedActions = allFilteredActions.filter((a) => a.status === "complete").sort((a, b) => (b.resolved_at || b.updated_at).localeCompare(a.resolved_at || a.updated_at));
 
+  const [showArchived, setShowArchived] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [callNotesId, setCallNotesId] = useState<string | null>(null);
   const [callNotes, setCallNotes] = useState("");
@@ -1619,7 +1622,7 @@ function ActionItemsPanel({
   return (
     <div className="bg-white rounded-lg border border-gray-300 overflow-hidden">
       <div className="bg-gray-800 px-4 py-2.5 flex items-center justify-between">
-        <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Action Items ({searchFilter ? `${filteredActions.length}/${actions.length}` : actions.length})</h2>
+        <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Action Items ({filteredActions.length})</h2>
         <div className="flex items-center gap-3">
           <div className="relative" ref={colPickerRef}>
             <button
@@ -1932,6 +1935,72 @@ function ActionItemsPanel({
       </div>
         </>
       ) : null}
+
+      {/* Archived link + view */}
+      {archivedActions.length > 0 && (
+        <button
+          onClick={() => setShowArchived(!showArchived)}
+          className={`mt-2 px-3 text-xs text-left transition-colors ${showArchived ? "text-gray-900 font-medium" : "text-gray-400 hover:text-gray-600"}`}
+        >
+          Archived ({archivedActions.length})
+        </button>
+      )}
+      {showArchived && archivedActions.length > 0 && (
+        <div className="mt-2 rounded-lg border border-gray-300 overflow-hidden">
+          <div className="bg-gray-700 px-4 h-9 flex items-center">
+            <h3 className="text-xs font-semibold text-white uppercase tracking-wide">Archived ({archivedActions.length})</h3>
+          </div>
+          <div>
+            <div className="bg-gray-50 px-3 py-1 border-b border-gray-300">
+              <div className="flex items-center gap-4">
+                <div className="flex-1" />
+                <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide w-[68px] text-right">Priority</span>
+                <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide w-[150px] text-right">Owner</span>
+                <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide w-[80px] text-right">Completed</span>
+                <span className="w-[68px]" />
+              </div>
+            </div>
+            {archivedActions.map((a) => (
+              <div key={a.id} className="bg-white px-3 py-2 border-b border-gray-200 last:border-b-0">
+                <div className="flex items-center gap-4 min-w-0">
+                  <span className="text-sm font-semibold text-gray-900 truncate min-w-0">{a.title}</span>
+                  <div className="flex-1" />
+                  <div className="w-[68px] flex-shrink-0 flex justify-end">
+                    <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border ${priorityColor(a.priority)}`}>{priorityLabel(a.priority)}</span>
+                  </div>
+                  <div className="w-[150px] flex-shrink-0 flex justify-end">
+                    {a.owner ? (
+                      <div className="flex items-center gap-1">
+                        <span className="w-5 h-5 rounded-full bg-blue-100 text-[9px] font-medium text-blue-700 flex items-center justify-center flex-shrink-0">
+                          {a.owner.full_name.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
+                        </span>
+                        <span className="text-xs text-gray-600 truncate">{a.owner.full_name}</span>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-gray-400 italic">Unassigned</span>
+                    )}
+                  </div>
+                  <span className="text-xs text-gray-500 w-[80px] text-right flex-shrink-0">
+                    {a.resolved_at ? new Date(a.resolved_at).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—"}
+                  </span>
+                  <div className="w-[68px] flex-shrink-0 flex justify-end">
+                    <button
+                      onClick={() => {
+                        supabase.from("action_items").update({ status: "pending", resolved_at: null }).eq("id", a.id).then(() => {});
+                        setActions((prev) => prev.map((act) => act.id === a.id ? { ...act, status: "pending" as ItemStatus, resolved_at: null } : act));
+                      }}
+                      className="text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors"
+                    >
+                      Reopen
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Floating bulk toolbar */}
       {selectedActionIds.size > 0 && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-30 bg-gray-800 text-white rounded-lg shadow-2xl px-4 py-3 flex items-center gap-3 text-sm">
