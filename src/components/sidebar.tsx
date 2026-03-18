@@ -52,10 +52,12 @@ function getSettingsItems(role: UserRole) {
 }
 
 export function Sidebar({ role: propRole = "user" as UserRole, profileId, userPersonId }: { role?: UserRole; profileId?: string; userPersonId?: string | null }) {
-  const { role: contextRole, userPersonId: contextPersonId } = useRole();
+  const { role: contextRole, userPersonId: contextPersonId, impersonation } = useRole();
   // Use context role (which reflects impersonation) over the server-passed prop
   const role = contextRole || propRole;
   const effectivePersonId = contextPersonId || userPersonId;
+  // When impersonating a non-admin, don't use real user's profileId for project visibility
+  const effectiveProfileId = impersonation && role === "user" ? null : profileId;
   const pathname = usePathname();
   const isOnSettings = pathname.startsWith("/settings");
   const isOnInitiatives = pathname.startsWith("/initiatives") || pathname.startsWith("/projects");
@@ -97,8 +99,9 @@ export function Sidebar({ role: propRole = "user" as UserRole, profileId, userPe
       const blockedProjectIds = new Set((blockerData || []).map((b: { project_id: string }) => b.project_id));
 
       // For regular users, only show projects they are part of
-      if (role === "user" && effectivePersonId && profileId) {
-        const { data: visibleIds } = await supabase.rpc("user_visible_project_ids", { p_person_id: effectivePersonId, p_profile_id: profileId });
+      if (role === "user" && effectivePersonId) {
+        const rpcProfileId = effectiveProfileId || "00000000-0000-0000-0000-000000000000";
+        const { data: visibleIds } = await supabase.rpc("user_visible_project_ids", { p_person_id: effectivePersonId, p_profile_id: rpcProfileId });
         const idSet = new Set((visibleIds || []).map(String));
         projs = projs.filter((p) => idSet.has(p.id));
       }
@@ -119,7 +122,7 @@ export function Sidebar({ role: propRole = "user" as UserRole, profileId, userPe
     load();
     window.addEventListener("sidebar:refresh", load);
     return () => window.removeEventListener("sidebar:refresh", load);
-  }, [role, profileId, effectivePersonId]);
+  }, [role, effectiveProfileId, effectivePersonId]);
 
   // Auto-expand based on current path (no re-fetch)
   useEffect(() => {
@@ -181,7 +184,7 @@ export function Sidebar({ role: propRole = "user" as UserRole, profileId, userPe
               <MessageSquare className="h-4 w-4" />
             </Link>
           )}
-          {role !== "vendor" && (
+          {(role === "super_admin" || role === "admin") && (
             <Link href="/timeline" className={cn("p-2 rounded-md", pathname === "/timeline" ? "bg-blue-50 text-blue-700" : "text-gray-500 hover:bg-gray-100 hover:text-gray-700")} title="Timeline">
               <CalendarDays className="h-4 w-4" />
             </Link>
@@ -253,8 +256,8 @@ export function Sidebar({ role: propRole = "user" as UserRole, profileId, userPe
           </Link>
         )}
 
-        {/* Timeline — hidden from vendors */}
-        {role !== "vendor" && (
+        {/* Timeline — admin+ only */}
+        {(role === "super_admin" || role === "admin") && (
           <Link
             href="/timeline"
             className={cn(
