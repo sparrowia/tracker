@@ -49,21 +49,31 @@ export default function ProjectHeader({ project, vendors }: ProjectHeaderProps) 
 
   async function save() {
     setSaving(true);
-    const updates = {
-      name: form.name.trim(),
+    const newName = form.name.trim();
+    const nameChanged = newName !== p.name;
+    const newSlug = nameChanged
+      ? newName.toLowerCase().replace(/[^a-z0-9\s-]/g, "").replace(/\s+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "")
+      : p.slug;
+    const updates: Record<string, unknown> = {
+      name: newName,
       description: form.description.trim() || null,
       health: form.health,
       platform_status: form.platform_status.trim() || null,
       target_completion: form.target_completion || null,
       start_date: form.start_date || null,
       notes: form.notes.trim() || null,
+      ...(nameChanged ? { slug: newSlug } : {}),
     };
 
     const { error } = await supabase.from("projects").update(updates).eq("id", p.id);
     if (!error) {
-      setP({ ...p, ...updates });
+      setP({ ...p, ...updates, slug: newSlug } as Project);
       setEditing(false);
       window.dispatchEvent(new CustomEvent("sidebar:refresh"));
+      // If slug changed, redirect to new URL
+      if (nameChanged && newSlug !== p.slug) {
+        window.location.href = `/projects/${newSlug}`;
+      }
     }
     setSaving(false);
   }
