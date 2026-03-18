@@ -1979,11 +1979,26 @@ export default function IntakeReviewPage() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-6 pb-20">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Review Extraction</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          {totalItems} items extracted. {totalAccepted} accepted.
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Review Extraction</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            {totalItems} items extracted. {totalAccepted} accepted.
+          </p>
+        </div>
+        <button
+          onClick={async () => {
+            if (!confirm("Discard this extraction? The intake record and any items created from it will be deleted.")) return;
+            // Delete any intake_entities linked to this intake
+            await supabase.from("intake_entities").delete().eq("intake_id", intakeId).then(() => {});
+            // Delete the intake record itself
+            await supabase.from("intakes").delete().eq("id", intakeId).then(() => {});
+            router.push("/intake");
+          }}
+          className="px-3 py-1.5 text-xs font-medium text-red-600 bg-white border border-red-200 rounded-md hover:bg-red-50 transition-colors flex-shrink-0"
+        >
+          Discard Extraction
+        </button>
       </div>
 
       {error && (
