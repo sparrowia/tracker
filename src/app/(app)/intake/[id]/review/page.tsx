@@ -140,6 +140,27 @@ const categoryFields: Record<EntityCategory, { field: string; label: string; typ
   ],
 };
 
+/** Render text with URLs as clickable links */
+function linkifyText(text: string): React.ReactNode[] {
+  const urlRegex = /(https?:\/\/[^\s)]+)/g;
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match;
+  while ((match = urlRegex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(text.slice(lastIndex, match.index));
+    }
+    parts.push(
+      <a key={match.index} href={match[0]} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline hover:text-blue-800 break-all">{match[0]}</a>
+    );
+    lastIndex = match.index + match[0].length;
+  }
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex));
+  }
+  return parts;
+}
+
 function renderHighlightedText(text: string, quote: string) {
   const lowerText = text.toLowerCase();
   const lowerQuote = quote.toLowerCase().trim();
@@ -2104,7 +2125,7 @@ export default function IntakeReviewPage() {
             Original Text
           </h2>
           <div ref={rawTextRef} className="bg-white rounded-lg border border-gray-200 p-4 max-h-[600px] overflow-y-auto">
-            <pre className="text-sm text-gray-700 whitespace-pre-wrap font-mono">{highlightedQuote ? renderHighlightedText(intake.raw_text, highlightedQuote) : intake.raw_text}</pre>
+            <pre className="text-sm text-gray-700 whitespace-pre-wrap font-mono">{highlightedQuote ? renderHighlightedText(intake.raw_text, highlightedQuote) : linkifyText(intake.raw_text)}</pre>
           </div>
         </div>
       )}
