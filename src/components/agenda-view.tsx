@@ -31,6 +31,10 @@ const typeLabels: Record<string, string> = {
   raid_decision: "Decision",
 };
 
+const typeColors: Record<string, string> = {
+  blocker: "text-red-700 bg-red-50 border border-red-200 rounded px-1.5 py-0.5",
+};
+
 const priorityRankMap: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
 
 const statusOptions: ItemStatus[] = ["pending", "in_progress", "complete", "needs_verification", "paused", "at_risk", "blocked"];
@@ -684,7 +688,7 @@ export function AgendaView({
               <span className={`inline-flex px-1.5 py-0.5 text-xs rounded ${priorityColor(item.priority)}`}>{priorityLabels[item.priority]}</span>
             </div>
             {/* Type */}
-            <span className="text-xs text-gray-500 w-[80px] flex-shrink-0">{typeLabels[item.entity_type] || item.entity_type}</span>
+            <span className={`text-xs w-[80px] flex-shrink-0 ${typeColors[item.entity_type] || "text-gray-500"}`}>{typeLabels[item.entity_type] || item.entity_type}</span>
             {/* Owner */}
             <div className="flex items-center gap-1.5 w-[140px] flex-shrink-0 min-w-0">
               {item.owner_name ? (
