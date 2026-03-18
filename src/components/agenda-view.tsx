@@ -736,7 +736,7 @@ export function AgendaView({
 
             {/* Description & Notes */}
             <div className="grid grid-cols-2 gap-4 px-5 py-3 border-t border-gray-200 bg-yellow-50/25">
-              <div className="rounded border border-gray-200 p-3">
+              <div className="rounded border border-gray-200 bg-white p-3">
                 <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Description</span>
                 <InlineText
                   value={descValue}
@@ -772,7 +772,7 @@ export function AgendaView({
                   }}
                   placeholder="Next steps..."
                   rows={2}
-                  className="w-full rounded border border-gray-200 px-2 py-1 text-sm font-bold focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none mt-1"
+                  className="w-full rounded border border-gray-200 bg-white px-2 py-1 text-sm font-bold focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none mt-1"
                 />
               </div>
             )}
@@ -791,7 +791,7 @@ export function AgendaView({
             )}
 
             {/* Properties grid */}
-            <div className="border-t border-gray-200">
+            <div className="border-t border-gray-200 bg-white">
               <div className="grid grid-cols-[120px_1fr_120px_1fr] items-stretch">
                 {/* Row: Type / Priority */}
                 <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-200">Type</span>
@@ -894,7 +894,7 @@ export function AgendaView({
 
             {/* Comments */}
             {commentProps && (
-              <div className="bg-yellow-50/25">
+              <div className="bg-white">
                 <CommentThread
                   {...commentProps}
                   orgId={project.org_id}
