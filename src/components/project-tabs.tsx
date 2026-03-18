@@ -805,32 +805,43 @@ function BlockersPanel({
 
   function renderColumnCell(b: BlockerRow, col: BlockerColumnKey) {
     const badge = statusBadge(b.status);
+    const blockerStatusOptions: ItemStatus[] = ["pending", "in_progress", "complete", "blocked"];
     switch (col) {
       case "priority":
         return (
-          <div className="w-[68px] flex-shrink-0 flex justify-end">
-            <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border ${priorityColor(b.priority)}`}>{priorityLabel(b.priority)}</span>
+          <div className="w-[68px] flex-shrink-0 flex justify-end" onClick={(e) => e.stopPropagation()}>
+            <select
+              value={b.priority}
+              onChange={(e) => saveField(b.id, "priority", e.target.value)}
+              className={`text-xs rounded border px-1.5 py-0.5 cursor-pointer appearance-none focus:outline-none focus:ring-1 focus:ring-blue-500 ${priorityColor(b.priority)}`}
+            >
+              {(["critical", "high", "medium", "low"] as PriorityLevel[]).map((p) => (<option key={p} value={p}>{priorityLabel(p)}</option>))}
+            </select>
           </div>
         );
       case "status":
         return (
-          <div className="w-[88px] flex-shrink-0 flex justify-end">
-            <span className={`inline-flex px-1.5 py-0.5 text-xs rounded ${badge.className}`}>{badge.label}</span>
+          <div className="w-[88px] flex-shrink-0 flex justify-end" onClick={(e) => e.stopPropagation()}>
+            <select
+              value={b.status}
+              onChange={(e) => saveField(b.id, "status", e.target.value)}
+              className={`text-xs rounded px-1.5 py-0.5 cursor-pointer appearance-none focus:outline-none focus:ring-1 focus:ring-blue-500 ${badge.className}`}
+            >
+              {blockerStatusOptions.map((s) => (<option key={s} value={s}>{s.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase())}</option>))}
+            </select>
           </div>
         );
       case "owner":
         return (
-          <div className="w-[150px] flex-shrink-0 flex justify-end">
-            {b.owner ? (
-              <div className="flex items-center gap-1">
-                <span className="w-5 h-5 rounded-full bg-blue-100 text-[9px] font-medium text-blue-700 flex items-center justify-center flex-shrink-0">
-                  {b.owner.full_name.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
-                </span>
-                <span className="text-xs text-gray-600 truncate">{b.owner.full_name}</span>
-              </div>
-            ) : (
-              <span className="text-xs text-gray-400 italic">Unassigned</span>
-            )}
+          <div className="w-[150px] flex-shrink-0 flex justify-end" onClick={(e) => e.stopPropagation()}>
+            <select
+              value={b.owner_id || ""}
+              onChange={(e) => saveField(b.id, "owner_id", e.target.value)}
+              className="text-xs text-gray-600 rounded border border-gray-200 px-1 py-0.5 cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500 max-w-full truncate"
+            >
+              <option value="">Unassigned</option>
+              {people.map((p) => (<option key={p.id} value={p.id}>{p.full_name}</option>))}
+            </select>
           </div>
         );
       case "vendor":
@@ -840,7 +851,16 @@ function BlockersPanel({
           </div>
         );
       case "due_date":
-        return <span className="text-xs text-gray-600 flex-shrink-0 w-[80px] text-right">{formatDateShort(b.due_date)}</span>;
+        return (
+          <div className="w-[80px] flex-shrink-0 text-right" onClick={(e) => e.stopPropagation()}>
+            <input
+              type="date"
+              value={b.due_date || ""}
+              onChange={(e) => saveField(b.id, "due_date", e.target.value)}
+              className="text-xs text-gray-600 border border-gray-200 rounded px-1 py-0.5 cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500 w-full"
+            />
+          </div>
+        );
       case "age":
         return <span className="text-xs text-red-600 font-medium flex-shrink-0 w-12 text-right">{b.age_days != null ? formatAge(b.age_days) : ""}</span>;
       case "first_flagged":
@@ -1407,29 +1427,39 @@ function ActionItemsPanel({
     switch (col) {
       case "priority":
         return (
-          <div className="w-[68px] flex-shrink-0 flex justify-end">
-            <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border ${priorityColor(a.priority)}`}>{priorityLabel(a.priority)}</span>
+          <div className="w-[68px] flex-shrink-0 flex justify-end" onClick={(e) => e.stopPropagation()}>
+            <select
+              value={a.priority}
+              onChange={(e) => saveField(a.id, "priority", e.target.value)}
+              className={`text-xs rounded border px-1.5 py-0.5 cursor-pointer appearance-none focus:outline-none focus:ring-1 focus:ring-blue-500 ${priorityColor(a.priority)}`}
+            >
+              {actionPriorityOptions.map((p) => (<option key={p} value={p}>{priorityLabel(p)}</option>))}
+            </select>
           </div>
         );
       case "status":
         return (
-          <div className="w-[88px] flex-shrink-0 flex justify-end">
-            <span className={`inline-flex px-1.5 py-0.5 text-xs rounded ${badge.className}`}>{badge.label}</span>
+          <div className="w-[88px] flex-shrink-0 flex justify-end" onClick={(e) => e.stopPropagation()}>
+            <select
+              value={a.status}
+              onChange={(e) => saveField(a.id, "status", e.target.value)}
+              className={`text-xs rounded px-1.5 py-0.5 cursor-pointer appearance-none focus:outline-none focus:ring-1 focus:ring-blue-500 ${badge.className}`}
+            >
+              {actionStatusOptions.map((s) => (<option key={s} value={s}>{s.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase())}</option>))}
+            </select>
           </div>
         );
       case "owner":
         return (
-          <div className="w-[150px] flex-shrink-0 flex justify-end">
-            {a.owner ? (
-              <div className="flex items-center gap-1">
-                <span className="w-5 h-5 rounded-full bg-blue-100 text-[9px] font-medium text-blue-700 flex items-center justify-center flex-shrink-0">
-                  {a.owner.full_name.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
-                </span>
-                <span className="text-xs text-gray-600 truncate">{a.owner.full_name}</span>
-              </div>
-            ) : (
-              <span className="text-xs text-gray-400 italic">Unassigned</span>
-            )}
+          <div className="w-[150px] flex-shrink-0 flex justify-end" onClick={(e) => e.stopPropagation()}>
+            <select
+              value={a.owner_id || ""}
+              onChange={(e) => saveField(a.id, "owner_id", e.target.value)}
+              className="text-xs text-gray-600 rounded border border-gray-200 px-1 py-0.5 cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500 max-w-full truncate"
+            >
+              <option value="">Unassigned</option>
+              {people.map((p) => (<option key={p.id} value={p.id}>{p.full_name}</option>))}
+            </select>
           </div>
         );
       case "vendor":
@@ -1443,7 +1473,16 @@ function ActionItemsPanel({
         return <span className="text-xs text-gray-600 flex-shrink-0 w-[88px] text-right">{stageLabel}</span>;
       }
       case "due_date":
-        return <span className="text-xs text-gray-600 flex-shrink-0 w-[80px] text-right">{formatDateShort(a.due_date)}</span>;
+        return (
+          <div className="w-[80px] flex-shrink-0 text-right" onClick={(e) => e.stopPropagation()}>
+            <input
+              type="date"
+              value={a.due_date || ""}
+              onChange={(e) => saveField(a.id, "due_date", e.target.value)}
+              className="text-xs text-gray-600 border border-gray-200 rounded px-1 py-0.5 cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500 w-full"
+            />
+          </div>
+        );
       case "age":
         return <span className="text-xs text-gray-500 font-medium flex-shrink-0 w-12 text-right">{a.age_days != null ? formatAge(a.age_days) : ""}</span>;
       case "first_flagged":
