@@ -103,7 +103,7 @@ export async function POST(request: Request) {
   }
 
   // Send auth invite email via Supabase
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://tracker-sable-rho.vercel.app";
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://edcet-tracker.vercel.app";
   const { error: authError } = await admin.auth.admin.inviteUserByEmail(email, {
     data: {
       org_id: profile.org_id,

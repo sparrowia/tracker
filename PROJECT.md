@@ -7,8 +7,8 @@ Project management and knowledge management tool for tracking vendors, projects,
 | Resource | URL |
 |----------|-----|
 | Repo | [github.com/sparrowia/tracker](https://github.com/sparrowia/tracker) |
-| Production | [tracker-sable-rho.vercel.app](https://tracker-sable-rho.vercel.app) |
-| Vercel Project | `tracker-sable-rho` (auto-deploys from `main`) |
+| Production | [edcet-tracker.vercel.app](https://edcet-tracker.vercel.app) |
+| Vercel Project | `edcet-tracker` (auto-deploys from `main`) |
 | Supabase | Project dashboard (check `.env.local` for URL) |
 
 ## Stack

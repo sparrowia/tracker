@@ -5,20 +5,20 @@
 Edcetera project management / knowledge management tool. Next.js 16 (App Router) + Supabase + Tailwind CSS 4.
 
 - **Repo:** github.com/sparrowia/tracker
-- **Vercel Project:** tracker-sable-rho
-- **Production URL:** tracker-sable-rho.vercel.app
+- **Vercel Project:** edcet-tracker
+- **Production URL:** edcet-tracker.vercel.app
 - **Deployment:** Vercel auto-deploys from `main`. Always commit + push to main after changes — Matt tests on deployed Vercel, not localhost.
 
 ## Multi-Project Environment
 
 Matt has multiple projects across different directories and Vercel accounts. **Always verify you are working in the correct project before running commands.**
 
-- **This project:** `/Users/matthewlobel/projects/edcetera-pm` → Vercel: `tracker-sable-rho`
+- **This project:** `/Users/matthewlobel/projects/edcetera-pm` → Vercel: `edcet-tracker`
 - **Edcetera support portal:** `/Users/matthewlobel/Repositories/edcet` → Vercel: `edcet` (under `avalon-adventures` team)
 - **Project management docs:** `/Users/matthewlobel/Repositories/edcet/project-management` → markdown files, no deployment
 - **Other projects exist** (LivingTale, Avalon Adventures) — never assume. Always check `pwd` and `.vercel/project.json` before deploying.
 
-**Vercel CLI note:** The CLI is authenticated to the `avalon-adventures` team (`matt-7913`), which does NOT have access to `tracker-sable-rho`. That project lives under a different Vercel scope. Do not use `npx vercel` for this project — rely on git push auto-deploy instead.
+**Vercel CLI note:** The CLI is authenticated to the `avalon-adventures` team (`matt-7913`), which does NOT have access to `edcet-tracker`. That project lives under a different Vercel scope. Do not use `npx vercel` for this project — rely on git push auto-deploy instead.
 
 ## Tech Stack
 
