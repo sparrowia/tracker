@@ -1061,29 +1061,16 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                           <InlineText value={entry.description || ""} onSave={(v) => saveField(entry.id, "description", v)} multiline placeholder="Add description..." />
                         </div>
                         <div className="rounded border border-gray-200 bg-white p-3">
-                          <div className="flex items-center justify-between mb-0.5">
-                            <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Notes</span>
-                          </div>
+                          <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Meeting Notes</span>
                           <textarea
-                            value={entry.notes || ""}
-                            onChange={(e) => {
-                              const v = e.target.value;
-                              setEntries((prev) => prev.map((en) => en.id === entry.id ? { ...en, notes: v } : en));
+                            defaultValue={entry.notes || ""}
+                            onBlur={(e) => {
+                              saveField(entry.id, "notes", e.target.value);
                             }}
-                            placeholder="Add notes..."
-                            rows={3}
-                            className="w-full rounded border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y mt-1"
+                            placeholder="Add meeting notes..."
+                            rows={6}
+                            className="w-full rounded border border-gray-300 bg-white px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y mt-1"
                           />
-                          {(entry.notes || "").trim() && (
-                            <div className="flex justify-end mt-1.5">
-                              <button
-                                onClick={() => saveField(entry.id, "notes", entry.notes || "")}
-                                className="px-3 py-1 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 transition-colors"
-                              >
-                                Update
-                              </button>
-                            </div>
-                          )}
                         </div>
                       </div>
 

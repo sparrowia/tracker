@@ -741,24 +741,17 @@ export function AgendaView({
                   placeholder="Add description..."
                 />
               </div>
-              <div className="rounded border border-gray-200 p-3">
-                <div className="flex items-center justify-between mb-0.5">
-                  <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Notes</span>
-                  <button
-                    onClick={() => handleSaveNotes(item)}
-                    disabled={savingNotes || !(notesText ?? notesValue).trim()}
-                    className="px-2 py-0.5 text-[10px] font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1 transition-colors"
-                  >
-                    {savingNotes && <svg className="animate-spin h-2.5 w-2.5" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>}
-                    {savingNotes ? "Updating..." : "Update"}
-                  </button>
-                </div>
+              <div className="rounded border border-gray-200 bg-white p-3">
+                <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Meeting Notes</span>
                 <textarea
-                  value={notesText !== null ? notesText : notesValue}
-                  onChange={(e) => setNotesText(e.target.value)}
-                  placeholder="Add notes..."
-                  rows={3}
-                  className="w-full rounded border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y mt-1"
+                  defaultValue={notesValue}
+                  onBlur={(e) => {
+                    const v = e.target.value;
+                    saveField(item, notesField, v);
+                  }}
+                  placeholder="Add meeting notes..."
+                  rows={6}
+                  className="w-full rounded border border-gray-300 bg-white px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y mt-1"
                 />
               </div>
             </div>
