@@ -158,6 +158,7 @@ export function VendorAgendaView({
 }) {
   const [items, setItems] = useState<VendorAgendaRow[]>([]);
   const [projects, setProjects] = useState<{ id: string; name: string; slug: string }[]>([]);
+  const [vendors, setVendors] = useState<{ id: string; name: string }[]>([]);
   const [groupInfo, setGroupInfo] = useState<ParentGroupInfo>({ childToParent: new Map(), parentTitles: new Map() });
   const [showAddForm, setShowAddForm] = useState(false);
   const [newTitle, setNewTitle] = useState("");
@@ -190,6 +191,9 @@ export function VendorAgendaView({
     });
     supabase.from("projects").select("id, name, slug").order("name").then(({ data }) => {
       if (!cancelled && data) setProjects(data);
+    });
+    supabase.from("vendors").select("id, name").order("name").then(({ data }) => {
+      if (!cancelled && data) setVendors(data as { id: string; name: string }[]);
     });
     return () => { cancelled = true; };
   }, [vendor.id]);
@@ -625,6 +629,25 @@ export function VendorAgendaView({
                   </select>
                 </div>
 
+                {/* Row: Vendor */}
+                <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-200">Vendor</span>
+                <div className="px-3 py-2.5 border-b border-gray-200 col-span-3">
+                  <select
+                    value={item.vendor_id || vendor.id}
+                    onChange={(e) => {
+                      saveField(item, "vendor_id", e.target.value);
+                      // Remove from this vendor's agenda if reassigned
+                      if (e.target.value !== vendor.id) {
+                        setItems((prev) => prev.filter((i) => i.entity_id !== item.entity_id));
+                        setExpandedId(null);
+                      }
+                    }}
+                    className="text-sm text-gray-700 border border-gray-200 rounded px-2 py-0.5 focus:border-blue-500 focus:outline-none"
+                  >
+                    {vendors.map((v) => (<option key={v.id} value={v.id}>{v.name}</option>))}
+                  </select>
+                </div>
+
                 {/* Row: Status / Due Date */}
                 <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-200">Status</span>
                 <div className="px-3 py-2.5 border-b border-gray-200">
@@ -649,73 +672,63 @@ export function VendorAgendaView({
                   />
                 </div>
 
-                {/* Row: Age / Score */}
+                {/* Row: Age */}
                 <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-200">Age</span>
-                <div className="px-3 py-2.5 border-b border-gray-200">
-                  <span className="text-sm text-gray-700">{formatAge(item.age_days)}</span>
-                </div>
-                <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-200">Score</span>
-                <div className="px-3 py-2.5 border-b border-gray-200">
-                  <span className="text-sm text-gray-700">{Math.round(item.score)}</span>
-                </div>
-
-                {/* Row: Rank */}
-                <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-200">Rank</span>
                 <div className="px-3 py-2.5 border-b border-gray-200 col-span-3">
-                  <span className="text-sm text-gray-700">#{item.rank}</span>
+                  <span className="text-sm text-gray-700">{formatAge(item.age_days)}</span>
                 </div>
               </div>
             </div>
 
-            {/* Context */}
+            {/* Description */}
             <div className="px-5 py-3">
-              <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Context</span>
+              <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Description</span>
               <InlineText
                 value={item.context || ""}
                 onSave={(v) => {
-                  const field = item.entity_type === "action_item" ? "notes" : item.entity_type === "blocker" ? "impact_description" : "context";
+                  const field = item.entity_type === "action_item" ? "description" : item.entity_type === "blocker" ? "description" : item.entity_type === "agenda_item" ? "context" : "description";
                   saveField(item, field, v);
                 }}
                 multiline
-                placeholder="Add context..."
+                placeholder="Add description..."
               />
             </div>
 
-            {/* Ask */}
-            {(item.entity_type === "agenda_item" || item.ask) && (
+            {/* Next Steps */}
+            {(item.entity_type === "action_item" || item.entity_type === "agenda_item" || item.entity_type.startsWith("raid_")) && (
               <div className="px-5 py-3 border-t border-gray-200">
-                <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Ask</span>
-                <InlineText
-                  value={item.ask || ""}
-                  onSave={(v) => saveField(item, "ask", v)}
-                  multiline
-                  placeholder="What do we need?"
+                <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Next Steps</span>
+                <textarea
+                  defaultValue={item.ask || ""}
+                  onBlur={(e) => {
+                    const field = item.entity_type === "agenda_item" ? "ask" : "next_steps";
+                    saveField(item, field, e.target.value);
+                  }}
+                  placeholder="Next steps..."
+                  rows={2}
+                  className="w-full rounded border border-gray-200 bg-white px-2 py-1 text-sm font-bold focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none mt-1"
                 />
               </div>
             )}
 
-            {/* Call Notes */}
+            {/* Meeting Notes */}
             <div className="px-5 py-3 border-t border-gray-200">
-              <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Call Notes</span>
+              <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Meeting Notes</span>
               <textarea
-                value={notesText ?? ""}
-                onChange={(e) => setNotesText(e.target.value)}
-                placeholder="Take notes during the call..."
-                rows={3}
-                className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y mt-1"
+                defaultValue={notesText ?? ""}
+                onBlur={(e) => {
+                  const v = e.target.value;
+                  const table = item.entity_type === "agenda_item" ? "agenda_items"
+                    : item.entity_type === "blocker" ? "blockers"
+                    : item.entity_type === "action_item" ? "action_items"
+                    : "raid_entries";
+                  const field = item.entity_type === "action_item" ? "notes" : item.entity_type === "blocker" ? "impact_description" : "notes";
+                  supabase.from(table).update({ [field]: v || null }).eq("id", item.entity_id).then(() => {});
+                }}
+                placeholder="Add meeting notes..."
+                rows={4}
+                className="w-full rounded-md border border-gray-300 bg-white px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y mt-1"
               />
-              {notesText?.trim() && (
-                <div className="flex justify-end mt-2">
-                  <button
-                    onClick={() => handleSaveNotes(item)}
-                    disabled={savingNotes}
-                    className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5"
-                  >
-                    {savingNotes && <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>}
-                    {savingNotes ? "Processing..." : "Process Notes"}
-                  </button>
-                </div>
-              )}
             </div>
 
             {/* Actions bar */}
