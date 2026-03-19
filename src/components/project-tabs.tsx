@@ -2545,7 +2545,11 @@ function DocsPanel({ projectId, projectCreatedBy }: { projectId: string; project
   const supabase = createClient();
   const { role, profileId } = useRole();
   const [sections, setSections] = useState<ProjectDocument[]>([]);
-  const [activeSection, setActiveSection] = useState<string | null>(null);
+  const [activeSection, setActiveSection] = useState<string | null>("__notes__");
+  const [projectNotes, setProjectNotes] = useState("");
+  const [fileList, setFileList] = useState<{ name: string; url: string; created_at: string }[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -2561,7 +2565,7 @@ function DocsPanel({ projectId, projectCreatedBy }: { projectId: string; project
   const [asking, setAsking] = useState(false);
   const [chatHistory, setChatHistory] = useState<{ role: "user" | "assistant"; text: string; sources?: string[] }[]>([]);
 
-  // Load existing docs on mount
+  // Load existing docs, project notes, and files on mount
   useEffect(() => {
     supabase
       .from("project_documents")
@@ -2571,9 +2575,22 @@ function DocsPanel({ projectId, projectCreatedBy }: { projectId: string; project
       .then(({ data }) => {
         const docs = (data || []) as ProjectDocument[];
         setSections(docs);
-        if (docs.length > 0) setActiveSection(docs[0].section_key);
         setLoading(false);
       });
+    // Load project notes
+    supabase.from("projects").select("notes").eq("id", projectId).single().then(({ data }) => {
+      if (data?.notes) setProjectNotes(data.notes);
+    });
+    // Load files from storage
+    supabase.storage.from("project-files").list(`${projectId}`, { limit: 100 }).then(({ data }) => {
+      if (data) {
+        setFileList(data.map((f) => ({
+          name: f.name,
+          url: supabase.storage.from("project-files").getPublicUrl(`${projectId}/${f.name}`).data.publicUrl,
+          created_at: f.created_at || "",
+        })));
+      }
+    });
   }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleGenerate() {
@@ -2738,6 +2755,31 @@ function DocsPanel({ projectId, projectCreatedBy }: { projectId: string; project
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Index</span>
               </div>
               <nav className="py-1">
+                {/* Permanent items */}
+                <button
+                  onClick={() => { setActiveSection("__files__"); setEditing(false); }}
+                  className={`w-full text-left px-3 py-1.5 text-sm transition-colors ${
+                    activeSection === "__files__"
+                      ? "bg-blue-50 text-blue-700 font-medium border-l-2 border-blue-600"
+                      : "text-gray-600 hover:bg-gray-100 border-l-2 border-transparent"
+                  }`}
+                >
+                  Files
+                </button>
+                <button
+                  onClick={() => { setActiveSection("__notes__"); setEditing(false); }}
+                  className={`w-full text-left px-3 py-1.5 text-sm transition-colors ${
+                    activeSection === "__notes__"
+                      ? "bg-blue-50 text-blue-700 font-medium border-l-2 border-blue-600"
+                      : "text-gray-600 hover:bg-gray-100 border-l-2 border-transparent"
+                  }`}
+                >
+                  Notes
+                </button>
+                {sections.length > 0 && (
+                  <div className="border-t border-gray-200 my-1" />
+                )}
+                {/* Generated sections */}
                 {sections.map((s) => (
                   <button
                     key={s.section_key}
@@ -2761,7 +2803,81 @@ function DocsPanel({ projectId, projectCreatedBy }: { projectId: string; project
 
             {/* Content area */}
             <div className="flex-1 min-w-0 flex flex-col">
-              {current ? (
+              {activeSection === "__notes__" ? (
+                <div className="flex-1 px-6 py-4">
+                  <h3 className="text-sm font-semibold text-gray-700 mb-2">Project Notes</h3>
+                  <textarea
+                    defaultValue={projectNotes}
+                    onBlur={(e) => {
+                      const v = e.target.value;
+                      setProjectNotes(v);
+                      supabase.from("projects").update({ notes: v || null }).eq("id", projectId).then(() => {});
+                    }}
+                    placeholder="Add project notes..."
+                    rows={15}
+                    className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
+                  />
+                </div>
+              ) : activeSection === "__files__" ? (
+                <div className="flex-1 px-6 py-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-semibold text-gray-700">Files</h3>
+                    {canEditDocs && (
+                      <button
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={uploading}
+                        className="text-xs bg-blue-600 hover:bg-blue-500 disabled:bg-gray-400 text-white px-3 py-1 rounded transition-colors font-medium"
+                      >
+                        {uploading ? "Uploading..." : "+ Upload File"}
+                      </button>
+                    )}
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      className="hidden"
+                      multiple
+                      onChange={async (e) => {
+                        const files = e.target.files;
+                        if (!files || files.length === 0) return;
+                        setUploading(true);
+                        for (const file of Array.from(files)) {
+                          const path = `${projectId}/${Date.now()}-${file.name}`;
+                          const { error } = await supabase.storage.from("project-files").upload(path, file);
+                          if (!error) {
+                            const url = supabase.storage.from("project-files").getPublicUrl(path).data.publicUrl;
+                            setFileList((prev) => [...prev, { name: file.name, url, created_at: new Date().toISOString() }]);
+                          }
+                        }
+                        setUploading(false);
+                        if (fileInputRef.current) fileInputRef.current.value = "";
+                      }}
+                    />
+                  </div>
+                  {fileList.length === 0 ? (
+                    <p className="text-sm text-gray-400">No files uploaded yet.</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {fileList.map((f, i) => (
+                        <div key={i} className="flex items-center justify-between py-1.5 px-2 rounded hover:bg-gray-50 border-b border-gray-100 last:border-b-0">
+                          <a href={f.url} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline truncate">{f.name}</a>
+                          {canEditDocs && (
+                            <button
+                              onClick={async () => {
+                                await supabase.storage.from("project-files").remove([`${projectId}/${f.name}`]);
+                                setFileList((prev) => prev.filter((_, j) => j !== i));
+                              }}
+                              className="text-gray-400 hover:text-red-500 transition-colors flex-shrink-0 ml-2"
+                              title="Delete file"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : current ? (
                 <>
                   {/* Edit toolbar */}
                   {canEditDocs && (
