@@ -291,7 +291,7 @@ export function VendorAgendaView({
       if (field === "status") return { ...i, status: value as ItemStatus };
       if (field === "due_date") return { ...i, due_date: value || null };
       if (field === "context" || field === "description" || field === "notes" || field === "impact_description") return { ...i, context: value };
-      if (field === "ask") return { ...i, ask: value };
+      if (field === "ask" || field === "next_steps") return { ...i, ask: value };
       if (field === "owner_id") {
         const person = people.find((p) => p.id === value);
         return { ...i, owner_id: value || null, owner_name: person?.full_name || null };
