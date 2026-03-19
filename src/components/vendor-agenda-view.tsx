@@ -608,13 +608,21 @@ export function VendorAgendaView({
                 </div>
                 <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-200">Project</span>
                 <div className="px-3 py-2.5 border-b border-gray-200">
-                  {item.project_slug ? (
-                    <Link href={`/projects/${item.project_slug}`} className="text-sm text-blue-600 hover:underline">
-                      {item.project_name}
-                    </Link>
-                  ) : (
-                    <span className="text-sm text-gray-400">—</span>
-                  )}
+                  <select
+                    value={(() => {
+                      const match = projects.find((p) => p.slug === item.project_slug);
+                      return match?.id || "";
+                    })()}
+                    onChange={(e) => {
+                      const proj = projects.find((p) => p.id === e.target.value);
+                      saveField(item, "project_id", e.target.value);
+                      setItems((prev) => prev.map((i) => i.entity_id === item.entity_id ? { ...i, project_name: proj?.name || null, project_slug: proj?.slug || null } : i));
+                    }}
+                    className="text-sm text-gray-700 border border-gray-200 rounded px-2 py-0.5 focus:border-blue-500 focus:outline-none"
+                  >
+                    <option value="">None</option>
+                    {projects.map((p) => (<option key={p.id} value={p.id}>{p.name}</option>))}
+                  </select>
                 </div>
 
                 {/* Row: Status / Due Date */}
