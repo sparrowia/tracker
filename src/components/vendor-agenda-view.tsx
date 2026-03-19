@@ -553,16 +553,16 @@ export function VendorAgendaView({
 
         {/* Expanded detail panel */}
         {isExpanded && (
-          <div className="bg-white border-b border-gray-200" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-yellow-50/25 border-b border-gray-200" onClick={(e) => e.stopPropagation()}>
             {/* Editable title */}
-            <div className="px-5 pt-3 pb-1">
+            <div className="px-5 pt-4 pb-3 text-base font-semibold text-gray-900 bg-yellow-50/25">
               <InlineText
                 value={item.title}
                 onSave={(v) => saveField(item, "title", v)}
                 placeholder="Untitled"
               />
             </div>
-            <div className="border-t border-gray-200">
+            <div className="border-t border-gray-200 bg-white">
               <div className="grid grid-cols-[120px_1fr_120px_1fr] items-stretch">
                 {/* Row: Type / Priority */}
                 <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-200">Type</span>
@@ -680,40 +680,22 @@ export function VendorAgendaView({
               </div>
             </div>
 
-            {/* Description */}
-            <div className="px-5 py-3">
-              <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Description</span>
-              <InlineText
-                value={item.context || ""}
-                onSave={(v) => {
-                  const field = item.entity_type === "action_item" ? "description" : item.entity_type === "blocker" ? "description" : item.entity_type === "agenda_item" ? "context" : "description";
-                  saveField(item, field, v);
-                }}
-                multiline
-                placeholder="Add description..."
-              />
-            </div>
-
-            {/* Next Steps */}
-            {(item.entity_type === "action_item" || item.entity_type === "agenda_item" || item.entity_type.startsWith("raid_")) && (
-              <div className="px-5 py-3 border-t border-gray-200">
-                <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Next Steps</span>
-                <textarea
-                  defaultValue={item.ask || ""}
-                  onBlur={(e) => {
-                    const field = item.entity_type === "agenda_item" ? "ask" : "next_steps";
-                    saveField(item, field, e.target.value);
+            {/* Description & Meeting Notes — side by side */}
+            <div className="grid grid-cols-2 gap-4 px-5 py-3 border-t border-gray-200 bg-yellow-50/25">
+              <div className="rounded border border-gray-200 bg-white p-3">
+                <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Description</span>
+                <InlineText
+                  value={item.context || ""}
+                  onSave={(v) => {
+                    const field = item.entity_type === "action_item" ? "description" : item.entity_type === "blocker" ? "description" : item.entity_type === "agenda_item" ? "context" : "description";
+                    saveField(item, field, v);
                   }}
-                  placeholder="Next steps..."
-                  rows={2}
-                  className="w-full rounded border border-gray-200 bg-white px-2 py-1 text-sm font-bold focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none mt-1"
+                  multiline
+                  placeholder="Add description..."
                 />
               </div>
-            )}
-
-            {/* Meeting Notes */}
-            <div className="px-5 py-3 border-t border-gray-200">
-              <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Meeting Notes</span>
+              <div className="rounded border border-gray-200 bg-white p-3">
+                <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Meeting Notes</span>
               <textarea
                 defaultValue={notesText ?? ""}
                 onBlur={(e) => {
@@ -726,8 +708,24 @@ export function VendorAgendaView({
                   supabase.from(table).update({ [field]: v || null }).eq("id", item.entity_id).then(() => {});
                 }}
                 placeholder="Add meeting notes..."
-                rows={4}
+                rows={6}
                 className="w-full rounded-md border border-gray-300 bg-white px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y mt-1"
+              />
+              </div>
+            </div>
+
+            {/* Next Steps */}
+            <div className="px-5 pb-3">
+              <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Next Steps</span>
+              <textarea
+                defaultValue={item.ask || ""}
+                onBlur={(e) => {
+                  const field = item.entity_type === "agenda_item" ? "ask" : "next_steps";
+                  saveField(item, field, e.target.value);
+                }}
+                placeholder="Next steps..."
+                rows={2}
+                className="w-full rounded border border-gray-200 bg-white px-2 py-1 text-sm font-bold focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none mt-1"
               />
             </div>
 
