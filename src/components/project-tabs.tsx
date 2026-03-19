@@ -2689,12 +2689,7 @@ function DocsPanel({ projectId, projectCreatedBy }: { projectId: string; project
         <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-2">{error}</div>
       )}
 
-      {sections.length === 0 && !generating ? (
-        <div className="border border-t-0 border-gray-300 rounded-b px-6 py-12 text-center">
-          <p className="text-gray-500 text-sm">No documentation generated yet.</p>
-          <p className="text-gray-400 text-xs mt-1">Click &ldquo;Generate Documentation&rdquo; to create a comprehensive project document from all tasks, risks, blockers, and decisions.</p>
-        </div>
-      ) : generating ? (
+      {generating ? (
         <div className="border border-t-0 border-gray-300 rounded-b px-6 py-12 text-center">
           <div className="inline-flex items-center gap-2 text-gray-500 text-sm">
             <svg className="animate-spin h-4 w-4 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
