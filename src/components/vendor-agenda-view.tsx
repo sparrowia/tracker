@@ -168,6 +168,8 @@ export function VendorAgendaView({
   const [collapsedGroups, setCollapsedGroups] = useState<Set<PriorityLevel>>(new Set());
   const [notesText, setNotesText] = useState<string | null>(null);
   const [savingNotes, setSavingNotes] = useState(false);
+  const [sortCol, setSortCol] = useState<string | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [generating, setGenerating] = useState(false);
   const [hasGenerated, setHasGenerated] = useState(false);
   const router = useRouter();
@@ -826,18 +828,49 @@ export function VendorAgendaView({
               <span className="w-[20px] flex-shrink-0" />
               <span className="w-[18px] flex-shrink-0" />
               <span className="w-[22px] flex-shrink-0" />
-              <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide flex-1">Name</span>
-              <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide w-[68px]">Priority</span>
-              <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide w-[80px]">Type</span>
-              <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide w-[140px]">Owner</span>
-              <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide w-[100px]">Project</span>
-              <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide w-12">Age</span>
-              <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide w-10 text-right">Score</span>
+              {[
+                { key: "name", label: "Name", cls: "flex-1" },
+                { key: "priority", label: "Priority", cls: "w-[68px]" },
+                { key: "type", label: "Type", cls: "w-[80px]" },
+                { key: "owner", label: "Owner", cls: "w-[140px]" },
+                { key: "project", label: "Project", cls: "w-[100px]" },
+                { key: "age", label: "Age", cls: "w-12" },
+                { key: "score", label: "Score", cls: "w-10 text-right" },
+              ].map((col) => (
+                <button
+                  key={col.key}
+                  onClick={() => { if (sortCol === col.key) { setSortDir((d) => d === "asc" ? "desc" : "asc"); } else { setSortCol(col.key); setSortDir("asc"); } }}
+                  className={`text-[10px] font-medium uppercase tracking-wide text-left flex items-center gap-0.5 transition-colors ${col.cls} ${sortCol === col.key ? "text-gray-700" : "text-gray-400 hover:text-gray-600"}`}
+                >
+                  {col.label}
+                  {sortCol === col.key && (
+                    <svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                      {sortDir === "asc" ? <polyline points="18 15 12 9 6 15"/> : <polyline points="6 9 12 15 18 9"/>}
+                    </svg>
+                  )}
+                </button>
+              ))}
             </div>
           </div>
 
-          {/* Rows grouped by priority */}
-          {priorityOptions.map((priority) => {
+          {/* Rows — sorted flat or grouped by priority */}
+          {sortCol ? (() => {
+            const priorityRank: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+            const sorted = [...items].sort((a, b) => {
+              let cmp = 0;
+              switch (sortCol) {
+                case "name": cmp = a.title.localeCompare(b.title); break;
+                case "priority": cmp = (priorityRank[a.priority] ?? 9) - (priorityRank[b.priority] ?? 9); break;
+                case "type": cmp = a.entity_type.localeCompare(b.entity_type); break;
+                case "owner": cmp = (a.owner_name || "zzz").localeCompare(b.owner_name || "zzz"); break;
+                case "project": cmp = (a.project_name || "zzz").localeCompare(b.project_name || "zzz"); break;
+                case "age": cmp = a.age_days - b.age_days; break;
+                case "score": cmp = a.score - b.score; break;
+              }
+              return sortDir === "desc" ? -cmp : cmp;
+            });
+            return sorted.map((item) => <Fragment key={item.entity_id}>{renderRow(item, false)}</Fragment>);
+          })() : priorityOptions.map((priority) => {
             const units = unitGroups[priority];
             if (units.length === 0) return null;
             const isCollapsed = collapsedGroups.has(priority);

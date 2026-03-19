@@ -55,12 +55,27 @@ export default async function VendorDetailPage({
   const ownerIds = [...new Set(items.map((i) => i.owner_id).filter(Boolean))];
   const projectIds = [...new Set(items.map((i) => i.project_id).filter(Boolean))];
 
+  // Also get project IDs from action_items, blockers, raid_entries, agenda_items for this vendor
+  const [{ data: aiProjs }, { data: blProjs }, { data: reProjs }, { data: agProjs }] = await Promise.all([
+    supabase.from("action_items").select("project_id").eq("vendor_id", v.id).not("project_id", "is", null),
+    supabase.from("blockers").select("project_id").eq("vendor_id", v.id).not("project_id", "is", null),
+    supabase.from("raid_entries").select("project_id").eq("vendor_id", v.id).not("project_id", "is", null),
+    supabase.from("agenda_items").select("project_id").eq("vendor_id", v.id).not("project_id", "is", null),
+  ]);
+  const allVendorProjectIds = new Set([
+    ...projectIds,
+    ...(aiProjs || []).map((r: { project_id: string }) => r.project_id),
+    ...(blProjs || []).map((r: { project_id: string }) => r.project_id),
+    ...(reProjs || []).map((r: { project_id: string }) => r.project_id),
+    ...(agProjs || []).map((r: { project_id: string }) => r.project_id),
+  ]);
+
   const [{ data: owners }, { data: relatedProjects }] = await Promise.all([
     ownerIds.length > 0
       ? supabase.from("people").select("id, full_name").in("id", ownerIds)
       : { data: [] },
-    projectIds.length > 0
-      ? supabase.from("projects").select("id, name, slug").in("id", projectIds)
+    allVendorProjectIds.size > 0
+      ? supabase.from("projects").select("id, name, slug").in("id", [...allVendorProjectIds])
       : { data: [] },
   ]);
 
@@ -100,25 +115,40 @@ export default async function VendorDetailPage({
         </section>
       )}
 
-      {/* Related Projects */}
-      {vendorProjects.length > 0 && (
-        <section>
-          <div className="bg-gray-800 px-4 py-2.5 rounded-t-lg">
-            <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Related Projects</h2>
-          </div>
-          <div className="flex gap-2 flex-wrap mt-3">
-            {vendorProjects.map((proj) => (
-              <Link
-                key={proj.id}
-                href={`/projects/${proj.slug}`}
-                className="inline-flex px-3 py-1 text-sm rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200"
-              >
-                {proj.name}
-              </Link>
-            ))}
-          </div>
-        </section>
-      )}
+      {/* Related Projects — derived from all items linked to this vendor */}
+      {(() => {
+        // Combine project_vendors projects with projects from accountability items
+        const allProjectIds = new Set<string>();
+        for (const p of vendorProjects) allProjectIds.add(p.id);
+        for (const item of items) {
+          if (item.project_id) allProjectIds.add(item.project_id);
+        }
+        const allProjects = [...allProjectIds].map((pid) => {
+          const fromVendor = vendorProjects.find((p) => p.id === pid);
+          if (fromVendor) return fromVendor;
+          const fromMap = projectMap.get(pid);
+          if (fromMap) return fromMap as { id: string; name: string; slug: string };
+          return null;
+        }).filter(Boolean).sort((a, b) => a!.name.localeCompare(b!.name));
+        return allProjects.length > 0 ? (
+          <section>
+            <div className="bg-gray-800 px-4 py-2.5 rounded-t-lg">
+              <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Related Projects</h2>
+            </div>
+            <div className="flex gap-2 flex-wrap mt-3">
+              {allProjects.map((proj) => (
+                <Link
+                  key={proj!.id}
+                  href={`/projects/${proj!.slug}`}
+                  className="inline-flex px-3 py-1 text-sm rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200"
+                >
+                  {proj!.name}
+                </Link>
+              ))}
+            </div>
+          </section>
+        ) : null;
+      })()}
 
       {/* Meeting Agenda */}
       <section>
