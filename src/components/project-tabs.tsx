@@ -2550,6 +2550,8 @@ function DocsPanel({ projectId, projectCreatedBy }: { projectId: string; project
   const [fileList, setFileList] = useState<{ name: string; url: string; created_at: string }[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [renamingFileIdx, setRenamingFileIdx] = useState<number | null>(null);
+  const [renameDraft, setRenameDraft] = useState("");
   const [generating, setGenerating] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -2858,9 +2860,46 @@ function DocsPanel({ projectId, projectCreatedBy }: { projectId: string; project
                   ) : (
                     <div className="space-y-1">
                       {fileList.map((f, i) => (
-                        <div key={i} className="flex items-center justify-between py-1.5 px-2 rounded hover:bg-gray-50 border-b border-gray-100 last:border-b-0">
-                          <a href={f.url} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline truncate">{f.name}</a>
-                          {canEditDocs && (
+                        <div key={i} className="flex items-center justify-between py-1.5 px-2 rounded hover:bg-gray-50 border-b border-gray-100 last:border-b-0 group">
+                          {renamingFileIdx === i ? (
+                            <input
+                              type="text"
+                              value={renameDraft}
+                              onChange={(e) => setRenameDraft(e.target.value)}
+                              onBlur={async () => {
+                                const newName = renameDraft.trim();
+                                if (newName && newName !== f.name) {
+                                  // Copy to new name, delete old
+                                  const oldPath = `${projectId}/${f.name}`;
+                                  const newPath = `${projectId}/${newName}`;
+                                  const { error } = await supabase.storage.from("project-files").copy(oldPath, newPath);
+                                  if (!error) {
+                                    await supabase.storage.from("project-files").remove([oldPath]);
+                                    const newUrl = supabase.storage.from("project-files").getPublicUrl(newPath).data.publicUrl;
+                                    setFileList((prev) => prev.map((file, j) => j === i ? { ...file, name: newName, url: newUrl } : file));
+                                  }
+                                }
+                                setRenamingFileIdx(null);
+                              }}
+                              onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); if (e.key === "Escape") setRenamingFileIdx(null); }}
+                              autoFocus
+                              className="text-sm text-gray-900 border-b border-blue-400 focus:outline-none bg-transparent flex-1 min-w-0"
+                            />
+                          ) : (
+                            <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                              <a href={f.url} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline truncate">{f.name}</a>
+                              {canEditDocs && (
+                                <button
+                                  onClick={(e) => { e.preventDefault(); setRenamingFileIdx(i); setRenameDraft(f.name); }}
+                                  className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-blue-600 transition-all flex-shrink-0"
+                                  title="Rename"
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                </button>
+                              )}
+                            </div>
+                          )}
+                          {canEditDocs && renamingFileIdx !== i && (
                             <button
                               onClick={async () => {
                                 await supabase.storage.from("project-files").remove([`${projectId}/${f.name}`]);
