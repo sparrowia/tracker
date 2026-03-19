@@ -7,9 +7,9 @@ import Link from "next/link";
 import { formatAge, priorityColor, priorityLabel, statusBadge, healthColor, healthLabel, formatDateShort } from "@/lib/utils";
 import type { ActionItem, Blocker, RaidEntry, Project, Initiative, Person, Vendor } from "@/lib/types";
 
-type ActionRow = ActionItem & { owner: Pick<Person, "id" | "full_name"> | null; project: Pick<Project, "id" | "name" | "slug"> | null };
-type BlockerRow = Blocker & { owner: Pick<Person, "id" | "full_name"> | null; vendor: Pick<Vendor, "id" | "name"> | null; project: Pick<Project, "id" | "name" | "slug"> | null };
-type RaidRow = RaidEntry & { owner: Pick<Person, "id" | "full_name"> | null; project: Pick<Project, "id" | "name" | "slug"> | null };
+type ActionRow = ActionItem & { owner: Pick<Person, "id" | "full_name" | "email"> | null; project: Pick<Project, "id" | "name" | "slug"> | null };
+type BlockerRow = Blocker & { owner: Pick<Person, "id" | "full_name" | "email"> | null; vendor: Pick<Vendor, "id" | "name"> | null; project: Pick<Project, "id" | "name" | "slug"> | null };
+type RaidRow = RaidEntry & { owner: Pick<Person, "id" | "full_name" | "email"> | null; project: Pick<Project, "id" | "name" | "slug"> | null };
 type ProjectRow = Project & { actionCount: number; blockerCount: number };
 type InitiativeGroup = Initiative & { projects: ProjectRow[] };
 
@@ -53,7 +53,7 @@ export default function DashboardPage() {
         // Overdue action items
         supabase
           .from("action_item_ages")
-          .select("*, owner:people(id, full_name), project:projects(id, name, slug)")
+          .select("*, owner:people(id, full_name, email), project:projects(id, name, slug)")
           .lt("due_date", today)
           .in("status", ["pending", "in_progress", "at_risk", "blocked"])
           .order("due_date")
@@ -61,7 +61,7 @@ export default function DashboardPage() {
         // Due this week
         supabase
           .from("action_item_ages")
-          .select("*, owner:people(id, full_name), project:projects(id, name, slug)")
+          .select("*, owner:people(id, full_name, email), project:projects(id, name, slug)")
           .gte("due_date", today)
           .lte("due_date", weekFromNow)
           .in("status", ["pending", "in_progress", "at_risk", "blocked"])
@@ -70,14 +70,14 @@ export default function DashboardPage() {
         // Active blockers
         supabase
           .from("blocker_ages")
-          .select("*, owner:people(id, full_name), vendor:vendors(id, name), project:projects(id, name, slug)")
+          .select("*, owner:people(id, full_name, email), vendor:vendors(id, name), project:projects(id, name, slug)")
           .order("priority")
           .order("first_flagged_at")
           .limit(15),
         // High/critical risks and issues
         supabase
           .from("raid_entries")
-          .select("*, owner:people(id, full_name), project:projects(id, name, slug)")
+          .select("*, owner:people(id, full_name, email), project:projects(id, name, slug)")
           .in("raid_type", ["risk", "issue"])
           .in("priority", ["critical", "high"])
           .neq("status", "complete")
@@ -88,7 +88,7 @@ export default function DashboardPage() {
         // Pending decisions
         supabase
           .from("raid_entries")
-          .select("*, owner:people(id, full_name), project:projects(id, name, slug)")
+          .select("*, owner:people(id, full_name, email), project:projects(id, name, slug)")
           .eq("raid_type", "decision")
           .neq("status", "complete")
           .order("priority")
@@ -245,7 +245,11 @@ export default function DashboardPage() {
                             <span className="w-5 h-5 rounded-full bg-blue-100 text-[10px] font-medium text-blue-700 flex items-center justify-center flex-shrink-0">
                               {item.owner.full_name.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
                             </span>
-                            <span className="text-gray-700">{item.owner.full_name}</span>
+                            {item.owner.email ? (
+                              <a href={`mailto:${item.owner.email}`} className="text-blue-600 hover:text-blue-800 hover:underline">{item.owner.full_name}</a>
+                            ) : (
+                              <span className="text-gray-700">{item.owner.full_name}</span>
+                            )}
                           </div>
                         ) : <span className="text-gray-400 italic">Unassigned</span>}
                       </td>
@@ -300,7 +304,11 @@ export default function DashboardPage() {
                             <span className="w-5 h-5 rounded-full bg-blue-100 text-[10px] font-medium text-blue-700 flex items-center justify-center flex-shrink-0">
                               {item.owner.full_name.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
                             </span>
-                            <span className="text-gray-700">{item.owner.full_name}</span>
+                            {item.owner.email ? (
+                              <a href={`mailto:${item.owner.email}`} className="text-blue-600 hover:text-blue-800 hover:underline">{item.owner.full_name}</a>
+                            ) : (
+                              <span className="text-gray-700">{item.owner.full_name}</span>
+                            )}
                           </div>
                         ) : <span className="text-gray-400 italic">Unassigned</span>}
                       </td>
@@ -400,7 +408,9 @@ export default function DashboardPage() {
                       </div>
                       <p className="text-sm text-gray-900 font-semibold mt-1">{r.title}</p>
                       <p className="text-xs text-gray-500 mt-1">
-                        {r.owner?.full_name || "Unassigned"} · {r.project?.name || "General"}
+                        {r.owner?.email ? (
+                          <a href={`mailto:${r.owner.email}`} className="text-blue-600 hover:underline">{r.owner.full_name}</a>
+                        ) : (r.owner?.full_name || "Unassigned")} · {r.project?.name || "General"}
                       </p>
                     </>
                   );
@@ -436,7 +446,9 @@ export default function DashboardPage() {
                       </div>
                       <p className="text-sm text-gray-900 font-semibold mt-1">{d.title}</p>
                       <p className="text-xs text-gray-500 mt-1">
-                        {d.owner?.full_name || "Unassigned"} · {d.project?.name || "General"}
+                        {d.owner?.email ? (
+                          <a href={`mailto:${d.owner.email}`} className="text-blue-600 hover:underline">{d.owner.full_name}</a>
+                        ) : (d.owner?.full_name || "Unassigned")} · {d.project?.name || "General"}
                       </p>
                     </>
                   );
