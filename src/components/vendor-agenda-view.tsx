@@ -157,9 +157,13 @@ export function VendorAgendaView({
   onPersonAdded?: (person: Person) => void;
 }) {
   const [items, setItems] = useState<VendorAgendaRow[]>([]);
+  const [projects, setProjects] = useState<{ id: string; name: string; slug: string }[]>([]);
   const [groupInfo, setGroupInfo] = useState<ParentGroupInfo>({ childToParent: new Map(), parentTitles: new Map() });
   const [showAddForm, setShowAddForm] = useState(false);
   const [newTitle, setNewTitle] = useState("");
+  const [newPriority, setNewPriority] = useState<PriorityLevel>("medium");
+  const [newOwnerId, setNewOwnerId] = useState("");
+  const [newProjectId, setNewProjectId] = useState("");
   const [newContext, setNewContext] = useState("");
   const [newAsk, setNewAsk] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -183,6 +187,9 @@ export function VendorAgendaView({
         setItems(data as VendorAgendaRow[]);
         setHasGenerated(true);
       }
+    });
+    supabase.from("projects").select("id, name, slug").order("name").then(({ data }) => {
+      if (!cancelled && data) setProjects(data);
     });
     return () => { cancelled = true; };
   }, [vendor.id]);
@@ -304,15 +311,19 @@ export function VendorAgendaView({
     if (!newTitle.trim()) return;
     await supabase.from("agenda_items").insert({
       vendor_id: vendor.id,
+      project_id: newProjectId || null,
       title: newTitle.trim(),
       context: newContext.trim() || null,
       ask: newAsk.trim() || null,
       severity: "new",
-      priority: "medium",
+      priority: newPriority,
       org_id: vendor.org_id,
       created_by: profileId,
     });
     setNewTitle("");
+    setNewPriority("medium");
+    setNewOwnerId("");
+    setNewProjectId("");
     setNewContext("");
     setNewAsk("");
     setShowAddForm(false);
@@ -809,6 +820,31 @@ export function VendorAgendaView({
       {showAddForm && (
         <div className="bg-white rounded-lg border border-gray-200 p-4 space-y-3">
           <input type="text" placeholder="Topic title" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Priority</label>
+              <select value={newPriority} onChange={(e) => setNewPriority(e.target.value as PriorityLevel)} className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none">
+                <option value="critical">Critical</option>
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Owner</label>
+              <select value={newOwnerId} onChange={(e) => setNewOwnerId(e.target.value)} className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none">
+                <option value="">Unassigned</option>
+                {people.map((p) => (<option key={p.id} value={p.id}>{p.full_name}</option>))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Project</label>
+              <select value={newProjectId} onChange={(e) => setNewProjectId(e.target.value)} className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none">
+                <option value="">None</option>
+                {projects.map((p) => (<option key={p.id} value={p.id}>{p.name}</option>))}
+              </select>
+            </div>
+          </div>
           <textarea placeholder="Context (optional)" value={newContext} onChange={(e) => setNewContext(e.target.value)} rows={2} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
           <textarea placeholder="Ask / What we need (optional)" value={newAsk} onChange={(e) => setNewAsk(e.target.value)} rows={2} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
           <div className="flex gap-2">
