@@ -1622,7 +1622,17 @@ function ActionItemsPanel({
   return (
     <div className="bg-white rounded-lg border border-gray-300">
       <div className="bg-gray-800 px-4 py-2.5 flex items-center justify-between rounded-t-lg">
-        <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Action Items ({filteredActions.length})</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Action Items ({filteredActions.length})</h2>
+          {archivedActions.length > 0 && (
+            <button
+              onClick={() => setShowArchived(!showArchived)}
+              className={`text-[10px] transition-colors ${showArchived ? "text-white font-medium" : "text-gray-400 hover:text-gray-200"}`}
+            >
+              Archived ({archivedActions.length})
+            </button>
+          )}
+        </div>
         <div className="flex items-center gap-3">
           <div className="relative" ref={colPickerRef}>
             <button
@@ -1936,15 +1946,7 @@ function ActionItemsPanel({
         </>
       ) : null}
 
-      {/* Archived link + view */}
-      {archivedActions.length > 0 && (
-        <button
-          onClick={() => setShowArchived(!showArchived)}
-          className={`mt-2 px-3 text-xs text-left transition-colors ${showArchived ? "text-gray-900 font-medium" : "text-gray-400 hover:text-gray-600"}`}
-        >
-          Archived ({archivedActions.length})
-        </button>
-      )}
+      {/* Archived view */}
       {showArchived && archivedActions.length > 0 && (
         <div className="mt-2 rounded-lg border border-gray-300 overflow-hidden">
           <div className="bg-gray-700 px-4 h-9 flex items-center">
