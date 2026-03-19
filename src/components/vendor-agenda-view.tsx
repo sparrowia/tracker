@@ -644,6 +644,7 @@ export function VendorAgendaView({
                     }}
                     className="text-sm text-gray-700 border border-gray-200 rounded px-2 py-0.5 focus:border-blue-500 focus:outline-none"
                   >
+                    <option value="">None</option>
                     {vendors.map((v) => (<option key={v.id} value={v.id}>{v.name}</option>))}
                   </select>
                 </div>
