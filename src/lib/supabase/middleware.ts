@@ -60,7 +60,8 @@ export async function updateSession(request: NextRequest) {
     !request.nextUrl.pathname.startsWith("/auth") &&
     !request.nextUrl.pathname.startsWith("/set-password") &&
     !request.nextUrl.pathname.startsWith("/issues") &&
-    !request.nextUrl.pathname.startsWith("/api/issues")
+    !request.nextUrl.pathname.startsWith("/api/issues") &&
+    !request.nextUrl.pathname.startsWith("/api/slack")
   ) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
