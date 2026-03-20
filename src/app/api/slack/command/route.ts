@@ -89,14 +89,15 @@ export async function POST(req: NextRequest) {
       }
 
       // Build queries — optionally scoped to project
+      // Match the UI: all non-complete statuses
       let overdueQ = supabase.from("action_items").select("*", { count: "exact", head: true })
-        .lt("due_date", today).in("status", ["pending", "in_progress", "at_risk", "blocked"]);
+        .lt("due_date", today).neq("status", "complete");
       let blockerQ = supabase.from("blockers").select("*", { count: "exact", head: true })
         .is("resolved_at", null);
       let actionQ = supabase.from("action_items").select("*", { count: "exact", head: true })
-        .in("status", ["pending", "in_progress"]);
+        .neq("status", "complete");
       let riskQ = supabase.from("raid_entries").select("*", { count: "exact", head: true })
-        .in("raid_type", ["risk", "issue"]).in("status", ["pending", "in_progress", "identified", "assessing"]);
+        .in("raid_type", ["risk", "issue"]).not("status", "in", '("complete","closed","mitigated")');
 
       if (projectId) {
         overdueQ = overdueQ.eq("project_id", projectId);
