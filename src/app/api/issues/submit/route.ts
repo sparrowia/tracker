@@ -114,13 +114,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Notify Slack (fire and forget)
-    notifyNewIssue({
-      projectName: project.name,
-      title,
-      issueType: issue_type,
-      reporter: reporter_name,
-    }).catch(() => {});
+    // Notify Slack — only for projects with a mapped channel
+    const projectChannelMap: Record<string, string> = {
+      "silk-uat": "#uat-unified-ce-platform",
+    };
+    const slackChannel = projectChannelMap[project_slug];
+    if (slackChannel) {
+      notifyNewIssue({
+        projectName: project.name,
+        title,
+        issueType: issue_type,
+        reporter: reporter_name,
+        channel: slackChannel,
+      }).catch(() => {});
+    }
 
     return NextResponse.json({ success: true, id: entry.id });
   } catch (err) {
