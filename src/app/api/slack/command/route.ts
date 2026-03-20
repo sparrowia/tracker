@@ -4,18 +4,18 @@ import { createAdminClient } from "@/lib/supabase/admin";
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://edcet-tracker.vercel.app";
 
 const GREETINGS = [
-  "🦫 *shuffles papers* Oh hi! I was just reorganizing your project tracker. Everything's fine. Probably.",
-  "🦫 Hey there! I've been keeping an eye on things while you were gone. Well, one eye. The other one was on Slack.",
-  "🦫 *adjusts tiny glasses* Ah yes, you've summoned Ed. How may I assist in your quest against overdue items?",
-  "🦫 Welcome back! I missed you. Not in a weird way. In a project-management way.",
-  "🦫 Oh good, you're here! I was starting to worry the blockers would stage a revolt.",
+  "🐾 *shuffles papers* Oh hi! I was just reorganizing your project tracker. Everything's fine. Probably.",
+  "🐾 Hey there! I've been keeping an eye on things while you were gone. Well, one eye. The other one was on Slack.",
+  "🐾 *adjusts tiny glasses* Ah yes, you've summoned Ed. How may I assist in your quest against overdue items?",
+  "🐾 Welcome back! I missed you. Not in a weird way. In a project-management way.",
+  "🐾 Oh good, you're here! I was starting to worry the blockers would stage a revolt.",
 ];
 
 const MOTIVATIONS = [
   "💪 You've got this! Every completed task is a tiny victory dance waiting to happen.",
   "🌟 Remember: the best project managers aren't the ones with zero blockers — they're the ones who tackle them head-on. Like you!",
   "🚀 Progress isn't always linear, but you're still moving forward. That counts for a lot.",
-  "🎯 Focus on one thing at a time. Even Ed can only chew one log at a time. 🦫",
+  "🎯 Focus on one thing at a time. Even Ed can only chill by one river at a time. 🐾",
   "⭐ The fact that you're checking in means you care. That already puts you ahead.",
 ];
 
@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         response_type: "ephemeral",
         text: [
-          "🦫 *Ed's Command Menu*",
+          "🐾 *Ed's Command Menu*",
           "",
           "`/ed` or `/ed hello` — Say hi to Ed",
           "`/ed status` — Live project stats (overdue, blockers, items)",
@@ -106,10 +106,10 @@ export async function POST(req: NextRequest) {
         `⚡ *${risks}* open risks & issues`,
         "",
         overdue === 0 && blockers === 0
-          ? "🦫 Looking good! Ed approves. 👍"
+          ? "🐾 Looking good! Ed approves. 👍"
           : overdue > 5
-            ? "🦫 Ed is concerned. Very concerned. Please check the dashboard."
-            : "🦫 A few things need attention, but nothing Ed can't handle. Well, nothing *you* can't handle. Ed's just a beaver.",
+            ? "🐾 Ed is concerned. Very concerned. Please check the dashboard."
+            : "🐾 A few things need attention, but nothing Ed can't handle. Well, nothing *you* can't handle. Ed's just a capybara. A very chill one.",
         "",
         `<${SITE_URL}/dashboard|Open Dashboard>`,
       ];
@@ -120,13 +120,13 @@ export async function POST(req: NextRequest) {
     // Unknown command
     return NextResponse.json({
       response_type: "ephemeral",
-      text: `🦫 Ed doesn't understand "${text}" yet. Try \`/ed help\` to see what I can do!`,
+      text: `🐾 Ed doesn't understand "${text}" yet. Try \`/ed help\` to see what I can do!`,
     });
   } catch (err) {
     console.error("Slack command error:", err);
     return NextResponse.json({
       response_type: "ephemeral",
-      text: "🦫 Ed tripped over a log. Something went wrong. Try again?",
+      text: "🐾 Ed tripped over a watermelon. Something went wrong. Try again?",
     });
   }
 }
