@@ -2531,7 +2531,18 @@ function IntakePanel({
                             <p className="text-gray-900 mt-0.5">{new Date(intake.created_at).toLocaleString()}</p>
                           </div>
                         </div>
-                        <div className="flex justify-end gap-2 pt-2 border-t border-gray-300 mt-2">
+                        <div className="flex justify-end items-center gap-3 pt-2 border-t border-gray-300 mt-2">
+                          {intake.extraction_status === "complete" && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); router.push(`/intake/${intake.id}/review`); }}
+                              className="text-gray-400 hover:text-blue-600 transition-colors"
+                              title="Review extracted items"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+                              </svg>
+                            </button>
+                          )}
                           <button
                             onClick={async (e) => {
                               e.stopPropagation();
@@ -2541,18 +2552,13 @@ function IntakePanel({
                               setIntakes((prev) => prev.filter((i) => i.id !== intake.id));
                               if (expandedId === intake.id) setExpandedId(null);
                             }}
-                            className="px-3 py-1.5 text-xs font-medium text-red-600 bg-white border border-red-200 rounded hover:bg-red-50"
+                            className="text-gray-400 hover:text-red-600 transition-colors"
+                            title="Delete intake"
                           >
-                            Delete
+                            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                            </svg>
                           </button>
-                          {intake.extraction_status === "complete" && (
-                            <button
-                              onClick={(e) => { e.stopPropagation(); router.push(`/intake/${intake.id}/review`); }}
-                              className="px-3 py-1.5 text-xs font-medium text-blue-700 bg-white border border-blue-300 rounded hover:bg-blue-50"
-                            >
-                              Review Extracted Items
-                            </button>
-                          )}
                         </div>
                       </div>
                     </div>
