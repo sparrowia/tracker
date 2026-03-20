@@ -2531,16 +2531,29 @@ function IntakePanel({
                             <p className="text-gray-900 mt-0.5">{new Date(intake.created_at).toLocaleString()}</p>
                           </div>
                         </div>
-                        {intake.extraction_status === "complete" && (
-                          <div className="flex justify-end pt-2 border-t border-gray-300 mt-2">
+                        <div className="flex justify-end gap-2 pt-2 border-t border-gray-300 mt-2">
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              if (!confirm("Delete this intake? This cannot be undone.")) return;
+                              await supabase.from("intake_entities").delete().eq("intake_id", intake.id);
+                              await supabase.from("intakes").delete().eq("id", intake.id);
+                              setIntakes((prev) => prev.filter((i) => i.id !== intake.id));
+                              if (expandedId === intake.id) setExpandedId(null);
+                            }}
+                            className="px-3 py-1.5 text-xs font-medium text-red-600 bg-white border border-red-200 rounded hover:bg-red-50"
+                          >
+                            Delete
+                          </button>
+                          {intake.extraction_status === "complete" && (
                             <button
                               onClick={(e) => { e.stopPropagation(); router.push(`/intake/${intake.id}/review`); }}
                               className="px-3 py-1.5 text-xs font-medium text-blue-700 bg-white border border-blue-300 rounded hover:bg-blue-50"
                             >
                               Review Extracted Items
                             </button>
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </div>
                     </div>
                   )}

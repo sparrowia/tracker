@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { notifyNewIssue } from "@/lib/slack";
 
 export async function POST(req: NextRequest) {
   try {
@@ -112,6 +113,14 @@ export async function POST(req: NextRequest) {
         { status: 500 }
       );
     }
+
+    // Notify Slack (fire and forget)
+    notifyNewIssue({
+      projectName: project.name,
+      title,
+      issueType: issue_type,
+      reporter: reporter_name,
+    }).catch(() => {});
 
     return NextResponse.json({ success: true, id: entry.id });
   } catch (err) {

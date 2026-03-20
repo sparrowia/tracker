@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { callDeepSeek } from "@/lib/ai/deepseek";
+import { notifyExtractionComplete } from "@/lib/slack";
 import { fetchOrgContext, buildContextPrompt, buildTermCorrectionsPrompt } from "@/lib/ai/context";
 import { EXTRACT_SYSTEM_PROMPT, SOURCE_HINTS, FEW_SHOT_EXAMPLE } from "@/lib/ai/prompts/extract";
 
@@ -208,6 +209,13 @@ export async function POST(request: Request) {
       .from("intakes")
       .update({ extracted_data: extracted, extraction_status: "complete" })
       .eq("id", intake_id);
+
+    // Notify Slack (fire and forget)
+    const counts: Record<string, number> = {};
+    for (const [key, items] of Object.entries(extracted)) {
+      if (Array.isArray(items)) counts[key] = items.length;
+    }
+    notifyExtractionComplete({ itemCounts: counts, intakeId: intake_id }).catch(() => {});
 
     return NextResponse.json({ success: true, data: extracted });
   } catch (err) {
