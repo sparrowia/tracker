@@ -13,6 +13,7 @@ import CommentThread from "@/components/comment-thread";
 import VendorPicker from "@/components/vendor-picker";
 import { useRole } from "@/components/role-context";
 import { canCreate, canDelete, canEditItem } from "@/lib/permissions";
+import ReminderButton from "@/components/reminder-button";
 
 type Tab = "actions" | "blockers" | "raid" | "agenda" | "intake" | "docs";
 
@@ -1206,6 +1207,12 @@ function BlockersPanel({
 
                   {/* Actions bar */}
                   <div className="flex justify-end items-center gap-3 px-5 py-2 border-t border-gray-100">
+                    <ReminderButton
+                      entityType="blocker"
+                      entityId={b.id}
+                      entityTitle={b.title}
+                      orgId={orgId}
+                    />
                     {canDelete(role) && (
                       <button
                         onClick={() => handleDelete(b.id)}
@@ -1924,6 +1931,12 @@ function ActionItemsPanel({
 
                   {/* Actions bar */}
                   <div className="flex justify-end items-center gap-3 px-5 py-2 border-t border-gray-100">
+                    <ReminderButton
+                      entityType="action_item"
+                      entityId={a.id}
+                      entityTitle={a.title}
+                      orgId={orgId}
+                    />
                     {canDelete(role) && (
                       <button
                         onClick={() => handleDelete(a.id)}

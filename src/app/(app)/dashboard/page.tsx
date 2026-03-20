@@ -22,6 +22,8 @@ export default function DashboardPage() {
   const [risksIssues, setRisksIssues] = useState<RaidRow[]>([]);
   const [decisions, setDecisions] = useState<RaidRow[]>([]);
   const [initiativeGroups, setInitiativeGroups] = useState<InitiativeGroup[]>([]);
+  const [reminders, setReminders] = useState<{ id: string; entity_type: string; entity_id: string; remind_at: string; title: string }[]>([]);
+  const [snoozeOpenId, setSnoozeOpenId] = useState<string | null>(null);
   const supabase = createClient();
 
   useEffect(() => {
@@ -49,6 +51,7 @@ export default function DashboardPage() {
         { data: projData },
         { data: actionCounts },
         { data: blockerCounts },
+        { data: reminderData },
       ] = await Promise.all([
         // Overdue action items
         supabase
@@ -101,6 +104,13 @@ export default function DashboardPage() {
         supabase.from("action_items").select("project_id").neq("status", "complete").not("project_id", "is", null),
         // Blocker counts per project (unresolved)
         supabase.from("blockers").select("project_id").is("resolved_at", null).not("project_id", "is", null),
+        // Due reminders
+        supabase
+          .from("reminders")
+          .select("id, entity_type, entity_id, remind_at, title")
+          .eq("dismissed", false)
+          .lte("remind_at", new Date().toISOString())
+          .order("remind_at"),
       ]);
 
       // Scope to visible projects for regular users
@@ -117,6 +127,7 @@ export default function DashboardPage() {
       setBlockers(scopeByProject((blockerData || []) as BlockerRow[]));
       setRisksIssues(scopeByProject((riskData || []) as RaidRow[]));
       setDecisions(scopeByProject((decisionData || []) as RaidRow[]));
+      setReminders(reminderData || []);
 
       // Build initiative-grouped project view with counts
       const actionCountMap = new Map<string, number>();
@@ -266,6 +277,79 @@ export default function DashboardPage() {
                 })}
               </tbody>
             </table>
+          </div>
+        </section>
+      )}
+
+      {/* Reminders */}
+      {reminders.length > 0 && (
+        <section>
+          <div className="bg-white rounded-lg border border-gray-300 overflow-hidden">
+            <div className="bg-indigo-800 px-4 py-2.5">
+              <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Reminders ({reminders.length})</h2>
+            </div>
+            <div>
+              {reminders.map((r) => {
+                const ago = Math.max(0, Math.floor((Date.now() - new Date(r.remind_at).getTime()) / 60000));
+                const agoLabel = ago < 60 ? `${ago}m ago` : ago < 1440 ? `${Math.floor(ago / 60)}h ago` : `${Math.floor(ago / 1440)}d ago`;
+                return (
+                  <div key={r.id} className="px-4 py-3 border-b border-gray-200 last:border-b-0 flex items-center gap-4">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-gray-900 font-semibold truncate">{r.title}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">Set {agoLabel}</p>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0 relative">
+                      <button
+                        onClick={() => setSnoozeOpenId(snoozeOpenId === r.id ? null : r.id)}
+                        className="text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+                      >
+                        Snooze
+                      </button>
+                      {snoozeOpenId === r.id && (
+                        <div className="absolute right-0 top-full mt-1 z-50 bg-white rounded-lg shadow-lg border border-gray-200 py-1 w-48">
+                          {[
+                            { label: "In 1 hour", ms: 60 * 60 * 1000 },
+                            { label: "In 4 hours", ms: 4 * 60 * 60 * 1000 },
+                            { label: "Tomorrow morning", ms: 0 },
+                            { label: "In 3 days", ms: 3 * 24 * 60 * 60 * 1000 },
+                            { label: "In 1 week", ms: 7 * 24 * 60 * 60 * 1000 },
+                          ].map((opt) => (
+                            <button
+                              key={opt.label}
+                              onClick={() => {
+                                let newTime: Date;
+                                if (opt.label === "Tomorrow morning") {
+                                  newTime = new Date();
+                                  newTime.setDate(newTime.getDate() + 1);
+                                  newTime.setHours(9, 0, 0, 0);
+                                } else {
+                                  newTime = new Date(Date.now() + opt.ms);
+                                }
+                                supabase.from("reminders").update({ remind_at: newTime.toISOString(), dismissed: false }).eq("id", r.id).then(() => {});
+                                setReminders((prev) => prev.filter((rem) => rem.id !== r.id));
+                                setSnoozeOpenId(null);
+                              }}
+                              className="w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
+                            >
+                              {opt.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      <button
+                        onClick={() => {
+                          supabase.from("reminders").update({ dismissed: true }).eq("id", r.id).then(() => {});
+                          setReminders((prev) => prev.filter((rem) => rem.id !== r.id));
+                        }}
+                        className="text-xs text-gray-500 hover:text-gray-700 font-medium"
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </section>
       )}

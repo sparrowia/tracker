@@ -9,6 +9,7 @@ import CommentThread from "@/components/comment-thread";
 import VendorPicker from "@/components/vendor-picker";
 import { useRole } from "@/components/role-context";
 import { canCreate, canDelete, canEditItem } from "@/lib/permissions";
+import ReminderButton from "@/components/reminder-button";
 
 type RaidRow = RaidEntry & { owner: Person | null; reporter: Person | null; vendor: Vendor | null };
 
@@ -1280,6 +1281,12 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
 
                       {/* Actions bar */}
                       <div className="flex justify-end items-center gap-3 px-5 py-2 border-t border-gray-200">
+                        <ReminderButton
+                          entityType="raid_entry"
+                          entityId={entry.id}
+                          entityTitle={entry.title}
+                          orgId={project.org_id}
+                        />
                         <button
                           onClick={() => startMove(entry.id)}
                           className="text-gray-400 hover:text-blue-600 transition-colors"
