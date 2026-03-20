@@ -19,13 +19,6 @@ const MOTIVATIONS = [
   "⭐ The fact that you're checking in means you care. That already puts you ahead.",
 ];
 
-const ROASTS = [
-  "🔥 Let me check... yep, those items are still overdue. But at least you're consistent!",
-  "🔥 You know what pairs well with overdue action items? Another meeting to discuss why they're overdue.",
-  "🔥 I see you've adopted the 'if I don't look at the due dates, they can't hurt me' strategy. Bold move.",
-  "🔥 Your blockers have blockers at this point. It's blockers all the way down.",
-  "🔥 On the bright side, you can't be behind schedule if you never set a schedule. *taps forehead*",
-];
 
 function pick(arr: string[]) {
   return arr[Math.floor(Math.random() * arr.length)];
@@ -45,10 +38,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ response_type: "ephemeral", text: pick(MOTIVATIONS) });
     }
 
-    if (text === "roast" || text === "roast me") {
-      return NextResponse.json({ response_type: "ephemeral", text: pick(ROASTS) });
-    }
-
     if (text === "help") {
       return NextResponse.json({
         response_type: "ephemeral",
@@ -58,7 +47,6 @@ export async function POST(req: NextRequest) {
           "`/ed` or `/ed hello` — Say hi to Ed",
           "`/ed status` — Live project stats (overdue, blockers, items)",
           "`/ed motivate` — Get an encouraging nudge",
-          "`/ed roast` — Get roasted about your overdue items",
           "`/ed help` — This menu",
           "",
           `<${SITE_URL}/dashboard|Open Dashboard>`,
