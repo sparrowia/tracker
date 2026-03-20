@@ -30,6 +30,8 @@ Matt has multiple projects across different directories and Vercel accounts. **A
 - pdfjs-dist (client-side PDF text extraction)
 - DeepSeek API (extraction/synthesis via `/api/extract` route)
 - Deterministic Asana parser (`lib/parsers/asana.ts`) — bypasses AI for Asana PDF exports
+- TipTap (MIT) — rich text editor for wiki/docs pages
+- Slack Bot (`Ed` the capybara 🐾) — notifications + `/ed` slash command
 
 ## Key Directories
 
@@ -49,25 +51,35 @@ src/
 │   │   ├── people/               # Internal team + vendor contacts
 │   │   ├── intake/               # Raw text/image intake with OCR
 │   │   │   └── [id]/review/      # Review extracted items
+│   │   ├── docs/                 # Documentation wiki (TipTap editor)
 │   │   └── settings/
 │   │       ├── page.tsx          # Term corrections for AI extraction
 │   │       └── team/page.tsx     # Team management (invites, roles, deactivation)
 │   ├── (auth)/login/             # Auth page (shows deactivation error)
 │   ├── auth/callback/            # Auth callback (marks invites accepted)
+│   ├── issues/[slug]/            # Public issue submission form (no auth required)
 │   └── api/
 │       ├── extract/              # DeepSeek extraction endpoint
 │       ├── invite/               # POST: send invitation email
 │       │   ├── resend/           # POST: resend expired invitation
 │       │   ├── cancel/           # POST: cancel invite (deletes auth user + profile + invitation)
 │       │   └── accept/           # POST: mark invitation accepted
+│       ├── issues/
+│       │   ├── submit/           # POST: public issue submission (service-role, no auth)
+│       │   └── project/          # GET: project info for public form
+│       ├── slack/
+│       │   └── command/          # POST: /ed slash command handler
 │       └── users/
 │           ├── deactivate/       # POST: deactivate user (admin+)
 │           └── reactivate/       # POST: reactivate user (super_admin)
 ├── components/
 │   ├── agenda-view.tsx           # Project meeting agenda — RAID-style layout with resolve, undo, detail panels
 │   ├── vendor-agenda-view.tsx    # Vendor meeting agenda — same layout as agenda-view for vendor detail pages
-│   ├── project-tabs.tsx          # Project detail tabs (actions, blockers, RAID, agenda, intake) with cross-tab state sync
-│   ├── raid-log.tsx              # RAID log with columns, filters, archived view, subtasks, drag-and-drop
+│   ├── project-tabs.tsx          # Project detail tabs (actions, blockers, RAID, agenda, intake, docs) with cross-tab state sync
+│   ├── project-header.tsx        # Project header with edit form, public issue form toggle, health badge
+│   ├── raid-log.tsx              # RAID log with columns, filters, archived view, subtasks, drag-and-drop, multi-select
+│   ├── wiki-editor.tsx           # TipTap rich text editor for documentation wiki
+│   ├── reminder-button.tsx       # Alarm clock reminder popover for action/blocker/RAID items
 │   ├── people-list.tsx            # People page client component — inline editing, status badges, invite, impersonation
 │   ├── comment-thread.tsx        # Threaded comments with file attachments
 │   ├── owner-picker.tsx          # Person selection dropdown with inline creation
@@ -78,7 +90,8 @@ src/
 └── lib/
     ├── types.ts                  # All TypeScript interfaces
     ├── utils.ts                  # Formatting helpers (priorityColor, formatAge, etc.)
-    ├── permissions.ts            # Role-based permission helpers (canCreate, canDelete, canEditItem, etc.)
+    ├── permissions.ts            # Role-based permission helpers (canCreate, canDelete, canEditItem, canEditWikiPage, etc.)
+    ├── slack.ts                  # Slack Bot notification utility (sendSlackMessage, notifyNewIssue, notifyExtractionComplete)
     ├── pdf.ts                    # Client-side PDF text extraction
     ├── ai/                       # DeepSeek client, context builder, prompts
     ├── parsers/asana.ts          # Deterministic Asana PDF export parser
@@ -328,6 +341,91 @@ Deactivation DB check skipped on RSC fetch requests (`rsc` or `next-router-state
 
 ### Client-Side Pages for Fast Navigation
 Initiative detail (`/initiatives/[slug]`) and dashboard (`/dashboard`) are client components — fetch directly from browser Supabase client, avoiding server round-trip overhead (middleware + layout re-render). Show inline loading skeletons while data loads.
+
+## Documentation Wiki
+
+Client component (`/docs`) with TipTap (MIT) rich text editor:
+- `wiki_pages` table with parent/child hierarchy, RLS (hidden from vendors)
+- Two-panel layout: page tree on left, editor on right
+- Dynamic import with `ssr: false` to avoid React hooks errors from TipTap
+- Sidebar links use `prefetch={false}` to prevent TipTap bundle loading on other pages
+- Migration: `20260316000001_wiki_pages.sql`
+
+## Project Documentation (Docs Tab)
+
+Each project has a Docs tab with:
+- **Files** — upload/download/delete files stored in Supabase Storage (`project-files` bucket)
+- **Notes** — free-form textarea that autosaves to `projects.notes`
+- Both always visible in the index, even without generated AI documentation
+- AI-generated sections (Project Overview, Stakeholders, Status Summary, etc.) appear below
+
+## Public Issue Form
+
+Public-facing issue submission form per project at `/issues/[slug]`:
+- No auth required (middleware excludes `/issues` and `/api/issues` paths)
+- Toggle on/off per project via `public_issue_form` boolean in project header (admin only)
+- Fields: Name, Issue Name, Description, Issue Type (13 options), URL, OS, Browser, up to 5 attachments
+- "Submit & New" keeps reporter name pre-filled
+- Creates RAID entry (type: issue) via service-role client
+- Slack notification when submitted (project-channel mapped)
+- Migration: `20260318000001_public_issue_form.sql`
+
+## Reminders
+
+Alarm clock button on Action Item, Blocker, and RAID entry detail panels:
+- Popover with preset time options (1h, 4h, tomorrow 9am, 3 days, 1 week) + custom datetime
+- `reminders` table with profile_id, entity_type, entity_id, remind_at, dismissed
+- Dashboard "REMINDERS" section (indigo header) below Overdue — shows due reminders with Snooze/Dismiss
+- Migration: `20260320000001_reminders.sql`
+
+## Slack Integration
+
+Bot name: **Ed** (capybara 🐾, company mascot). Slack App ID: `A0AMR4A6Y2H`.
+
+### Notifications (Level 1)
+- New public issue submitted → posts to project-mapped Slack channel
+- Extraction complete → posts item counts + review link
+- Project-to-channel mapping in `src/app/api/issues/submit/route.ts` and `src/app/api/extract/route.ts`
+- Currently mapped: `silk-uat` → `#uat-unified-ce-platform`
+- Utility: `src/lib/slack.ts` with `sendSlackMessage`, `notifyNewIssue`, `notifyExtractionComplete`, `notifyNewBlocker`
+
+### Slash Command (`/ed`)
+- `/ed` or `/ed hello` — Greeting from Ed the capybara
+- `/ed status` — Live project stats (scoped to project when run from a mapped channel)
+- `/ed motivate` — Random encouraging message (20 variations)
+- `/ed help` — Command menu
+- Channel-to-project mapping for scoped status: `uat-unified-ce-platform` → Unified System
+- Handler: `src/app/api/slack/command/route.ts`
+
+### Environment Variables
+- `SLACK_BOT_TOKEN` — Bot User OAuth Token (xoxb-...)
+- `SLACK_DEFAULT_CHANNEL` — Fallback channel (currently `#uat-unified-ce-platform`)
+
+## Multi-Select & Bulk Operations
+
+Action items, blockers, and RAID entries support multi-select:
+- Click left edge of row to select (blue checkmark appears)
+- Shift+click for range selection
+- Selecting a RAID parent auto-selects children
+- Floating dark toolbar appears at bottom with bulk operations:
+  - Priority, Status, Owner dropdowns (bulk update)
+  - RAID log: "Nest under..." dropdown + "Group" button
+  - Delete button (confirmation dialog)
+  - Clear selection
+
+## Intake Review (Extraction)
+
+Single-card view with category tabs:
+- Keyboard shortcuts: A=accept, X=reject, E=edit, Left/Right=navigate
+- Accept All per tab, auto-advance with visual flash (green/grey)
+- Inline-editable: type reassignment, priority, owner, due date, click-to-edit title
+- Related items: text-based matching first (word overlap + substring), AI only for unmatched
+- Link actions: Update / Replace / Child ↓ / Parent ↑
+- Manual search: "+ Link to existing item" searches action_items/blockers/raid_entries
+- Completed/closed items excluded from matches
+- Fathom transcripts pre-processed: strip URLs/timestamps, extract ACTION ITEMs deterministically
+- Current year injected into prompt + post-processing fixes wrong-year dates
+- Discard Extraction button in header
 
 ## Development
 
