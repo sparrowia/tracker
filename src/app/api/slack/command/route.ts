@@ -17,6 +17,21 @@ const MOTIVATIONS = [
   "🚀 Progress isn't always linear, but you're still moving forward. That counts for a lot.",
   "🎯 Focus on one thing at a time. Even Ed can only chill by one river at a time. 🐾",
   "⭐ The fact that you're checking in means you care. That already puts you ahead.",
+  "🏔️ Every mountain is climbed one step at a time. You're already on the trail.",
+  "🌊 Be like Ed — stay calm, stay steady, and let the current carry you forward. 🐾",
+  "🔥 You're doing more than you think. Take a breath and look at how far you've come.",
+  "🎪 Juggling projects is hard. But you haven't dropped anything yet. Keep going!",
+  "💡 The best time to start was yesterday. The second best time is right now. Go get it.",
+  "🌱 Small progress is still progress. Water the seeds you've already planted.",
+  "🏆 Nobody sees the behind-the-scenes grind. But Ed does. And Ed is impressed. 🐾",
+  "☀️ New day, new chance to close out that one task that's been bugging you. You know the one.",
+  "🎸 You're the project management rockstar your team didn't know they needed.",
+  "🧠 Working smart > working hard. Take a step back, prioritize, then crush it.",
+  "🐾 Ed believes in you. And Ed's judgment is impeccable. Just look at that face.",
+  "🌈 Behind every resolved blocker is someone who refused to give up. That's you.",
+  "⚡ Momentum builds. Knock out one small win and watch the rest follow.",
+  "🎯 You don't have to finish everything today. Just move one thing forward.",
+  "🫡 Your team is lucky to have someone who actually tracks things. Most people just wing it.",
 ];
 
 
@@ -28,6 +43,7 @@ export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
     const text = (formData.get("text") as string || "").trim().toLowerCase();
+    const channelName = (formData.get("channel_name") as string || "").toLowerCase();
 
     // Simple commands that don't need DB
     if (!text || text === "hello" || text === "hi" || text === "hey") {
@@ -54,26 +70,47 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Status command — pull live data
+    // Status command — pull live data, scoped to project if in a linked channel
     if (text === "status" || text === "stats" || text === "report") {
       const supabase = createAdminClient();
       const today = new Date().toISOString().split("T")[0];
+
+      // Channel-to-project mapping
+      const channelProjectMap: Record<string, string> = {
+        "uat-unified-ce-platform": "silk-uat",
+      };
+      const projectSlug = channelProjectMap[channelName] || null;
+      let projectId: string | null = null;
+      let projectName: string | null = null;
+
+      if (projectSlug) {
+        const { data: proj } = await supabase.from("projects").select("id, name").eq("slug", projectSlug).single();
+        if (proj) { projectId = proj.id; projectName = proj.name; }
+      }
+
+      // Build queries — optionally scoped to project
+      let overdueQ = supabase.from("action_items").select("*", { count: "exact", head: true })
+        .lt("due_date", today).in("status", ["pending", "in_progress", "at_risk", "blocked"]);
+      let blockerQ = supabase.from("blockers").select("*", { count: "exact", head: true })
+        .is("resolved_at", null);
+      let actionQ = supabase.from("action_items").select("*", { count: "exact", head: true })
+        .in("status", ["pending", "in_progress"]);
+      let riskQ = supabase.from("raid_entries").select("*", { count: "exact", head: true })
+        .in("raid_type", ["risk", "issue"]).in("status", ["pending", "in_progress", "identified", "assessing"]);
+
+      if (projectId) {
+        overdueQ = overdueQ.eq("project_id", projectId);
+        blockerQ = blockerQ.eq("project_id", projectId);
+        actionQ = actionQ.eq("project_id", projectId);
+        riskQ = riskQ.eq("project_id", projectId);
+      }
 
       const [
         { count: overdueCount },
         { count: blockerCount },
         { count: openActionCount },
         { count: openRiskCount },
-      ] = await Promise.all([
-        supabase.from("action_items").select("*", { count: "exact", head: true })
-          .lt("due_date", today).in("status", ["pending", "in_progress", "at_risk", "blocked"]),
-        supabase.from("blockers").select("*", { count: "exact", head: true })
-          .is("resolved_at", null),
-        supabase.from("action_items").select("*", { count: "exact", head: true })
-          .in("status", ["pending", "in_progress"]),
-        supabase.from("raid_entries").select("*", { count: "exact", head: true })
-          .in("raid_type", ["risk", "issue"]).in("status", ["pending", "in_progress", "identified", "assessing"]),
-      ]);
+      ] = await Promise.all([overdueQ, blockerQ, actionQ, riskQ]);
 
       const overdue = overdueCount || 0;
       const blockers = blockerCount || 0;
@@ -85,8 +122,11 @@ export async function POST(req: NextRequest) {
       else if (overdue > 0 || blockers > 0) mood = "😐";
       else mood = "🎉";
 
+      const title = projectName ? `*${projectName} — Status Report*` : "*Project Health Report*";
+      const dashboardLink = projectSlug ? `${SITE_URL}/projects/${projectSlug}` : `${SITE_URL}/dashboard`;
+
       const lines = [
-        `${mood} *Project Health Report*`,
+        `${mood} ${title}`,
         "",
         `📋 *${actions}* open action items`,
         overdue > 0 ? `⚠️ *${overdue}* overdue` : "✅ Nothing overdue!",
@@ -99,7 +139,7 @@ export async function POST(req: NextRequest) {
             ? "🐾 Ed is concerned. Very concerned. Please check the dashboard."
             : "🐾 A few things need attention, but nothing Ed can't handle. Well, nothing *you* can't handle. Ed's just a capybara. A very chill one.",
         "",
-        `<${SITE_URL}/dashboard|Open Dashboard>`,
+        `<${dashboardLink}|${projectName ? `Open ${projectName}` : "Open Dashboard"}>`,
       ];
 
       return NextResponse.json({ response_type: "ephemeral", text: lines.join("\n") });
