@@ -268,7 +268,7 @@ export default function DashboardPage() {
                         {item.owner ? (
                           <div className="flex items-center gap-2.5 relative z-10">
                             {item.owner.email && (
-                              <a href={`https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(item.owner.email)}`} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-blue-600 transition-colors" title={`Email ${item.owner.full_name}`}>
+                              <a href={`https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(item.owner.email)}&su=${encodeURIComponent(`RE: ${item.title}`)}&body=${encodeURIComponent(`https://edcet-tracker.vercel.app/projects/${item.project?.slug || ""}?tab=actions\n\n`)}`} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-blue-600 transition-colors" title={`Email ${item.owner.full_name}`}>
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
                               </a>
                             )}
@@ -406,7 +406,7 @@ export default function DashboardPage() {
                         {item.owner ? (
                           <div className="flex items-center gap-2.5 relative z-10">
                             {item.owner.email && (
-                              <a href={`https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(item.owner.email)}`} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-blue-600 transition-colors" title={`Email ${item.owner.full_name}`}>
+                              <a href={`https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(item.owner.email)}&su=${encodeURIComponent(`RE: ${item.title}`)}&body=${encodeURIComponent(`https://edcet-tracker.vercel.app/projects/${item.project?.slug || ""}?tab=actions\n\n`)}`} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-blue-600 transition-colors" title={`Email ${item.owner.full_name}`}>
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
                               </a>
                             )}
@@ -506,7 +506,7 @@ export default function DashboardPage() {
                       <p className="text-sm text-gray-900 font-semibold mt-1">{r.title}</p>
                       <p className="text-xs text-gray-500 mt-1">
                         {r.owner?.email ? (
-                          <a href={`https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(r.owner.email)}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">{r.owner.full_name}</a>
+                          <a href={`https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(r.owner.email)}&su=${encodeURIComponent(`RE: ${r.title}`)}&body=${encodeURIComponent(`https://edcet-tracker.vercel.app/projects/${r.project?.slug || ""}?tab=raid\n\n`)}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">{r.owner.full_name}</a>
                         ) : (r.owner?.full_name || "Unassigned")} · {r.project?.name || "General"}
                       </p>
                     </>
@@ -544,7 +544,7 @@ export default function DashboardPage() {
                       <p className="text-sm text-gray-900 font-semibold mt-1">{d.title}</p>
                       <p className="text-xs text-gray-500 mt-1">
                         {d.owner?.email ? (
-                          <a href={`https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(d.owner.email)}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">{d.owner.full_name}</a>
+                          <a href={`https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(d.owner.email)}&su=${encodeURIComponent(`RE: ${d.title}`)}&body=${encodeURIComponent(`https://edcet-tracker.vercel.app/projects/${d.project?.slug || ""}?tab=raid\n\n`)}`} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">{d.owner.full_name}</a>
                         ) : (d.owner?.full_name || "Unassigned")} · {d.project?.name || "General"}
                       </p>
                     </>
