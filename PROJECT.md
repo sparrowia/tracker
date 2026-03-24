@@ -99,7 +99,7 @@ src/
 | `organizations` | Multi-tenant org isolation |
 | `profiles` | User accounts linked to auth |
 | `vendors` | External companies (Silk, BenchPrep, etc.) |
-| `people` | Internal team + vendor contacts |
+| `people` | Internal team + vendor contacts (includes `slack_member_id` for DM links) |
 | `initiatives` | High-level strategic initiatives |
 | `projects` | Tracked projects with health status |
 | `action_items` | Tasks with owner, priority, due date, meeting toggle |
@@ -213,6 +213,9 @@ All in `supabase/migrations/`:
 | `20260313000001_milestones.sql` | Milestones table for company timeline |
 | `20260313000002_milestones_parent_id.sql` | Self-referencing `parent_id` on milestones for grouping |
 | `20260316000001_wiki_pages.sql` | Wiki pages table with parent/child hierarchy and block content |
+| `20260318000001_public_issue_form.sql` | Public issue form toggle on projects |
+| `20260320000001_reminders.sql` | Reminders table for action/blocker/RAID items |
+| `20260324000001_slack_member_id.sql` | Add `slack_member_id` to people for Slack DM links |
 
 ## Deployment
 

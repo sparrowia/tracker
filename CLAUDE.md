@@ -137,7 +137,7 @@ The app uses a consistent Asana-inspired visual style across all pages:
 Defined in `src/lib/types.ts`:
 
 - **Vendor** — external companies (Silk, BenchPrep, etc.)
-- **Person** — internal team or vendor contacts
+- **Person** — internal team or vendor contacts (includes `slack_member_id` for Slack DM links)
 - **Project** — tracked projects with health status
 - **ActionItem** — tasks with owner, priority, due date, age
 - **Blocker** — blocking issues with impact description
@@ -222,7 +222,7 @@ Client component `people-list.tsx` with two tabs: **Internal Team** and **Vendor
 
 **Internal Team tab:**
 - Alphabetically sorted by first name
-- Click-to-expand inline editing for all person fields (name, title, email, phone, vendor, internal, notes)
+- Click-to-expand inline editing for all person fields (name, title, email, phone, Slack ID, vendor, internal, notes)
 - Checking "Internal" clears vendor assignment and hides vendor field
 - Contact status badges: **Joined** (has profile_id), **Invited** (pending invitation by email match), **Added** (manually created)
 - Invite button on "Added" contacts with email — calls `POST /api/invite` with role inferred from vendor_id
@@ -242,6 +242,10 @@ Client component `people-list.tsx` with two tabs: **Internal Team** and **Vendor
 Client component (`/dashboard`) with role-scoped data:
 - **Overdue** (red `bg-red-800` header) — action items past due date
 - **Due This Week** — action items due in next 7 days
+- **Contact column** — replaces Status column in Overdue and Due This Week tables with:
+  - Gmail compose icon (envelope) — opens `mail.google.com/mail/?view=cm` with pre-filled To, Subject (`RE: <item title>`), and body (link back to item in Tracker)
+  - Slack DM icon (chat bubble) — links to `edcetera.slack.com/team/MEMBER_ID` to open the person's Slack profile (requires `slack_member_id` on the person record)
+  - Icons show gray, turn blue (email) or purple (Slack) on hover
 - **Active Blockers** — with age severity coloring from `blocker_ages` view
 - **Risks & Issues** (left column) / **Decisions Needed** (right column) — 2-column grid from `raid_entries`
 - **Initiatives** — HR divider with "Initiatives" label, then 2-column grid of initiative tables showing child projects with health/action/blocker counts
@@ -331,7 +335,7 @@ Migration `20260311000002_performance_indexes.sql` adds indexes on:
 `vendor_item_counts()` — single SQL query with GROUP BY joins that returns action/blocker/people counts per vendor. Replaces full-table scans with client-side aggregation on dashboard and vendors page.
 
 ### Slim SELECT Joins
-Dashboard queries use `select("*, owner:people(id, full_name), ...")` instead of `select("*, owner:people(*)")` to reduce payload size. Same for comment thread author joins.
+Dashboard queries use `select("*, owner:people(id, full_name, email, slack_member_id), ...")` instead of `select("*, owner:people(*)")` to reduce payload size. Same for comment thread author joins.
 
 ### Middleware Optimization
 Deactivation DB check skipped on RSC fetch requests (`rsc` or `next-router-state-tree` headers). Full check still runs on initial page loads and hard navigations.
@@ -384,10 +388,9 @@ Bot name: **Ed** (capybara 🐾, company mascot). Slack App ID: `A0AMR4A6Y2H`.
 
 ### Notifications (Level 1)
 - New public issue submitted → posts to project-mapped Slack channel
-- Extraction complete → posts item counts + review link
-- Project-to-channel mapping in `src/app/api/issues/submit/route.ts` and `src/app/api/extract/route.ts`
+- Project-to-channel mapping in `src/app/api/issues/submit/route.ts`
 - Currently mapped: `silk-uat` → `#uat-unified-ce-platform`
-- Utility: `src/lib/slack.ts` with `sendSlackMessage`, `notifyNewIssue`, `notifyExtractionComplete`, `notifyNewBlocker`
+- Utility: `src/lib/slack.ts` with `sendSlackMessage`, `notifyNewIssue`, `notifyNewBlocker`
 
 ### Slash Command (`/ed`)
 - `/ed` or `/ed hello` — Greeting from Ed the capybara
@@ -421,7 +424,9 @@ Single-card view with category tabs:
 - Inline-editable: type reassignment, priority, owner, due date, click-to-edit title
 - Related items: text-based matching first (word overlap + substring), AI only for unmatched
 - Link actions: Update / Replace / Child ↓ / Parent ↑
-- Manual search: "+ Link to existing item" searches action_items/blockers/raid_entries
+- Manual search: "+ Link to existing item" searches action_items/blockers/raid_entries (white background input)
+- Manual search also includes accepted items from the current extraction, labeled "from this extraction" (no link action buttons since not yet in DB)
+- Tab badge shows reviewed/total count (both accepted and rejected items count as reviewed)
 - Completed/closed items excluded from matches
 - Fathom transcripts pre-processed: strip URLs/timestamps, extract ACTION ITEMs deterministically
 - Current year injected into prompt + post-processing fixes wrong-year dates
