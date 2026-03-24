@@ -25,10 +25,7 @@ export async function GET(req: NextRequest) {
 
   // Return an HTML page that triggers the slack:// protocol from the client
   // Browser redirects to custom protocols don't work from server-side redirects
-  const slackUrl = `slack://channel?team=${SLACK_TEAM_ID}&id=${data.channel.id}`;
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Opening Slack...</title></head><body><script>window.location.href=${JSON.stringify(slackUrl)};setTimeout(()=>window.close(),1000);</script></body></html>`;
-
-  return new NextResponse(html, {
-    headers: { "Content-Type": "text/html" },
-  });
+  // Use the web client URL — Slack will prompt to open in the desktop app
+  const slackUrl = `https://app.slack.com/client/${SLACK_TEAM_ID}/${data.channel.id}`;
+  return NextResponse.redirect(slackUrl);
 }
