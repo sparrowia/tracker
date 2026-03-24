@@ -17,6 +17,7 @@ interface MatchCandidate {
   project_name?: string;
   confidence: "high" | "medium";
   reason: string;
+  from_intake?: boolean;
 }
 
 interface ExtractedItem {
@@ -586,6 +587,31 @@ export default function IntakeReviewPage() {
     for (const r of (raids || [])) {
       const pn = Array.isArray(r.project) ? r.project[0]?.name : (r.project as { name: string } | null)?.name;
       results.push({ table: "raid_entries", id: r.id, title: r.title, status: r.status, priority: r.priority, raid_type: r.raid_type, confidence: "high", reason: "manual search", project_name: pn || undefined });
+    }
+
+    // Also include accepted items from the current extraction
+    const acceptedItems = Object.entries(extracted).flatMap(([cat, items]) =>
+      (items as ExtractedItem[])
+        .filter((i) => i._accepted === true)
+        .filter((i) => (i.title || i.subject || "").toLowerCase().includes(q))
+        .map((i) => ({
+          table: (cat === "blockers" ? "blockers" : cat === "action_items" ? "action_items" : "raid_entries") as MatchCandidate["table"],
+          id: `intake-${cat}-${(i.title || i.subject || "").slice(0, 30)}`,
+          title: i.title || i.subject || "",
+          status: i.status || "pending",
+          priority: i.priority || "medium",
+          raid_type: cat === "decisions" ? "decision" : cat === "issues" ? "issue" : cat === "risks" ? "risk" : undefined,
+          confidence: "high" as const,
+          reason: "accepted in this extraction",
+          from_intake: true,
+        }))
+    );
+    // Deduplicate: skip accepted items whose title already appears in DB results
+    const dbTitles = new Set(results.map((r) => r.title.toLowerCase()));
+    for (const ai of acceptedItems) {
+      if (!dbTitles.has(ai.title.toLowerCase())) {
+        results.push(ai);
+      }
     }
 
     setSearchResults(results);
@@ -1840,7 +1866,7 @@ export default function IntakeReviewPage() {
                     onKeyDown={(e) => { if (e.key === "Enter") searchExistingItems(searchQuery); if (e.key === "Escape") { setSearchOpen(false); setSearchQuery(""); setSearchResults([]); } }}
                     placeholder="Search existing items..."
                     autoFocus
-                    className="flex-1 text-xs rounded border border-gray-300 px-2 py-1 focus:border-blue-500 focus:outline-none"
+                    className="flex-1 text-xs rounded border border-gray-300 px-2 py-1 bg-white focus:border-blue-500 focus:outline-none"
                   />
                   <button
                     onClick={() => searchExistingItems(searchQuery)}
@@ -1874,16 +1900,20 @@ export default function IntakeReviewPage() {
                               {result.project_name && <span className="text-[10px] text-orange-600">{result.project_name}</span>}
                             </div>
                           </div>
-                          <div className="flex gap-1 flex-shrink-0">
-                            <button onClick={() => { linkItem(category, idx, result, "update"); setSearchOpen(false); setSearchQuery(""); setSearchResults([]); }}
-                              className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600 hover:bg-blue-50 hover:text-blue-700">Update</button>
-                            <button onClick={() => { linkItem(category, idx, result, "replace"); setSearchOpen(false); setSearchQuery(""); setSearchResults([]); }}
-                              className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600 hover:bg-amber-50 hover:text-amber-700">Replace</button>
-                            <button onClick={() => { linkItem(category, idx, result, "child"); setSearchOpen(false); setSearchQuery(""); setSearchResults([]); }}
-                              className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600 hover:bg-green-50 hover:text-green-700">Child ↓</button>
-                            <button onClick={() => { linkItem(category, idx, result, "parent"); setSearchOpen(false); setSearchQuery(""); setSearchResults([]); }}
-                              className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600 hover:bg-purple-50 hover:text-purple-700">Parent ↑</button>
-                          </div>
+                          {result.from_intake ? (
+                            <span className="text-[10px] text-green-600 italic flex-shrink-0">from this extraction</span>
+                          ) : (
+                            <div className="flex gap-1 flex-shrink-0">
+                              <button onClick={() => { linkItem(category, idx, result, "update"); setSearchOpen(false); setSearchQuery(""); setSearchResults([]); }}
+                                className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600 hover:bg-blue-50 hover:text-blue-700">Update</button>
+                              <button onClick={() => { linkItem(category, idx, result, "replace"); setSearchOpen(false); setSearchQuery(""); setSearchResults([]); }}
+                                className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600 hover:bg-amber-50 hover:text-amber-700">Replace</button>
+                              <button onClick={() => { linkItem(category, idx, result, "child"); setSearchOpen(false); setSearchQuery(""); setSearchResults([]); }}
+                                className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600 hover:bg-green-50 hover:text-green-700">Child ↓</button>
+                              <button onClick={() => { linkItem(category, idx, result, "parent"); setSearchOpen(false); setSearchQuery(""); setSearchResults([]); }}
+                                className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600 hover:bg-purple-50 hover:text-purple-700">Parent ↑</button>
+                            </div>
+                          )}
                         </div>
                       );
                     })}
