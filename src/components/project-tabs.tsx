@@ -1588,11 +1588,11 @@ function ActionItemsPanel({
     const now = new Date().toISOString();
     const { error } = await supabase.from("action_items").update({ status: "complete", resolved_at: now }).eq("id", id);
     if (!error) {
-      setActions((prev) => prev.filter((a) => a.id !== id));
+      setActions((prev) => prev.map((a) => a.id === id ? { ...a, status: "complete" as ItemStatus, resolved_at: now } : a));
       if (expandedId === id) setExpandedId(null);
       addUndo(`Resolved "${action.title}"`, async () => {
         const { error: err } = await supabase.from("action_items").update({ status: prevStatus, resolved_at: null }).eq("id", id);
-        if (!err) setActions((prev) => [...prev, { ...action, status: prevStatus, resolved_at: null }]);
+        if (!err) setActions((prev) => prev.map((a) => a.id === id ? { ...a, status: prevStatus, resolved_at: null } : a));
       });
     }
   }
