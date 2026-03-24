@@ -1643,15 +1643,18 @@ function ActionItemsPanel({
     <div className="bg-white rounded-lg border border-gray-300">
       <div className="bg-gray-800 px-4 py-2.5 flex items-center justify-between rounded-t-lg">
         <div className="flex items-center gap-2">
-          <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Action Items ({filteredActions.length})</h2>
-          {archivedActions.length > 0 && (
-            <button
-              onClick={() => setShowArchived(!showArchived)}
-              className={`text-[10px] transition-colors ${showArchived ? "text-white font-medium" : "text-gray-400 hover:text-gray-200"}`}
-            >
-              Archived ({archivedActions.length})
-            </button>
-          )}
+          <h2 className="text-xs font-semibold text-white uppercase tracking-wide">
+            Action Items ({filteredActions.length})
+            {archivedActions.length > 0 && (
+              <>
+                {" "}
+                <span className="font-normal">|</span>{" "}
+                <button onClick={() => setShowArchived(!showArchived)} className="hover:underline">
+                  Archived ({archivedActions.length})
+                </button>
+              </>
+            )}
+          </h2>
         </div>
         <div className="flex items-center gap-3">
           <div className="relative" ref={colPickerRef}>
