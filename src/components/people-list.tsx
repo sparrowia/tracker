@@ -196,6 +196,14 @@ export default function PeopleList({ initialPeople, vendors, profiles, initialIn
             placeholder="—"
             className="text-sm rounded border border-gray-300 px-2 py-1.5 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
+          <label className="text-xs font-medium text-gray-400">Slack ID</label>
+          <input
+            type="text"
+            defaultValue={person.slack_member_id || ""}
+            onBlur={(e) => { if (e.target.value !== (person.slack_member_id || "")) saveField(person.id, "slack_member_id", e.target.value || null); }}
+            placeholder="U0XXXXXXXX"
+            className="text-sm rounded border border-gray-300 px-2 py-1.5 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          />
           {!person.is_internal && (
             <>
               <label className="text-xs font-medium text-gray-400">Vendor</label>

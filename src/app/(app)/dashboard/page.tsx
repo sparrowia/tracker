@@ -4,10 +4,11 @@ import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRole } from "@/components/role-context";
 import Link from "next/link";
-import { formatAge, priorityColor, priorityLabel, statusBadge, healthColor, healthLabel, formatDateShort } from "@/lib/utils";
+import { formatAge, priorityColor, priorityLabel, healthColor, healthLabel, formatDateShort } from "@/lib/utils";
 import type { ActionItem, Blocker, RaidEntry, Project, Initiative, Person, Vendor } from "@/lib/types";
 
-type ActionRow = ActionItem & { owner: Pick<Person, "id" | "full_name" | "email"> | null; project: Pick<Project, "id" | "name" | "slug"> | null };
+type ActionRow = ActionItem & { owner: Pick<Person, "id" | "full_name" | "email" | "slack_member_id"> | null; project: Pick<Project, "id" | "name" | "slug"> | null };
+const SLACK_TEAM_ID = "T03U1QJMG";
 type BlockerRow = Blocker & { owner: Pick<Person, "id" | "full_name" | "email"> | null; vendor: Pick<Vendor, "id" | "name"> | null; project: Pick<Project, "id" | "name" | "slug"> | null };
 type RaidRow = RaidEntry & { owner: Pick<Person, "id" | "full_name" | "email"> | null; project: Pick<Project, "id" | "name" | "slug"> | null };
 type ProjectRow = Project & { actionCount: number; blockerCount: number };
@@ -56,7 +57,7 @@ export default function DashboardPage() {
         // Overdue action items
         supabase
           .from("action_item_ages")
-          .select("*, owner:people(id, full_name, email), project:projects(id, name, slug)")
+          .select("*, owner:people(id, full_name, email, slack_member_id), project:projects(id, name, slug)")
           .lt("due_date", today)
           .in("status", ["pending", "in_progress", "at_risk", "blocked"])
           .order("due_date")
@@ -64,7 +65,7 @@ export default function DashboardPage() {
         // Due this week
         supabase
           .from("action_item_ages")
-          .select("*, owner:people(id, full_name, email), project:projects(id, name, slug)")
+          .select("*, owner:people(id, full_name, email, slack_member_id), project:projects(id, name, slug)")
           .gte("due_date", today)
           .lte("due_date", weekFromNow)
           .in("status", ["pending", "in_progress", "at_risk", "blocked"])
@@ -80,7 +81,7 @@ export default function DashboardPage() {
         // High/critical risks and issues
         supabase
           .from("raid_entries")
-          .select("*, owner:people(id, full_name, email), project:projects(id, name, slug)")
+          .select("*, owner:people(id, full_name, email, slack_member_id), project:projects(id, name, slug)")
           .in("raid_type", ["risk", "issue"])
           .in("priority", ["critical", "high"])
           .neq("status", "complete")
@@ -91,7 +92,7 @@ export default function DashboardPage() {
         // Pending decisions
         supabase
           .from("raid_entries")
-          .select("*, owner:people(id, full_name, email), project:projects(id, name, slug)")
+          .select("*, owner:people(id, full_name, email, slack_member_id), project:projects(id, name, slug)")
           .eq("raid_type", "decision")
           .neq("status", "complete")
           .order("priority")
@@ -237,13 +238,11 @@ export default function DashboardPage() {
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Project</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Due</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Overdue</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Contact</th>
                 </tr>
               </thead>
               <tbody>
-                {overdue.map((item) => {
-                  const badge = statusBadge(item.status);
-                  return (
+                {overdue.map((item) => (
                     <tr key={item.id} className="border-b border-gray-200 hover:bg-red-50/60 relative group">
                       <td className="px-4 py-3 text-sm text-gray-900 font-semibold">
                         {item.project ? (
@@ -256,11 +255,7 @@ export default function DashboardPage() {
                             <span className="w-5 h-5 rounded-full bg-blue-100 text-[10px] font-medium text-blue-700 flex items-center justify-center flex-shrink-0">
                               {item.owner.full_name.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
                             </span>
-                            {item.owner.email ? (
-                              <a href={`mailto:${item.owner.email}`} className="text-blue-600 hover:text-blue-800 hover:underline">{item.owner.full_name}</a>
-                            ) : (
-                              <span className="text-gray-700">{item.owner.full_name}</span>
-                            )}
+                            <span className="text-gray-700">{item.owner.full_name}</span>
                           </div>
                         ) : <span className="text-gray-400 italic">Unassigned</span>}
                       </td>
@@ -270,11 +265,23 @@ export default function DashboardPage() {
                         {item.days_overdue != null ? `${item.days_overdue}d` : "—"}
                       </td>
                       <td className="px-4 py-3">
-                        <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${badge.className}`}>{badge.label}</span>
+                        {item.owner ? (
+                          <div className="flex items-center gap-2.5 relative z-10">
+                            {item.owner.email && (
+                              <a href={`mailto:${item.owner.email}`} className="text-gray-400 hover:text-blue-600 transition-colors" title={`Email ${item.owner.full_name}`}>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+                              </a>
+                            )}
+                            {item.owner.slack_member_id && (
+                              <a href={`https://slack.com/app_redirect?channel=${item.owner.slack_member_id}&team=${SLACK_TEAM_ID}`} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-purple-600 transition-colors" title={`Slack DM ${item.owner.full_name}`}>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                              </a>
+                            )}
+                          </div>
+                        ) : <span className="text-gray-300">—</span>}
                       </td>
                     </tr>
-                  );
-                })}
+                ))}
               </tbody>
             </table>
           </div>
@@ -369,13 +376,11 @@ export default function DashboardPage() {
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Project</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Priority</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Due</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Contact</th>
                 </tr>
               </thead>
               <tbody>
-                {dueThisWeek.map((item) => {
-                  const badge = statusBadge(item.status);
-                  return (
+                {dueThisWeek.map((item) => (
                     <tr key={item.id} className="border-b border-gray-200 hover:bg-blue-50/60 relative group">
                       <td className="px-4 py-3 text-sm text-gray-900 font-semibold">
                         {item.project ? (
@@ -388,11 +393,7 @@ export default function DashboardPage() {
                             <span className="w-5 h-5 rounded-full bg-blue-100 text-[10px] font-medium text-blue-700 flex items-center justify-center flex-shrink-0">
                               {item.owner.full_name.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
                             </span>
-                            {item.owner.email ? (
-                              <a href={`mailto:${item.owner.email}`} className="text-blue-600 hover:text-blue-800 hover:underline">{item.owner.full_name}</a>
-                            ) : (
-                              <span className="text-gray-700">{item.owner.full_name}</span>
-                            )}
+                            <span className="text-gray-700">{item.owner.full_name}</span>
                           </div>
                         ) : <span className="text-gray-400 italic">Unassigned</span>}
                       </td>
@@ -402,11 +403,23 @@ export default function DashboardPage() {
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-600">{formatDateShort(item.due_date)}</td>
                       <td className="px-4 py-3">
-                        <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${badge.className}`}>{badge.label}</span>
+                        {item.owner ? (
+                          <div className="flex items-center gap-2.5 relative z-10">
+                            {item.owner.email && (
+                              <a href={`mailto:${item.owner.email}`} className="text-gray-400 hover:text-blue-600 transition-colors" title={`Email ${item.owner.full_name}`}>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+                              </a>
+                            )}
+                            {item.owner.slack_member_id && (
+                              <a href={`https://slack.com/app_redirect?channel=${item.owner.slack_member_id}&team=${SLACK_TEAM_ID}`} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-purple-600 transition-colors" title={`Slack DM ${item.owner.full_name}`}>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                              </a>
+                            )}
+                          </div>
+                        ) : <span className="text-gray-300">—</span>}
                       </td>
                     </tr>
-                  );
-                })}
+                ))}
               </tbody>
             </table>
           </div>

@@ -103,6 +103,7 @@ export interface Person {
   full_name: string;
   email: string | null;
   phone: string | null;
+  slack_member_id: string | null;
   title: string | null;
   vendor_id: string | null;
   is_internal: boolean;
