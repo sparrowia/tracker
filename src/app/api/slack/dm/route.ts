@@ -20,8 +20,15 @@ export async function GET(req: NextRequest) {
 
   const data = await res.json();
   if (!data.ok || !data.channel?.id) {
-    return NextResponse.json({ error: "Failed to open DM channel" }, { status: 502 });
+    return NextResponse.json({ error: "Failed to open DM channel", detail: data.error }, { status: 502 });
   }
 
-  return NextResponse.redirect(`slack://channel?team=${SLACK_TEAM_ID}&id=${data.channel.id}`);
+  // Return an HTML page that triggers the slack:// protocol from the client
+  // Browser redirects to custom protocols don't work from server-side redirects
+  const slackUrl = `slack://channel?team=${SLACK_TEAM_ID}&id=${data.channel.id}`;
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Opening Slack...</title></head><body><script>window.location.href=${JSON.stringify(slackUrl)};setTimeout(()=>window.close(),1000);</script></body></html>`;
+
+  return new NextResponse(html, {
+    headers: { "Content-Type": "text/html" },
+  });
 }
