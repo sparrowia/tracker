@@ -1647,8 +1647,8 @@ function ActionItemsPanel({
             Action Items ({filteredActions.length})
             {archivedActions.length > 0 && (
               <>
-                {" "}
-                <span className="font-normal">|</span>{" "}
+                {"\u00a0\u00a0\u00a0"}
+                <span className="font-normal">|</span>{"\u00a0\u00a0\u00a0"}
                 <button onClick={() => setShowArchived(!showArchived)} className="hover:underline">
                   Archived ({archivedActions.length})
                 </button>
