@@ -8,7 +8,6 @@ import { formatAge, priorityColor, priorityLabel, healthColor, healthLabel, form
 import type { ActionItem, Blocker, RaidEntry, Project, Initiative, Person, Vendor } from "@/lib/types";
 
 type ActionRow = ActionItem & { owner: Pick<Person, "id" | "full_name" | "email" | "slack_member_id"> | null; project: Pick<Project, "id" | "name" | "slug"> | null };
-const SLACK_TEAM_ID = "T03U1QJMG";
 type BlockerRow = Blocker & { owner: Pick<Person, "id" | "full_name" | "email"> | null; vendor: Pick<Vendor, "id" | "name"> | null; project: Pick<Project, "id" | "name" | "slug"> | null };
 type RaidRow = RaidEntry & { owner: Pick<Person, "id" | "full_name" | "email"> | null; project: Pick<Project, "id" | "name" | "slug"> | null };
 type ProjectRow = Project & { actionCount: number; blockerCount: number };
@@ -273,7 +272,7 @@ export default function DashboardPage() {
                               </a>
                             )}
                             {item.owner.slack_member_id && (
-                              <a href={`slack://user?team=${SLACK_TEAM_ID}&id=${item.owner.slack_member_id}`} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-purple-600 transition-colors" title={`Slack DM ${item.owner.full_name}`}>
+                              <a href={`/api/slack/dm?user=${item.owner.slack_member_id}`} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-purple-600 transition-colors" title={`Slack DM ${item.owner.full_name}`}>
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                               </a>
                             )}
@@ -411,7 +410,7 @@ export default function DashboardPage() {
                               </a>
                             )}
                             {item.owner.slack_member_id && (
-                              <a href={`slack://user?team=${SLACK_TEAM_ID}&id=${item.owner.slack_member_id}`} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-purple-600 transition-colors" title={`Slack DM ${item.owner.full_name}`}>
+                              <a href={`/api/slack/dm?user=${item.owner.slack_member_id}`} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-purple-600 transition-colors" title={`Slack DM ${item.owner.full_name}`}>
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                               </a>
                             )}
