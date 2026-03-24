@@ -1069,21 +1069,19 @@ export default function IntakeReviewPage() {
                 if (reErr) errors.push(`Re-parent ${linkedTo.title}: ${reErr.message}`);
               }
             } else if (linkedTo.table === "action_items") {
-              // Action items don't have parent_id — create new item with cross-reference notes
-              const { data: newItem, error: err } = await supabase.from("action_items").insert({
+              // Create new parent action item and re-parent the existing one under it
+              const { data: newParent, error: err } = await supabase.from("action_items").insert({
                 org_id: orgId, title: item.title || item.subject,
                 owner_id: ownerId, vendor_id: item._vendor_id || null,
                 project_id: item._project_id || null, priority: item.priority || "medium",
                 status: item.status || "pending", due_date: item.due_date || null,
-                first_flagged_at: today, notes: [noteText, `Child: ${linkedTo.title}`].filter(Boolean).join("\n\n"),
+                first_flagged_at: today, notes: noteText,
                 created_by: profileId,
               }).select("id").single();
               if (err) { errors.push(`Create parent ${item.title}: ${err.message}`); }
-              else if (newItem) {
-                // Add parent reference to existing item's notes
-                const { data: existing } = await supabase.from("action_items").select("notes").eq("id", linkedTo.id).single();
-                const updatedNotes = [existing?.notes, `Parent: ${item.title || item.subject}`].filter(Boolean).join("\n\n");
-                await supabase.from("action_items").update({ notes: updatedNotes }).eq("id", linkedTo.id).then(() => {});
+              else if (newParent) {
+                const { error: reErr } = await supabase.from("action_items").update({ parent_id: newParent.id }).eq("id", linkedTo.id);
+                if (reErr) errors.push(`Re-parent ${linkedTo.title}: ${reErr.message}`);
               }
             } else if (linkedTo.table === "blockers") {
               const { data: newItem, error: err } = await supabase.from("blockers").insert({
@@ -1107,7 +1105,9 @@ export default function IntakeReviewPage() {
           const parentRef = `Related to: ${linkedTo.title}`;
 
           // For all other types: create as a new item, with parent link where possible
+          const actionParentId = linkedTo.table === "action_items" ? linkedTo.id : null;
           if (effectiveCat === "action_items") {
+            const noteText2 = item.notes || item.details || item.rationale || item.impact_description || null;
             const { error: err } = await supabase.from("action_items").insert({
               org_id: orgId,
               title: item.title || item.subject,
@@ -1118,7 +1118,8 @@ export default function IntakeReviewPage() {
               status: item.status || "pending",
               due_date: item.due_date || null,
               first_flagged_at: today,
-              notes: [parentRef, item.notes || item.details || item.rationale || item.impact_description].filter(Boolean).join("\n\n"),
+              parent_id: actionParentId,
+              notes: actionParentId ? noteText2 : [parentRef, noteText2].filter(Boolean).join("\n\n"),
               created_by: profileId,
             });
             if (err) errors.push(`Create ${item.title}: ${err.message}`);

@@ -167,6 +167,8 @@ export interface ActionItem {
   next_steps: string | null;
   stage: string | null;
   include_in_meeting: boolean;
+  parent_id: string | null;
+  sort_order: number;
   created_by: string | null;
   created_at: string;
   updated_at: string;

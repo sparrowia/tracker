@@ -1384,6 +1384,7 @@ function ActionItemsPanel({
   const archivedActions = allFilteredActions.filter((a) => a.status === "complete").sort((a, b) => (b.resolved_at || b.updated_at).localeCompare(a.resolved_at || a.updated_at));
 
   const [showArchived, setShowArchived] = useState(false);
+  const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set());
   const [expandedId, setExpandedId] = useState<string | null>(deepLinkItemId || null);
   const [callNotesId, setCallNotesId] = useState<string | null>(null);
   const [callNotes, setCallNotes] = useState("");
@@ -1741,19 +1742,68 @@ function ActionItemsPanel({
         </div>
       </div>
       <div>
-        {filteredActions.map((a) => {
+        {(() => {
+          // Build parent/child ordered list
+          const parentActions = filteredActions.filter((a) => !a.parent_id);
+          const childMap = new Map<string, ActionRow[]>();
+          for (const a of filteredActions) {
+            if (a.parent_id) {
+              const arr = childMap.get(a.parent_id) || [];
+              arr.push(a);
+              childMap.set(a.parent_id, arr);
+            }
+          }
+          const orderedList: { action: ActionRow; isChild: boolean }[] = [];
+          for (const p of parentActions) {
+            orderedList.push({ action: p, isChild: false });
+            if (expandedParents.has(p.id)) {
+              for (const c of (childMap.get(p.id) || [])) {
+                orderedList.push({ action: c, isChild: true });
+              }
+            }
+          }
+          // Include orphaned children (parent filtered out or completed)
+          for (const a of filteredActions) {
+            if (a.parent_id && !parentActions.some((p) => p.id === a.parent_id) && !orderedList.some((o) => o.action.id === a.id)) {
+              orderedList.push({ action: a, isChild: true });
+            }
+          }
+          return orderedList.map(({ action: a, isChild }) => {
           const isExpanded = expandedId === a.id;
           const badge = statusBadge(a.status);
+          const childCount = filteredActions.filter((x) => x.parent_id === a.id).length;
 
           return (
             <Fragment key={a.id}>
               {/* Collapsed row */}
               <div
                 id={`action-${a.id}`}
-                className={`px-3 py-2 border-b border-gray-200 last:border-b-0 cursor-pointer ${selectedActionIds.has(a.id) ? "bg-blue-50" : "bg-white hover:bg-gray-50"}`}
+                className={`py-2 border-b border-gray-200 last:border-b-0 cursor-pointer ${selectedActionIds.has(a.id) ? "bg-blue-50" : "bg-white hover:bg-gray-50"}`}
+                style={{ paddingLeft: isChild ? "2rem" : "0.75rem", paddingRight: "0.75rem" }}
                 onClick={() => toggleExpand(a.id)}
               >
                 <div className="flex items-center gap-4 min-w-0">
+                  {/* Child arrow */}
+                  {isChild && <span className="text-gray-300 flex-shrink-0 -ml-2">↳</span>}
+                  {/* Subtask disclosure triangle */}
+                  {!isChild && childCount > 0 ? (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setExpandedParents((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(a.id)) next.delete(a.id); else next.add(a.id);
+                          return next;
+                        });
+                      }}
+                      className="w-[20px] flex items-center justify-center flex-shrink-0 text-gray-400 hover:text-gray-600"
+                      title={expandedParents.has(a.id) ? "Hide subtasks" : "Show subtasks"}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" className={`transition-transform fill-current ${expandedParents.has(a.id) ? "rotate-90" : ""}`}>
+                        <polygon points="6,4 20,12 6,20" />
+                      </svg>
+                    </button>
+                  ) : !isChild ? <span className="w-[20px] flex-shrink-0" /> : null}
                   {/* Select hitbox — shift+click for range */}
                   <button
                     onClick={(e) => {
@@ -1794,6 +1844,10 @@ function ActionItemsPanel({
                   <MeetingToggle active={a.include_in_meeting} onClick={(e) => { e.stopPropagation(); toggleMeeting(a.id); }} />
                   {/* Title */}
                   <span className="text-sm font-semibold text-gray-900 truncate min-w-0">{a.title}</span>
+                  {/* Child count badge */}
+                  {childCount > 0 && (
+                    <span className="text-[10px] text-gray-500 bg-gray-200 rounded px-1.5 py-0.5 flex-shrink-0">{childCount}</span>
+                  )}
                   {/* Spacer */}
                   <div className="flex-1" />
                   {/* Metadata — dynamic columns */}
@@ -1967,7 +2021,8 @@ function ActionItemsPanel({
               )}
             </Fragment>
           );
-        })}
+          });
+        })()}
       </div>
         </>
       ) : null}
