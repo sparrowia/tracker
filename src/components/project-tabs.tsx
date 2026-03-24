@@ -91,6 +91,7 @@ export default function ProjectTabs({
   const { role, profileId, userPersonId } = useRole();
   const [tabOrder, setTabOrder] = useState<Tab[]>(loadTabOrder);
   const urlTab = searchParams.get("tab") as Tab | null;
+  const urlItem = searchParams.get("item");
   const [active, setActive] = useState<Tab>(urlTab && DEFAULT_ORDER.includes(urlTab) ? urlTab : tabOrder[0]);
   const [searchFilter, setSearchFilter] = useState("");
   const [dragTab, setDragTab] = useState<Tab | null>(null);
@@ -342,7 +343,7 @@ export default function ProjectTabs({
         </div>
 
         <div style={{ display: active === "actions" ? "block" : "none" }}>
-          <ActionItemsPanel actions={actions} people={peopleList} vendors={vendorsList} onPersonAdded={addPerson} onVendorAdded={addVendor} addUndo={addUndo} onCountChange={setActionCount} intakeSourceMap={intakeSourceMap} onNewItemsSuggested={onNewItemsSuggested} registerAdder={(fn) => { itemAddersRef.current.addAction = fn; return () => { itemAddersRef.current.addAction = undefined; }; }} registerResolver={(fn) => { itemAddersRef.current.resolveAction = fn; return () => { itemAddersRef.current.resolveAction = undefined; }; }} registerUpdater={(fn) => { itemAddersRef.current.updateAction = fn; return () => { itemAddersRef.current.updateAction = undefined; }; }} onMeetingToggle={bumpAgendaRefresh} orgId={project.org_id} projectId={project.id} searchFilter={searchFilter} />
+          <ActionItemsPanel actions={actions} people={peopleList} vendors={vendorsList} onPersonAdded={addPerson} onVendorAdded={addVendor} addUndo={addUndo} onCountChange={setActionCount} intakeSourceMap={intakeSourceMap} onNewItemsSuggested={onNewItemsSuggested} registerAdder={(fn) => { itemAddersRef.current.addAction = fn; return () => { itemAddersRef.current.addAction = undefined; }; }} registerResolver={(fn) => { itemAddersRef.current.resolveAction = fn; return () => { itemAddersRef.current.resolveAction = undefined; }; }} registerUpdater={(fn) => { itemAddersRef.current.updateAction = fn; return () => { itemAddersRef.current.updateAction = undefined; }; }} onMeetingToggle={bumpAgendaRefresh} orgId={project.org_id} projectId={project.id} searchFilter={searchFilter} deepLinkItemId={urlItem} />
         </div>
 
         <div style={{ display: active === "intake" ? "block" : "none" }}>
@@ -1318,6 +1319,7 @@ function ActionItemsPanel({
   orgId,
   projectId,
   searchFilter = "",
+  deepLinkItemId,
 }: {
   actions: ActionRow[];
   people: Person[];
@@ -1335,6 +1337,7 @@ function ActionItemsPanel({
   orgId: string;
   projectId: string;
   searchFilter?: string;
+  deepLinkItemId?: string | null;
 }) {
   const { role, profileId, userPersonId } = useRole();
   const [actions, setActions] = useState<ActionRow[]>(initialActions);
@@ -1381,7 +1384,7 @@ function ActionItemsPanel({
   const archivedActions = allFilteredActions.filter((a) => a.status === "complete").sort((a, b) => (b.resolved_at || b.updated_at).localeCompare(a.resolved_at || a.updated_at));
 
   const [showArchived, setShowArchived] = useState(false);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(deepLinkItemId || null);
   const [callNotesId, setCallNotesId] = useState<string | null>(null);
   const [callNotes, setCallNotes] = useState("");
   const [savingNotes, setSavingNotes] = useState(false);
@@ -1400,6 +1403,15 @@ function ActionItemsPanel({
     if (showColPicker) document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showColPicker]);
+
+  // Scroll to deep-linked action item
+  useEffect(() => {
+    if (deepLinkItemId) {
+      requestAnimationFrame(() => {
+        document.getElementById(`action-${deepLinkItemId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   function toggleColumn(key: ActionColumnKey) {
     setVisibleCols((prev) => {
@@ -1737,6 +1749,7 @@ function ActionItemsPanel({
             <Fragment key={a.id}>
               {/* Collapsed row */}
               <div
+                id={`action-${a.id}`}
                 className={`px-3 py-2 border-b border-gray-200 last:border-b-0 cursor-pointer ${selectedActionIds.has(a.id) ? "bg-blue-50" : "bg-white hover:bg-gray-50"}`}
                 onClick={() => toggleExpand(a.id)}
               >

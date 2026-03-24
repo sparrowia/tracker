@@ -245,7 +245,7 @@ export default function DashboardPage() {
                     <tr key={item.id} className="border-b border-gray-200 hover:bg-red-50/60 relative group">
                       <td className="px-4 py-3 text-sm text-gray-900 font-semibold">
                         {item.project ? (
-                          <Link href={`/projects/${item.project.slug}?tab=actions`} className="before:absolute before:inset-0">{item.title}</Link>
+                          <Link href={`/projects/${item.project.slug}?tab=actions&item=${item.id}`} className="before:absolute before:inset-0">{item.title}</Link>
                         ) : item.title}
                       </td>
                       <td className="px-4 py-3 text-sm">
@@ -383,7 +383,7 @@ export default function DashboardPage() {
                     <tr key={item.id} className="border-b border-gray-200 hover:bg-blue-50/60 relative group">
                       <td className="px-4 py-3 text-sm text-gray-900 font-semibold">
                         {item.project ? (
-                          <Link href={`/projects/${item.project.slug}?tab=actions`} className="before:absolute before:inset-0">{item.title}</Link>
+                          <Link href={`/projects/${item.project.slug}?tab=actions&item=${item.id}`} className="before:absolute before:inset-0">{item.title}</Link>
                         ) : item.title}
                       </td>
                       <td className="px-4 py-3 text-sm">
