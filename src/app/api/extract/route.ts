@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { callDeepSeek } from "@/lib/ai/deepseek";
-import { notifyExtractionComplete } from "@/lib/slack";
+
 import { fetchOrgContext, buildContextPrompt, buildTermCorrectionsPrompt } from "@/lib/ai/context";
 import { EXTRACT_SYSTEM_PROMPT, SOURCE_HINTS, FEW_SHOT_EXAMPLE } from "@/lib/ai/prompts/extract";
 
@@ -209,22 +209,6 @@ export async function POST(request: Request) {
       .from("intakes")
       .update({ extracted_data: extracted, extraction_status: "complete" })
       .eq("id", intake_id);
-
-    // Notify Slack — only for projects with a mapped channel
-    if (project_id) {
-      const { data: proj } = await supabase.from("projects").select("slug").eq("id", project_id).single();
-      const projectChannelMap: Record<string, string> = {
-        "silk-uat": "#uat-unified-ce-platform",
-      };
-      const slackChannel = proj?.slug ? projectChannelMap[proj.slug] : null;
-      if (slackChannel) {
-        const counts: Record<string, number> = {};
-        for (const [key, items] of Object.entries(extracted)) {
-          if (Array.isArray(items)) counts[key] = items.length;
-        }
-        notifyExtractionComplete({ itemCounts: counts, intakeId: intake_id, channel: slackChannel }).catch(() => {});
-      }
-    }
 
     return NextResponse.json({ success: true, data: extracted });
   } catch (err) {
