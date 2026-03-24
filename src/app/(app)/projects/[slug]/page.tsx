@@ -26,6 +26,7 @@ export default async function ProjectDetailPage({
   // All queries in a single parallel batch — including initiative breadcrumb
   const [
     { data: actionItems },
+    { data: archivedActionItems },
     { data: raidEntries },
     { data: blockers },
     { data: vendors },
@@ -39,6 +40,12 @@ export default async function ProjectDetailPage({
       .eq("project_id", p.id)
       .order("priority")
       .order("due_date", { ascending: true, nullsFirst: false }),
+    supabase
+      .from("action_items")
+      .select("*, owner:people(*), vendor:vendors(*)")
+      .eq("project_id", p.id)
+      .eq("status", "complete")
+      .order("resolved_at", { ascending: false }),
     supabase
       .from("raid_entries")
       .select("*, owner:people!raid_entries_owner_id_fkey(*), reporter:people!raid_entries_reporter_id_fkey(*), vendor:vendors(*)")
@@ -69,7 +76,7 @@ export default async function ProjectDetailPage({
 
   const initiative = initiativeData as Initiative | null;
 
-  const typedActions = (actionItems || []) as (ActionItem & { owner: Person | null; vendor: Vendor | null })[];
+  const typedActions = [...(actionItems || []), ...(archivedActionItems || [])] as (ActionItem & { owner: Person | null; vendor: Vendor | null })[];
   const typedRaid = (raidEntries || []) as (RaidEntry & { owner: Person | null; reporter: Person | null; vendor: Vendor | null })[];
   const typedBlockers = (blockers || []) as (Blocker & { owner: Person | null; vendor: Vendor | null })[];
   const typedVendors = (vendors || []) as Vendor[];
