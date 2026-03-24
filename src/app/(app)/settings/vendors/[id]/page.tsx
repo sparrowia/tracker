@@ -4,6 +4,7 @@ import Link from "next/link";
 import { priorityColor, priorityLabel, statusBadge, formatAge, formatDateShort } from "@/lib/utils";
 import type { Vendor, Person, VendorAccountabilityRow, Project } from "@/lib/types";
 import { VendorAgendaView } from "@/components/vendor-agenda-view";
+import { VendorContacts } from "@/components/vendor-contacts";
 
 export default async function VendorDetailPage({
   params,
@@ -94,26 +95,7 @@ export default async function VendorDetailPage({
       </div>
 
       {/* Contacts */}
-      {people.length > 0 && (
-        <section>
-          <div className="bg-gray-800 px-4 py-2.5 rounded-t-lg">
-            <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Contacts</h2>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-3">
-            {people.map((person) => (
-              <div key={person.id} className="bg-white rounded-lg border border-gray-300 p-3">
-                <p className="font-medium text-gray-900 text-sm">{person.full_name}</p>
-                {person.title && <p className="text-xs text-gray-500">{person.title}</p>}
-                {person.email && (
-                  <a href={`mailto:${person.email}`} className="text-xs text-blue-600 hover:underline">
-                    {person.email}
-                  </a>
-                )}
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
+      <VendorContacts initialContacts={people} vendorId={v.id} orgId={v.org_id} />
 
       {/* Related Projects — derived from all items linked to this vendor */}
       {(() => {
