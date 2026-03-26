@@ -133,13 +133,12 @@ export default function CommentThread({ raidEntryId, actionItemId, blockerId, or
 
   function handleBodyChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
     const val = e.target.value;
+    const cursorPos = e.target.selectionStart;
     setBody(val);
 
-    const cursorPos = e.target.selectionStart;
+    // Check if we're in an @mention context — run synchronously before React re-render
     const textBeforeCursor = val.slice(0, cursorPos);
-
-    // Check if we're in an @mention context
-    const atMatch = textBeforeCursor.match(/@([^\s@]*)$/);
+    const atMatch = textBeforeCursor.match(/@(\S*)$/);
     if (atMatch) {
       setMentionQuery(atMatch[1]);
       setMentionStart(cursorPos - atMatch[0].length);
@@ -364,7 +363,7 @@ export default function CommentThread({ raidEntryId, actionItemId, blockerId, or
             {mentionQuery !== null && mentionCandidates.length > 0 && (
               <div
                 ref={mentionRef}
-                className="absolute left-0 bottom-full mb-1 w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50 max-h-48 overflow-y-auto"
+                className="absolute left-0 top-full mt-1 w-72 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-[100] max-h-48 overflow-y-auto"
               >
                 {mentionCandidates.map((p, idx) => (
                   <button
