@@ -46,7 +46,6 @@ function getSettingsItems(role: UserRole) {
   ];
   if (role === "super_admin" || role === "admin") {
     items.push({ name: "Term Corrections", href: "/settings", icon: BookType });
-    items.push({ name: "Team", href: "/settings/team", icon: Users });
   }
   return items;
 }

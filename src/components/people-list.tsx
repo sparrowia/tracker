@@ -27,6 +27,9 @@ export default function PeopleList({ initialPeople, vendors, profiles, initialIn
   const [addingExternal, setAddingExternal] = useState(false);
   const [addName, setAddName] = useState("");
   const [invitingId, setInvitingId] = useState<string | null>(null);
+  const [inviteFormId, setInviteFormId] = useState<string | null>(null);
+  const [inviteRole, setInviteRole] = useState<string>("user");
+  const [inviteVendorId, setInviteVendorId] = useState<string>("");
   const [expandedVendors, setExpandedVendors] = useState<Set<string>>(new Set());
   const supabase = createClient();
 
@@ -125,19 +128,23 @@ export default function PeopleList({ initialPeople, vendors, profiles, initialIn
     if (!person.email) return;
     setInvitingId(person.id);
     try {
-      const inviteRole = person.vendor_id ? "vendor" : "user";
+      const selectedRole = inviteRole === "vendor" ? "vendor" : inviteRole;
+      const selectedVendorId = selectedRole === "vendor" ? (inviteVendorId || person.vendor_id || undefined) : undefined;
       const res = await fetch("/api/invite", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: person.email,
-          role: inviteRole,
-          vendor_id: person.vendor_id || undefined,
+          role: selectedRole,
+          vendor_id: selectedVendorId,
         }),
       });
       const result = await res.json();
       if (res.ok) {
         setInvitations((prev) => [...prev, { id: result.invitation.id, email: person.email!, accepted_at: null }]);
+        setInviteFormId(null);
+        setInviteRole("user");
+        setInviteVendorId("");
       } else {
         alert(result.error || "Failed to send invitation");
       }
@@ -228,6 +235,26 @@ export default function PeopleList({ initialPeople, vendors, profiles, initialIn
               className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
             />
           </div>
+          {person.profile_id && (() => {
+            const linkedProfile = profiles.find((pr) => pr.id === person.profile_id);
+            if (!linkedProfile || linkedProfile.role === "super_admin") return null;
+            return (
+              <>
+                <label className="text-xs font-medium text-gray-400">Role</label>
+                <select
+                  value={linkedProfile.role}
+                  onChange={async (e) => {
+                    await supabase.from("profiles").update({ role: e.target.value }).eq("id", person.profile_id!);
+                  }}
+                  className="text-sm rounded border border-gray-300 px-2 py-1.5 focus:border-blue-500 focus:outline-none cursor-pointer"
+                >
+                  <option value="admin">Admin</option>
+                  <option value="user">User</option>
+                  <option value="vendor">Vendor</option>
+                </select>
+              </>
+            );
+          })()}
         </div>
         <div className="mt-3 max-w-3xl">
           <label className="text-xs font-medium text-gray-400">Notes</label>
@@ -255,30 +282,92 @@ export default function PeopleList({ initialPeople, vendors, profiles, initialIn
                 Impersonate
               </button>
             )}
-            {status === "added" && person.email && (
+            {status === "added" && person.email && inviteFormId !== person.id && (
               <button
-                onClick={() => handleInvite(person)}
-                disabled={invitingId === person.id}
-                className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors disabled:opacity-50"
+                onClick={() => {
+                  setInviteFormId(person.id);
+                  setInviteRole(person.vendor_id ? "vendor" : "user");
+                  setInviteVendorId(person.vendor_id || "");
+                }}
+                className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
                   <polyline points="22,6 12,13 2,6"/>
                 </svg>
-                {invitingId === person.id ? "Sending..." : "Invite"}
+                Invite
               </button>
             )}
+            {inviteFormId === person.id && (
+              <div className="flex items-center gap-2">
+                <select
+                  value={inviteRole}
+                  onChange={(e) => setInviteRole(e.target.value)}
+                  className="text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                >
+                  <option value="user">User</option>
+                  <option value="admin">Admin</option>
+                  <option value="vendor">Vendor</option>
+                </select>
+                {inviteRole === "vendor" && (
+                  <select
+                    value={inviteVendorId}
+                    onChange={(e) => setInviteVendorId(e.target.value)}
+                    className="text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  >
+                    <option value="">Select vendor...</option>
+                    {vendors.map((v) => (
+                      <option key={v.id} value={v.id}>{v.name}</option>
+                    ))}
+                  </select>
+                )}
+                <button
+                  onClick={() => handleInvite(person)}
+                  disabled={invitingId === person.id || (inviteRole === "vendor" && !inviteVendorId)}
+                  className="text-xs font-medium text-white bg-blue-600 rounded px-2.5 py-1 hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {invitingId === person.id ? "Sending..." : "Send"}
+                </button>
+                <button
+                  onClick={() => { setInviteFormId(null); setInviteRole("user"); setInviteVendorId(""); }}
+                  className="text-xs text-gray-500 hover:text-gray-700"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
           </div>
-          <button
-            onClick={() => { if (confirm(`Delete ${person.full_name}?`)) handleDelete(person.id); }}
-            className="text-gray-400 hover:text-red-600 transition-colors"
-            title="Delete"
-          >
+          <div className="flex items-center gap-3">
+            {status === "joined" && person.profile_id && (() => {
+              const linkedProfile = profiles.find((pr) => pr.id === person.profile_id);
+              if (linkedProfile?.role === "super_admin") return null;
+              return (
+                <button
+                  onClick={async () => {
+                    if (!confirm(`Deactivate ${person.full_name}? They will lose access.`)) return;
+                    await fetch("/api/users/deactivate", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ user_id: person.profile_id }),
+                    });
+                  }}
+                  className="text-xs text-red-500 hover:text-red-700 font-medium"
+                >
+                  Deactivate
+                </button>
+              );
+            })()}
+            <button
+              onClick={() => { if (confirm(`Delete ${person.full_name}?`)) handleDelete(person.id); }}
+              className="text-gray-400 hover:text-red-600 transition-colors"
+              title="Delete"
+            >
             <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="3 6 5 6 21 6"/>
               <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
             </svg>
           </button>
+          </div>
         </div>
       </div>
     );
