@@ -216,9 +216,43 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
   const lastSelectedRef = useRef<string | null>(null);
   const visibleIdsRef = useRef<string[]>([]);
   const [movingId, setMovingId] = useState<string | null>(null);
+  const [readAtMap, setReadAtMap] = useState<Map<string, string>>(new Map());
   const [moveProjects, setMoveProjects] = useState<{ id: string; name: string; slug: string }[]>([]);
   const [moveTargetId, setMoveTargetId] = useState("");
   const supabase = createClient();
+
+  // Fetch read timestamps for unread indicators
+  useEffect(() => {
+    if (!profileId || entries.length === 0) return;
+    supabase
+      .from("item_reads")
+      .select("entity_id, read_at")
+      .eq("profile_id", profileId)
+      .eq("entity_type", "raid_entry")
+      .in("entity_id", entries.map((e) => e.id))
+      .then(({ data }) => {
+        if (data) setReadAtMap(new Map(data.map((r) => [r.entity_id, r.read_at])));
+      });
+  }, [profileId, entries.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function raidUnreadIndicator(item: { id: string; updated_at: string }) {
+    const readAt = readAtMap.get(item.id);
+    if (!readAt) return "new";
+    if (new Date(readAt) < new Date(item.updated_at)) return "updated";
+    return null;
+  }
+
+  function markRaidAsRead(id: string) {
+    if (!profileId) return;
+    const now = new Date().toISOString();
+    supabase.from("item_reads").upsert({
+      profile_id: profileId,
+      entity_type: "raid_entry",
+      entity_id: id,
+      read_at: now,
+    }, { onConflict: "profile_id,entity_type,entity_id" }).then(() => {});
+    setReadAtMap((prev) => new Map(prev).set(id, now));
+  }
 
   const hasActiveFilters = filterPriority || filterStatus || filterOwner || filterAge || searchFilter;
 
@@ -450,7 +484,11 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
   const decisions = activeEntries.filter((r) => r.raid_type === "decision");
 
   function toggleExpand(id: string) {
-    setExpandedId((prev) => (prev === id ? null : id));
+    setExpandedId((prev) => {
+      const newId = prev === id ? null : id;
+      if (newId) markRaidAsRead(newId);
+      return newId;
+    });
   }
 
   async function handleResolve(id: string) {
@@ -1021,6 +1059,9 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                           <path d="M13.73 21a2 2 0 0 1-3.46 0" />
                         </svg>
                       </button>
+                      {/* Unread indicator */}
+                      {raidUnreadIndicator(entry) === "new" && <span className="text-red-600 font-bold text-sm flex-shrink-0" title="New">!</span>}
+                      {raidUnreadIndicator(entry) === "updated" && <span className="text-red-600 font-bold text-sm flex-shrink-0" title="Updated">!!</span>}
                       {/* Title — inline editable for decisions */}
                       {entry.raid_type === "decision" ? (
                         <span className="text-sm font-semibold min-w-0 flex-1 truncate" onClick={(e) => e.stopPropagation()}>
