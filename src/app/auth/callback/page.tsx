@@ -13,6 +13,8 @@ function CallbackHandler() {
 
   useEffect(() => {
     async function handleCallback() {
+      const next = searchParams.get("next") || "/set-password";
+
       // Case 1: PKCE flow — ?code= in URL query string
       const code = searchParams.get("code");
       if (code) {
@@ -23,7 +25,7 @@ function CallbackHandler() {
         }
         if (data?.user) {
           await markInvitationAccepted(data.user.email);
-          router.replace("/set-password");
+          router.replace(next);
           return;
         }
       }
@@ -52,7 +54,7 @@ function CallbackHandler() {
             // Clear the hash from URL
             window.history.replaceState(null, "", window.location.pathname);
             await markInvitationAccepted(data.session.user.email);
-            router.replace("/set-password");
+            router.replace(next);
             return;
           }
         }
