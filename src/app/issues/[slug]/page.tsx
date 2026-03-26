@@ -23,6 +23,7 @@ const ISSUE_TYPES = [
   "Performance - Load or Lag Times",
   "Responsive Issue",
   "Security",
+  "Support Request",
   "UI/UX",
   "Other",
 ];
