@@ -27,6 +27,7 @@ interface RaidLogProps {
   onConvertedToAction?: (actionId: string) => void;
   onConvertedToBlocker?: (blockerId: string) => void;
   registerUpdater?: (fn: (id: string, field: string, value: string, person?: Person | null, vendor?: Vendor | null) => void) => () => void;
+  registerAdder?: (fn: (item: RaidRow) => void) => () => void;
   searchFilter?: string;
 }
 
@@ -170,7 +171,7 @@ function InlineDate({ value, onSave }: { value: string | null; onSave: (v: strin
   );
 }
 
-export default function RaidLog({ initialEntries, project, people, vendors, onPersonAdded, onVendorAdded, addUndo, onCountChange, intakeSourceMap = {}, onMeetingToggle, onConvertedToAction, onConvertedToBlocker, registerUpdater, searchFilter = "" }: RaidLogProps) {
+export default function RaidLog({ initialEntries, project, people, vendors, onPersonAdded, onVendorAdded, addUndo, onCountChange, intakeSourceMap = {}, onMeetingToggle, onConvertedToAction, onConvertedToBlocker, registerUpdater, registerAdder, searchFilter = "" }: RaidLogProps) {
   const { role, profileId, userPersonId } = useRole();
   const [entries, setEntries] = useState<RaidRow[]>(initialEntries);
 
@@ -192,6 +193,14 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
       }));
     });
   }, [registerUpdater]);
+
+  useEffect(() => {
+    if (!registerAdder) return;
+    return registerAdder((newItem: RaidRow) => {
+      setEntries((prev) => [...prev, newItem]);
+    });
+  }, [registerAdder]);
+
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<RaidType>("risk");
   const [showArchived, setShowArchived] = useState(false);

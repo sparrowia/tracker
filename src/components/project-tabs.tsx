@@ -131,7 +131,7 @@ export default function ProjectTabs({
   const itemAddersRef = useRef<{
     addBlocker?: (item: BlockerRow) => void;
     addAction?: (item: ActionRow) => void;
-    addRaid?: (item: RaidEntry & { owner: Person | null; vendor: Vendor | null }) => void;
+    addRaid?: (item: RaidEntry & { owner: Person | null; reporter: Person | null; vendor: Vendor | null }) => void;
     resolveBlocker?: (id: string) => void;
     resolveAction?: (id: string) => void;
     updateBlocker?: (id: string, field: string, value: string, person?: Person | null, vendor?: Vendor | null) => void;
@@ -339,11 +339,25 @@ export default function ProjectTabs({
               }
             }}
             registerUpdater={(fn) => { itemAddersRef.current.updateRaid = fn; return () => { itemAddersRef.current.updateRaid = undefined; }; }}
+            registerAdder={(fn) => { itemAddersRef.current.addRaid = fn; return () => { itemAddersRef.current.addRaid = undefined; }; }}
           />
         </div>
 
         <div style={{ display: active === "actions" ? "block" : "none" }}>
-          <ActionItemsPanel actions={actions} people={peopleList} vendors={vendorsList} onPersonAdded={addPerson} onVendorAdded={addVendor} addUndo={addUndo} onCountChange={setActionCount} intakeSourceMap={intakeSourceMap} onNewItemsSuggested={onNewItemsSuggested} registerAdder={(fn) => { itemAddersRef.current.addAction = fn; return () => { itemAddersRef.current.addAction = undefined; }; }} registerResolver={(fn) => { itemAddersRef.current.resolveAction = fn; return () => { itemAddersRef.current.resolveAction = undefined; }; }} registerUpdater={(fn) => { itemAddersRef.current.updateAction = fn; return () => { itemAddersRef.current.updateAction = undefined; }; }} onMeetingToggle={bumpAgendaRefresh} orgId={project.org_id} projectId={project.id} searchFilter={searchFilter} deepLinkItemId={urlItem} />
+          <ActionItemsPanel actions={actions} people={peopleList} vendors={vendorsList} onPersonAdded={addPerson} onVendorAdded={addVendor} addUndo={addUndo} onCountChange={setActionCount} intakeSourceMap={intakeSourceMap} onNewItemsSuggested={onNewItemsSuggested} registerAdder={(fn) => { itemAddersRef.current.addAction = fn; return () => { itemAddersRef.current.addAction = undefined; }; }} registerResolver={(fn) => { itemAddersRef.current.resolveAction = fn; return () => { itemAddersRef.current.resolveAction = undefined; }; }} registerUpdater={(fn) => { itemAddersRef.current.updateAction = fn; return () => { itemAddersRef.current.updateAction = undefined; }; }} onMeetingToggle={bumpAgendaRefresh} orgId={project.org_id} projectId={project.id} searchFilter={searchFilter} deepLinkItemId={urlItem}
+            onConvertedToRaid={async (raidId) => {
+              const { data } = await supabase.from("raid_entries").select("*, owner:people!raid_entries_owner_id_fkey(*), reporter:people!raid_entries_reporter_id_fkey(*), vendor:vendors(*)").eq("id", raidId).single();
+              if (data && itemAddersRef.current.addRaid) {
+                itemAddersRef.current.addRaid(data);
+              }
+            }}
+            onConvertedToBlocker={async (blockerId) => {
+              const { data } = await supabase.from("blockers").select("*, owner:people!blockers_owner_id_fkey(*), vendor:vendors(*)").eq("id", blockerId).single();
+              if (data && itemAddersRef.current.addBlocker) {
+                itemAddersRef.current.addBlocker(data as BlockerRow);
+              }
+            }}
+          />
         </div>
 
         <div style={{ display: active === "intake" ? "block" : "none" }}>
@@ -526,7 +540,7 @@ function StagingArea({
   itemAddersRef: React.RefObject<{
     addBlocker?: (item: BlockerRow) => void;
     addAction?: (item: ActionRow) => void;
-    addRaid?: (item: RaidEntry & { owner: Person | null; vendor: Vendor | null }) => void;
+    addRaid?: (item: RaidEntry & { owner: Person | null; reporter: Person | null; vendor: Vendor | null }) => void;
   }>;
 }) {
   const { profileId } = useRole();
@@ -1323,6 +1337,8 @@ function ActionItemsPanel({
   projectId,
   searchFilter = "",
   deepLinkItemId,
+  onConvertedToRaid,
+  onConvertedToBlocker,
 }: {
   actions: ActionRow[];
   people: Person[];
@@ -1341,6 +1357,8 @@ function ActionItemsPanel({
   projectId: string;
   searchFilter?: string;
   deepLinkItemId?: string | null;
+  onConvertedToRaid?: (raidId: string) => void;
+  onConvertedToBlocker?: (blockerId: string) => void;
 }) {
   const { role, profileId, userPersonId } = useRole();
   const [actions, setActions] = useState<ActionRow[]>(initialActions);
@@ -1653,6 +1671,64 @@ function ActionItemsPanel({
     }
   }
 
+  async function convertToRaidEntry(id: string, raidType: "risk" | "issue" | "assumption" | "decision") {
+    const action = actions.find((a) => a.id === id);
+    if (!action) return;
+    const prefix = raidType === "decision" ? "D" : raidType === "issue" ? "I" : raidType === "assumption" ? "A" : "R";
+    const { count } = await supabase.from("raid_entries").select("*", { count: "exact", head: true }).eq("org_id", orgId).eq("raid_type", raidType);
+    const displayId = `${prefix}${(count || 0) + 1}`;
+    const { data, error } = await supabase.from("raid_entries").insert({
+      org_id: orgId,
+      raid_type: raidType,
+      display_id: displayId,
+      title: action.title,
+      description: action.description || null,
+      notes: action.notes || null,
+      next_steps: action.next_steps || null,
+      owner_id: action.owner_id || null,
+      vendor_id: action.vendor_id || null,
+      project_id: action.project_id || null,
+      priority: action.priority,
+      status: action.status === "pending" || action.status === "in_progress" ? action.status : "pending",
+      first_flagged_at: action.first_flagged_at,
+      created_by: profileId,
+      sort_order: 0,
+      include_in_meeting: action.include_in_meeting,
+    }).select("id").single();
+    if (error) { console.error("Convert failed:", error); return; }
+    // Move comments to the new raid entry
+    await supabase.from("comments").update({ raid_entry_id: data.id, action_item_id: null }).eq("action_item_id", id);
+    await supabase.from("action_items").delete().eq("id", id);
+    setActions((prev) => prev.filter((a) => a.id !== id));
+    setExpandedId(null);
+    onConvertedToRaid?.(data.id);
+  }
+
+  async function convertToBlocker(id: string) {
+    const action = actions.find((a) => a.id === id);
+    if (!action) return;
+    const { data, error } = await supabase.from("blockers").insert({
+      org_id: orgId,
+      title: action.title,
+      description: action.description || null,
+      impact_description: action.notes || null,
+      owner_id: action.owner_id || null,
+      vendor_id: action.vendor_id || null,
+      project_id: action.project_id || null,
+      priority: action.priority,
+      status: action.status === "pending" || action.status === "in_progress" ? action.status : "pending",
+      first_flagged_at: action.first_flagged_at,
+      created_by: profileId,
+      include_in_meeting: action.include_in_meeting,
+    }).select("id").single();
+    if (error) { console.error("Convert failed:", error); return; }
+    await supabase.from("comments").update({ blocker_id: data.id, action_item_id: null }).eq("action_item_id", id);
+    await supabase.from("action_items").delete().eq("id", id);
+    setActions((prev) => prev.filter((a) => a.id !== id));
+    setExpandedId(null);
+    onConvertedToBlocker?.(data.id);
+  }
+
   async function handleAdd() {
     if (!addTitle.trim()) return;
     const { data, error } = await supabase
@@ -1956,6 +2032,27 @@ function ActionItemsPanel({
                   {/* Properties grid */}
                   <div className="border-t border-gray-100 bg-white">
                     <div className="grid grid-cols-[120px_1fr_120px_1fr] items-center">
+                      {/* Row: Type */}
+                      <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-100">Type</span>
+                      <div className="px-3 py-2.5 border-b border-gray-100 col-span-3">
+                        <select
+                          value="action_item"
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val === "__blocker") { convertToBlocker(a.id); return; }
+                            if (val.startsWith("__raid_")) { convertToRaidEntry(a.id, val.replace("__raid_", "") as "risk" | "issue" | "assumption" | "decision"); return; }
+                          }}
+                          className="text-sm rounded border border-transparent hover:border-gray-300 bg-transparent py-0 focus:border-blue-500 focus:outline-none cursor-pointer -ml-0.5"
+                        >
+                          <option value="action_item">Action Item</option>
+                          <option disabled className="text-gray-300">────────────</option>
+                          <option value="__raid_risk">Risk</option>
+                          <option value="__raid_assumption">Assumption</option>
+                          <option value="__raid_issue">Issue</option>
+                          <option value="__raid_decision">Decision</option>
+                          <option value="__blocker">Blocker</option>
+                        </select>
+                      </div>
                       {/* Row: Priority / Status */}
                       <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-100">Priority</span>
                       <div className="px-3 py-2.5 border-b border-gray-100">
