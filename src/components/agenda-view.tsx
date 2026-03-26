@@ -720,9 +720,10 @@ export function AgendaView({
           const descValue = detail.description ?? (descField === "context" ? item.context : null) ?? "";
           const notesValue = detail.notes ?? (notesField === "context" ? item.context : notesField === "impact_description" ? item.context : null) ?? "";
           const showNextSteps = item.entity_type === "action_item" || item.entity_type === "raid_issue";
-          const commentProps = item.entity_type === "action_item" ? { actionItemId: item.entity_id }
-            : item.entity_type === "blocker" ? { blockerId: item.entity_id }
-            : item.entity_type.startsWith("raid_") ? { raidEntryId: item.entity_id }
+          const commentBase = { itemTitle: item.title, itemType: item.entity_type.replace(/_/g, " "), projectName: project.name, ownerId: item.owner_id };
+          const commentProps = item.entity_type === "action_item" ? { actionItemId: item.entity_id, ...commentBase }
+            : item.entity_type === "blocker" ? { blockerId: item.entity_id, ...commentBase }
+            : item.entity_type.startsWith("raid_") ? { raidEntryId: item.entity_id, ...commentBase }
             : null;
           return (
           <div className="bg-yellow-50/25 border-b border-gray-200" onClick={(e) => e.stopPropagation()}>

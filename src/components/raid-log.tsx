@@ -1317,6 +1317,10 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                           raidEntryId={entry.id}
                           orgId={project.org_id}
                           people={people}
+                          itemTitle={entry.title}
+                          itemType={entry.raid_type}
+                          projectName={project.name}
+                          ownerId={entry.owner_id}
                         />
                       </div>
 

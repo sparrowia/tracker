@@ -1203,6 +1203,9 @@ function BlockersPanel({
                       blockerId={b.id}
                       orgId={orgId}
                       people={people}
+                      itemTitle={b.title}
+                      itemType="blocker"
+                      ownerId={b.owner_id}
                     />
                   </div>
 
@@ -2037,6 +2040,9 @@ function ActionItemsPanel({
                       actionItemId={a.id}
                       orgId={orgId}
                       people={people}
+                      itemTitle={a.title}
+                      itemType="action item"
+                      ownerId={a.owner_id}
                     />
                   </div>
 
