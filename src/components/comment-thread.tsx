@@ -89,6 +89,7 @@ export default function CommentThread({ raidEntryId, actionItemId, blockerId, or
   const [mentionIndex, setMentionIndex] = useState(0);
   const [mentionStart, setMentionStart] = useState(0);
   const mentionRef = useRef<HTMLDivElement>(null);
+  const mentionsRef = useRef<Map<string, string>>(new Map()); // name -> person_id
 
   // Filter people for mention dropdown — only those with profiles (active users)
   const mentionCandidates = mentionQuery !== null
@@ -151,19 +152,28 @@ export default function CommentThread({ raidEntryId, actionItemId, blockerId, or
   function insertMention(person: Person) {
     const before = body.slice(0, mentionStart);
     const after = body.slice(textareaRef.current?.selectionStart || mentionStart + (mentionQuery?.length || 0) + 1);
-    const mention = `@[${person.full_name}](${person.id}) `;
-    const newBody = before + mention + after;
+    const displayText = `@${person.full_name} `;
+    const newBody = before + displayText + after;
     setBody(newBody);
     setMentionQuery(null);
+    mentionsRef.current.set(person.full_name, person.id);
 
-    // Refocus textarea
     requestAnimationFrame(() => {
       if (textareaRef.current) {
-        const pos = before.length + mention.length;
+        const pos = before.length + displayText.length;
         textareaRef.current.focus();
         textareaRef.current.setSelectionRange(pos, pos);
       }
     });
+  }
+
+  /** Convert display text (@Name) to storage format (@[Name](id)) for saving */
+  function buildMentionMarkup(text: string): string {
+    let result = text;
+    for (const [name, id] of mentionsRef.current) {
+      result = result.replace(new RegExp(`@${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "g"), `@[${name}](${id})`);
+    }
+    return result;
   }
 
   function handleMentionKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -202,9 +212,11 @@ export default function CommentThread({ raidEntryId, actionItemId, blockerId, or
     setPosting(true);
     setMentionQuery(null);
 
+    const storedBody = buildMentionMarkup(body.trim());
+
     const insert: Record<string, unknown> = {
       org_id: orgId,
-      body: body.trim(),
+      body: storedBody,
       author_id: currentUser?.id || null,
     };
     if (raidEntryId) insert.raid_entry_id = raidEntryId;
@@ -236,11 +248,12 @@ export default function CommentThread({ raidEntryId, actionItemId, blockerId, or
     setComments((prev) => [newComment, ...prev]);
 
     // Queue notifications for @mentioned people and item owner
-    queueNotifications(comment.id, body.trim());
+    queueNotifications(comment.id, storedBody);
 
     setBody("");
     setFiles([]);
     setPosting(false);
+    mentionsRef.current.clear();
   }
 
   async function queueNotifications(commentId: string, commentBody: string) {
