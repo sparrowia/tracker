@@ -1884,7 +1884,7 @@ function ActionItemsPanel({
                   {/* Meeting toggle */}
                   <MeetingToggle active={a.include_in_meeting} onClick={(e) => { e.stopPropagation(); toggleMeeting(a.id); }} />
                   {/* Unread indicator */}
-                  {unreadIndicator(a) === "new" && <span className="text-red-600 font-bold text-sm flex-shrink-0" title="New">!</span>}
+                  {unreadIndicator(a) === "new" && <span className="flex-shrink-0" title="New">🆕</span>}
                   {unreadIndicator(a) === "updated" && <span className="text-red-600 font-bold text-sm flex-shrink-0" title="Updated">!!</span>}
                   {/* Title */}
                   <span className="text-sm font-semibold text-gray-900 truncate min-w-0">{a.title}</span>

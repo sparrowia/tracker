@@ -1060,7 +1060,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                         </svg>
                       </button>
                       {/* Unread indicator */}
-                      {raidUnreadIndicator(entry) === "new" && <span className="text-red-600 font-bold text-sm flex-shrink-0" title="New">!</span>}
+                      {raidUnreadIndicator(entry) === "new" && <span className="flex-shrink-0" title="New">🆕</span>}
                       {raidUnreadIndicator(entry) === "updated" && <span className="text-red-600 font-bold text-sm flex-shrink-0" title="Updated">!!</span>}
                       {/* Title — inline editable for decisions */}
                       {entry.raid_type === "decision" ? (
