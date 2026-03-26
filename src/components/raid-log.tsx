@@ -404,6 +404,24 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
       const newOwner = people.find((p) => p.id === value) || null;
       dbUpdates.owner_id = value || null;
       setEntries((prev) => prev.map((e) => e.id === id ? { ...e, owner_id: value || null, owner: newOwner } as RaidRow : e));
+      if (value && value !== userPersonId) {
+        const person = people.find((p) => p.id === value);
+        if (person?.email) {
+          const currentPerson = people.find((p) => p.id === userPersonId);
+          supabase.from("comment_notifications").insert({
+            org_id: project.org_id,
+            recipient_person_id: value,
+            recipient_email: person.email,
+            comment_id: null,
+            commenter_name: null,
+            comment_body: null,
+            item_title: entry.title,
+            item_type: entry.raid_type,
+            mention_type: "assignment",
+            assigned_by: currentPerson?.full_name || "Someone",
+          }).then(() => {});
+        }
+      }
     } else if (field === "reporter_id") {
       const newReporter = people.find((p) => p.id === value) || null;
       dbUpdates.reporter_id = value || null;

@@ -864,6 +864,24 @@ function BlockersPanel({
     }
   }
 
+  function notifyBlockerAssignment(personId: string, itemTitle: string) {
+    const person = people.find((p) => p.id === personId);
+    if (!person?.email || personId === userPersonId) return;
+    const currentPerson = people.find((p) => p.id === userPersonId);
+    supabase.from("comment_notifications").insert({
+      org_id: orgId,
+      recipient_person_id: personId,
+      recipient_email: person.email,
+      comment_id: null,
+      commenter_name: null,
+      comment_body: null,
+      item_title: itemTitle,
+      item_type: "blocker",
+      mention_type: "assignment",
+      assigned_by: currentPerson?.full_name || "Someone",
+    }).then(() => {});
+  }
+
   function saveField(id: string, field: string, value: string) {
     const dbUpdates: Record<string, unknown> = {};
 
@@ -871,6 +889,10 @@ function BlockersPanel({
       const newOwner = people.find((p) => p.id === value) || null;
       dbUpdates.owner_id = value || null;
       setBlockers((prev) => prev.map((b) => b.id === id ? { ...b, owner_id: value || null, owner: newOwner } as BlockerRow : b));
+      if (value) {
+        const blocker = blockers.find((b) => b.id === id);
+        if (blocker) notifyBlockerAssignment(value, blocker.title);
+      }
     } else if (field === "vendor_id") {
       const newVendor = vendors.find((v) => v.id === value) || null;
       dbUpdates.vendor_id = value || null;
@@ -1526,6 +1548,26 @@ function ActionItemsPanel({
     }
   }
 
+  function notifyAssignment(personId: string, itemTitle: string, itemType: string) {
+    const person = people.find((p) => p.id === personId);
+    if (!person?.email) return;
+    // Don't notify yourself
+    const currentPerson = people.find((p) => p.profile_id && p.id === userPersonId);
+    if (personId === userPersonId) return;
+    supabase.from("comment_notifications").insert({
+      org_id: orgId,
+      recipient_person_id: personId,
+      recipient_email: person.email,
+      comment_id: null,
+      commenter_name: null,
+      comment_body: null,
+      item_title: itemTitle,
+      item_type: itemType,
+      mention_type: "assignment",
+      assigned_by: currentPerson?.full_name || "Someone",
+    }).then(() => {});
+  }
+
   function saveField(id: string, field: string, value: string) {
     const dbUpdates: Record<string, unknown> = {};
 
@@ -1533,6 +1575,11 @@ function ActionItemsPanel({
       const newOwner = people.find((p) => p.id === value) || null;
       dbUpdates.owner_id = value || null;
       setActions((prev) => prev.map((a) => a.id === id ? { ...a, owner_id: value || null, owner: newOwner } as ActionRow : a));
+      // Notify new owner
+      if (value) {
+        const action = actions.find((a) => a.id === id);
+        if (action) notifyAssignment(value, action.title, "action item");
+      }
     } else if (field === "vendor_id") {
       const newVendor = vendors.find((v) => v.id === value) || null;
       dbUpdates.vendor_id = value || null;

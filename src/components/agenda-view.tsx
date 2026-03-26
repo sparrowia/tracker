@@ -260,7 +260,7 @@ export function AgendaView({
   const [detailFields, setDetailFields] = useState<Record<string, { description?: string; notes?: string; next_steps?: string }>>({});
   const router = useRouter();
   const supabase = createClient();
-  const { role, profileId } = useRole();
+  const { role, profileId, userPersonId } = useRole();
 
   // Fetch description/notes/next_steps when expanding an item
   useEffect(() => {
@@ -363,6 +363,22 @@ export function AgendaView({
       if (field === "ask") return { ...i, ask: value };
       if (field === "owner_id") {
         const person = people.find((p) => p.id === value);
+        // Notify new owner of assignment
+        if (value && person?.email && value !== userPersonId) {
+          const currentPerson = people.find((p) => p.id === userPersonId);
+          supabase.from("comment_notifications").insert({
+            org_id: project.org_id,
+            recipient_person_id: value,
+            recipient_email: person.email,
+            comment_id: null,
+            commenter_name: null,
+            comment_body: null,
+            item_title: i.title,
+            item_type: i.entity_type.replace(/_/g, " "),
+            mention_type: "assignment",
+            assigned_by: currentPerson?.full_name || "Someone",
+          }).then(() => {});
+        }
         return { ...i, owner_id: value || null, owner_name: person?.full_name || null };
       }
       if (field === "vendor_id") {
