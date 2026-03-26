@@ -24,7 +24,7 @@ export default async function VendorDetailPage({
 
   const v = vendor as Vendor;
 
-  const [{ data: accountability }, { data: contacts }, { data: projects }, { data: allPeople }] =
+  const [{ data: accountability }, { data: contacts }, { data: projects }, { data: allPeople }, { data: invitationData }] =
     await Promise.all([
       supabase
         .from("vendor_accountability")
@@ -44,6 +44,10 @@ export default async function VendorDetailPage({
         .select("*")
         .eq("org_id", v.org_id)
         .order("full_name"),
+      supabase
+        .from("invitations")
+        .select("id, email, accepted_at")
+        .eq("vendor_id", v.id),
     ]);
 
   const items = (accountability || []) as VendorAccountabilityRow[];
@@ -95,7 +99,7 @@ export default async function VendorDetailPage({
       </div>
 
       {/* Contacts */}
-      <VendorContacts initialContacts={people} vendorId={v.id} orgId={v.org_id} />
+      <VendorContacts initialContacts={people} vendorId={v.id} orgId={v.org_id} initialInvitations={(invitationData || []) as { id: string; email: string; accepted_at: string | null }[]} />
 
       {/* Related Projects — derived from all items linked to this vendor */}
       {(() => {
