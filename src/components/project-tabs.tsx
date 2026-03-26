@@ -1885,7 +1885,7 @@ function ActionItemsPanel({
                   <MeetingToggle active={a.include_in_meeting} onClick={(e) => { e.stopPropagation(); toggleMeeting(a.id); }} />
                   {/* Unread indicator */}
                   {unreadIndicator(a) === "new" && <span className="text-[9px] font-bold text-white bg-blue-500 rounded px-1 py-0.5 flex-shrink-0">NEW</span>}
-                  {unreadIndicator(a) === "updated" && <span className="text-red-600 font-bold text-sm flex-shrink-0" title="Updated">!!</span>}
+                  {unreadIndicator(a) === "updated" && <span className="flex-shrink-0" title="Updated">❗</span>}
                   {/* Title */}
                   <span className="text-sm font-semibold text-gray-900 truncate min-w-0">{a.title}</span>
                   {/* Child count badge */}

@@ -1061,7 +1061,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                       </button>
                       {/* Unread indicator */}
                       {raidUnreadIndicator(entry) === "new" && <span className="text-[9px] font-bold text-white bg-blue-500 rounded px-1 py-0.5 flex-shrink-0">NEW</span>}
-                      {raidUnreadIndicator(entry) === "updated" && <span className="text-red-600 font-bold text-sm flex-shrink-0" title="Updated">!!</span>}
+                      {raidUnreadIndicator(entry) === "updated" && <span className="flex-shrink-0" title="Updated">❗</span>}
                       {/* Title — inline editable for decisions */}
                       {entry.raid_type === "decision" ? (
                         <span className="text-sm font-semibold min-w-0 flex-1 truncate" onClick={(e) => e.stopPropagation()}>
