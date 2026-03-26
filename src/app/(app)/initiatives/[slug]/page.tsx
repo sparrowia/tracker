@@ -45,6 +45,13 @@ export default function InitiativeDetailPage() {
 
       if (!init) { setLoading(false); return; }
 
+      // Get visible project IDs for non-admin users
+      let visibleProjectIds: Set<string> | null = null;
+      if (!isAdmin && userPersonId && profileId) {
+        const { data: ids } = await supabase.rpc("user_visible_project_ids", { p_person_id: userPersonId, p_profile_id: profileId });
+        visibleProjectIds = new Set((ids || []).map(String));
+      }
+
       const [{ data: projs }, { data: ppl }, { data: ownerData }] = await Promise.all([
         supabase.from("projects").select("*").eq("initiative_id", init.id).order("name"),
         supabase.from("people").select("*").order("full_name"),
@@ -52,14 +59,15 @@ export default function InitiativeDetailPage() {
       ]);
 
       setInitiative(init as Initiative);
-      setProjects((projs || []) as Project[]);
+      const allProjects = (projs || []) as Project[];
+      setProjects(visibleProjectIds ? allProjects.filter((p) => visibleProjectIds!.has(p.id)) : allProjects);
       setPeople((ppl || []) as Person[]);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       setOwners((ownerData || []).map((o: any) => o.person).filter(Boolean) as Person[]);
       setLoading(false);
     }
     load();
-  }, [slug]);
+  }, [slug, role, userPersonId, profileId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const updateField = useCallback(async (field: string, value: string | null) => {
     if (!initiative) return;
