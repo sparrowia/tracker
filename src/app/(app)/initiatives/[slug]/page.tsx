@@ -39,7 +39,7 @@ export default function InitiativeDetailPage() {
     async function load() {
       const { data: init } = await supabase
         .from("initiatives")
-        .select("*, owner:people(id, full_name)")
+        .select("*, owner:people!initiatives_owner_id_fkey(id, full_name)")
         .eq("slug", slug)
         .single();
 
