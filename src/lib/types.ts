@@ -204,6 +204,9 @@ export interface RaidEntry {
   sort_order: number;
   first_flagged_at: string;
   resolved_at: string | null;
+  sf_case_id: string | null;
+  sf_case_number: string | null;
+  sf_case_url: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
