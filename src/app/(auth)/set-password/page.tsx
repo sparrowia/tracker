@@ -2,15 +2,34 @@
 
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export default function SetPasswordPage() {
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [ready, setReady] = useState(false);
   const router = useRouter();
   const supabase = createClient();
+
+  // Handle tokens from password reset or invite links (hash fragment)
+  useEffect(() => {
+    async function init() {
+      const hash = window.location.hash;
+      if (hash) {
+        const params = new URLSearchParams(hash.substring(1));
+        const access_token = params.get("access_token");
+        const refresh_token = params.get("refresh_token");
+        if (access_token && refresh_token) {
+          await supabase.auth.setSession({ access_token, refresh_token });
+          window.history.replaceState(null, "", window.location.pathname);
+        }
+      }
+      setReady(true);
+    }
+    init();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -39,6 +58,14 @@ export default function SetPasswordPage() {
     }
   }
 
+  if (!ready) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <p className="text-sm text-gray-500">Setting up...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="max-w-md w-full space-y-8 p-8">
@@ -47,7 +74,7 @@ export default function SetPasswordPage() {
             Edcetera
           </h1>
           <p className="mt-2 text-center text-sm text-gray-600">
-            Set your password to get started
+            Set your password
           </p>
         </div>
 

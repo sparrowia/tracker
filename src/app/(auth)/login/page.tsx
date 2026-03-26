@@ -98,7 +98,7 @@ function LoginForm() {
 
     const siteUrl = window.location.origin;
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${siteUrl}/auth/callback?next=/set-password`,
+      redirectTo: `${siteUrl}/set-password`,
     });
 
     if (error) {
