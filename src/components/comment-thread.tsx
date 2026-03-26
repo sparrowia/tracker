@@ -362,6 +362,18 @@ export default function CommentThread({ raidEntryId, actionItemId, blockerId, or
             </span>
           )}
           <div className="flex-1 relative">
+            {/* Highlight layer — white bg, renders colored @mentions */}
+            <div
+              aria-hidden
+              className="absolute inset-0 rounded border border-transparent bg-white px-2 py-1.5 text-sm whitespace-pre-wrap break-words overflow-hidden pointer-events-none"
+              style={{ lineHeight: "20px" }}
+            >
+              {body.split(/(@\S+)/g).map((part, i) =>
+                part.startsWith("@") && mentionsRef.current.has(part.slice(1).trimEnd())
+                  ? <span key={i} className="text-blue-600 font-semibold">{part}</span>
+                  : <span key={i} className="text-gray-900">{part}</span>
+              )}
+            </div>
             <textarea
               ref={textareaRef}
               value={body}
@@ -370,20 +382,9 @@ export default function CommentThread({ raidEntryId, actionItemId, blockerId, or
               onBlur={() => { setTimeout(() => setMentionQuery(null), 200); }}
               placeholder="Add a comment... (@ to mention)"
               rows={2}
-              className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
+              style={{ color: "transparent", caretColor: "#111827", lineHeight: "20px", WebkitTextFillColor: "transparent" }}
+              className="w-full rounded border border-gray-300 bg-transparent px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none relative z-10"
             />
-            {/* Mention tags */}
-            {mentionsRef.current.size > 0 && body && [...mentionsRef.current.keys()].some((n) => body.includes(`@${n}`)) && (
-              <div className="flex flex-wrap gap-1 mt-1">
-                {[...mentionsRef.current.entries()]
-                  .filter(([name]) => body.includes(`@${name}`))
-                  .map(([name, id]) => (
-                    <span key={id} className="inline-flex items-center gap-1 text-[10px] font-medium text-blue-700 bg-blue-50 rounded-full px-2 py-0.5">
-                      @{name}
-                    </span>
-                  ))}
-              </div>
-            )}
             {/* @mention dropdown */}
             {mentionQuery !== null && mentionCandidates.length > 0 && (
               <div
