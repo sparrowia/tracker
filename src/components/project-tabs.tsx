@@ -1414,7 +1414,7 @@ function ActionItemsPanel({
     });
   }, [registerUpdater]);
 
-  useEffect(() => { onCountChange?.(actions.length); }, [actions.length, onCountChange]);
+  useEffect(() => { onCountChange?.(actions.filter((a) => a.status !== "complete").length); }, [actions, onCountChange]);
 
   const actionSearchLower = searchFilter.toLowerCase();
   const allFilteredActions = searchFilter
