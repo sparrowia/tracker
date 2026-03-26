@@ -28,10 +28,11 @@ export default function InitiativeDetailPage() {
   const [editingName, setEditingName] = useState(false);
   const [editingDesc, setEditingDesc] = useState(false);
   const [editingNotes, setEditingNotes] = useState(false);
+  const [owners, setOwners] = useState<Person[]>([]);
   const supabase = createClient();
 
   const isAdmin = role === "super_admin" || role === "admin";
-  const isOwner = initiative?.owner_id != null && initiative.owner_id === userPersonId;
+  const isOwner = owners.some((o) => o.id === userPersonId) || (initiative?.owner_id != null && initiative.owner_id === userPersonId);
   const canEdit = isAdmin || isOwner;
 
   useEffect(() => {
@@ -44,14 +45,17 @@ export default function InitiativeDetailPage() {
 
       if (!init) { setLoading(false); return; }
 
-      const [{ data: projs }, { data: ppl }] = await Promise.all([
+      const [{ data: projs }, { data: ppl }, { data: ownerData }] = await Promise.all([
         supabase.from("projects").select("*").eq("initiative_id", init.id).order("name"),
         supabase.from("people").select("*").order("full_name"),
+        supabase.from("initiative_owners").select("person_id, person:people(*)").eq("initiative_id", init.id),
       ]);
 
       setInitiative(init as Initiative);
       setProjects((projs || []) as Project[]);
       setPeople((ppl || []) as Person[]);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      setOwners((ownerData || []).map((o: any) => o.person).filter(Boolean) as Person[]);
       setLoading(false);
     }
     load();
@@ -108,10 +112,6 @@ export default function InitiativeDetailPage() {
       </div>
     );
   }
-
-  const ownerName = initiative.owner
-    ? (initiative.owner as Person).full_name
-    : people.find((p) => p.id === initiative.owner_id)?.full_name || null;
 
   return (
     <div className="max-w-5xl mx-auto space-y-8">
@@ -180,18 +180,41 @@ export default function InitiativeDetailPage() {
             )}
           </div>
 
-          {/* Owner */}
-          <div className="px-4 py-2.5 text-xs font-medium text-gray-500 uppercase bg-gray-50 border-r border-gray-200 flex items-center">Owner</div>
-          <div className="px-4 py-2.5 flex items-center">
-            {canEdit ? (
+          {/* Owners */}
+          <div className="px-4 py-2.5 text-xs font-medium text-gray-500 uppercase bg-gray-50 border-r border-gray-200 flex items-center">Owners</div>
+          <div className="px-4 py-2.5 flex items-center gap-2 flex-wrap">
+            {owners.map((o) => (
+              <span key={o.id} className="inline-flex items-center gap-1 text-sm bg-blue-50 text-blue-700 rounded-full px-2.5 py-0.5">
+                {o.full_name}
+                {canEdit && (
+                  <button
+                    onClick={async () => {
+                      await supabase.from("initiative_owners").delete().eq("initiative_id", initiative.id).eq("person_id", o.id);
+                      setOwners((prev) => prev.filter((p) => p.id !== o.id));
+                    }}
+                    className="text-blue-400 hover:text-red-500 ml-0.5"
+                    title="Remove owner"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  </button>
+                )}
+              </span>
+            ))}
+            {owners.length === 0 && !canEdit && <span className="text-sm text-gray-400 italic">No owners</span>}
+            {canEdit && (
               <OwnerPicker
-                value={initiative.owner_id || ""}
-                onChange={(id) => updateField("owner_id", id || null)}
-                people={people}
+                value=""
+                onChange={async (id) => {
+                  if (!id || owners.some((o) => o.id === id)) return;
+                  await supabase.from("initiative_owners").insert({ initiative_id: initiative.id, person_id: id });
+                  const person = people.find((p) => p.id === id);
+                  if (person) setOwners((prev) => [...prev, person]);
+                  // Also update legacy owner_id if it's the first owner
+                  if (owners.length === 0) updateField("owner_id", id);
+                }}
+                people={people.filter((p) => !owners.some((o) => o.id === p.id))}
                 onPersonAdded={handlePersonAdded}
               />
-            ) : (
-              <span className="text-sm text-gray-700">{ownerName || <span className="text-gray-400 italic">Unassigned</span>}</span>
             )}
           </div>
         </div>
