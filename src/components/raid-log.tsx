@@ -188,7 +188,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
         if (field === "vendor_id") return { ...e, vendor_id: value || null, vendor: vendor || null } as RaidRow;
         if (field === "status") return { ...e, status: value as ItemStatus, ...(["complete", "closed", "mitigated"].includes(value) ? {} : { resolved_at: null }) } as RaidRow;
         if (field === "decision_date") return { ...e, decision_date: value || null } as RaidRow;
-        return { ...e, [field]: value || null } as RaidRow;
+        return { ...e, [field]: value } as RaidRow;
       }));
     });
   }, [registerUpdater]);
@@ -404,13 +404,13 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
       dbUpdates.vendor_id = value || null;
       setEntries((prev) => prev.map((e) => e.id === id ? { ...e, vendor_id: value || null, vendor: newVendor } as RaidRow : e));
     } else {
-      dbUpdates[field] = value || null;
+      dbUpdates[field] = value;
       const resolvedStatuses = entry.raid_type === "risk" ? ["closed", "mitigated"] : ["complete", "closed"];
       if (field === "status" && !resolvedStatuses.includes(value)) {
         dbUpdates.resolved_at = null;
-        setEntries((prev) => prev.map((e) => e.id === id ? { ...e, [field]: value || null, resolved_at: null } as RaidRow : e));
+        setEntries((prev) => prev.map((e) => e.id === id ? { ...e, [field]: value, resolved_at: null } as RaidRow : e));
       } else {
-        setEntries((prev) => prev.map((e) => e.id === id ? { ...e, [field]: value || null } as RaidRow : e));
+        setEntries((prev) => prev.map((e) => e.id === id ? { ...e, [field]: value } as RaidRow : e));
       }
     }
 

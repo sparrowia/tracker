@@ -276,7 +276,8 @@ export function VendorAgendaView({
       : item.entity_type === "blocker" ? "blockers"
       : item.entity_type === "action_item" ? "action_items"
       : "raid_entries";
-    const dbUpdates: Record<string, unknown> = { [field]: value || null };
+    const fkFields = ["owner_id", "vendor_id", "due_date"];
+    const dbUpdates: Record<string, unknown> = { [field]: fkFields.includes(field) ? (value || null) : value };
     if (field === "status") {
       const resolvedStatuses = ["complete", "closed", "mitigated"];
       if (!resolvedStatuses.includes(value)) {
@@ -379,19 +380,19 @@ export function VendorAgendaView({
       if (aiUpdates.due_date !== undefined) dbUpdates.due_date = aiUpdates.due_date;
 
       if (item.entity_type === "agenda_item") {
-        if (aiUpdates.context !== undefined) { dbUpdates.context = aiUpdates.context || null; localUpdates.context = aiUpdates.context || null; }
-        if (aiUpdates.ask !== undefined) { dbUpdates.ask = aiUpdates.ask || null; localUpdates.ask = aiUpdates.ask || null; }
+        if (aiUpdates.context) { dbUpdates.context = aiUpdates.context; localUpdates.context = aiUpdates.context; }
+        if (aiUpdates.ask) { dbUpdates.ask = aiUpdates.ask; localUpdates.ask = aiUpdates.ask; }
       } else if (item.entity_type === "action_item") {
-        if (aiUpdates.description !== undefined) dbUpdates.description = aiUpdates.description || null;
-        if (aiUpdates.notes !== undefined) dbUpdates.notes = aiUpdates.notes || null;
-        if (aiUpdates.next_steps !== undefined) dbUpdates.next_steps = aiUpdates.next_steps || null;
+        if (aiUpdates.description) dbUpdates.description = aiUpdates.description;
+        if (aiUpdates.notes) dbUpdates.notes = aiUpdates.notes;
+        if (aiUpdates.next_steps) dbUpdates.next_steps = aiUpdates.next_steps;
       } else if (item.entity_type === "blocker") {
-        if (aiUpdates.description !== undefined) dbUpdates.description = aiUpdates.description || null;
-        if (aiUpdates.impact_description !== undefined) dbUpdates.impact_description = aiUpdates.impact_description || null;
+        if (aiUpdates.description) dbUpdates.description = aiUpdates.description;
+        if (aiUpdates.impact_description) dbUpdates.impact_description = aiUpdates.impact_description;
       } else {
-        if (aiUpdates.description !== undefined) dbUpdates.description = aiUpdates.description || null;
-        if (aiUpdates.notes !== undefined) dbUpdates.notes = aiUpdates.notes || null;
-        if (aiUpdates.next_steps !== undefined) dbUpdates.next_steps = aiUpdates.next_steps || null;
+        if (aiUpdates.description) dbUpdates.description = aiUpdates.description;
+        if (aiUpdates.notes) dbUpdates.notes = aiUpdates.notes;
+        if (aiUpdates.next_steps) dbUpdates.next_steps = aiUpdates.next_steps;
       }
 
       // Resolve owner_name to owner_id

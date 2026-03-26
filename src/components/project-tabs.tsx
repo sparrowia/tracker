@@ -763,7 +763,7 @@ function BlockersPanel({
         if (field === "owner_id") return { ...b, owner_id: value || null, owner: person || null } as BlockerRow;
         if (field === "vendor_id") return { ...b, vendor_id: value || null, vendor: vendor || null } as BlockerRow;
         if (field === "status") return { ...b, status: value as ItemStatus, ...(["complete", "closed", "mitigated"].includes(value) ? {} : { resolved_at: null }) } as BlockerRow;
-        return { ...b, [field]: value || null } as BlockerRow;
+        return { ...b, [field]: value } as BlockerRow;
       }));
     });
   }, [registerUpdater]);
@@ -862,12 +862,12 @@ function BlockersPanel({
       dbUpdates.vendor_id = value || null;
       setBlockers((prev) => prev.map((b) => b.id === id ? { ...b, vendor_id: value || null, vendor: newVendor } as BlockerRow : b));
     } else {
-      dbUpdates[field] = value || null;
+      dbUpdates[field] = value;
       if (field === "status" && value !== "complete") {
         dbUpdates.resolved_at = null;
-        setBlockers((prev) => prev.map((b) => b.id === id ? { ...b, [field]: value || null, resolved_at: null } as BlockerRow : b));
+        setBlockers((prev) => prev.map((b) => b.id === id ? { ...b, [field]: value, resolved_at: null } as BlockerRow : b));
       } else {
-        setBlockers((prev) => prev.map((b) => b.id === id ? { ...b, [field]: value || null } as BlockerRow : b));
+        setBlockers((prev) => prev.map((b) => b.id === id ? { ...b, [field]: value } as BlockerRow : b));
       }
     }
 
@@ -1122,7 +1122,7 @@ function BlockersPanel({
                       <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Impact / Notes</span>
                       <textarea
                         defaultValue={b.impact_description || ""}
-                        onBlur={(e) => { saveField(b.id, "impact_description", e.target.value); }}
+                        onBlur={(e) => { if (e.target.value !== (b.impact_description || "")) saveField(b.id, "impact_description", e.target.value); }}
                         placeholder="Add notes..."
                         rows={6}
                         className="w-full rounded border border-gray-300 bg-white px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y mt-1"
@@ -1366,7 +1366,7 @@ function ActionItemsPanel({
         if (field === "owner_id") return { ...a, owner_id: value || null, owner: person || null } as ActionRow;
         if (field === "vendor_id") return { ...a, vendor_id: value || null, vendor: vendor || null } as ActionRow;
         if (field === "status") return { ...a, status: value as ItemStatus, ...(["complete", "closed", "mitigated"].includes(value) ? {} : { resolved_at: null }) } as ActionRow;
-        return { ...a, [field]: value || null } as ActionRow;
+        return { ...a, [field]: value } as ActionRow;
       }));
     });
   }, [registerUpdater]);
@@ -1517,13 +1517,13 @@ function ActionItemsPanel({
       dbUpdates.vendor_id = value || null;
       setActions((prev) => prev.map((a) => a.id === id ? { ...a, vendor_id: value || null, vendor: newVendor } as ActionRow : a));
     } else {
-      dbUpdates[field] = value || null;
+      dbUpdates[field] = value;
       // When changing status away from complete, clear resolved_at so RPC picks it up again
       if (field === "status" && value !== "complete") {
         dbUpdates.resolved_at = null;
-        setActions((prev) => prev.map((a) => a.id === id ? { ...a, [field]: value || null, resolved_at: null } as ActionRow : a));
+        setActions((prev) => prev.map((a) => a.id === id ? { ...a, [field]: value, resolved_at: null } as ActionRow : a));
       } else {
-        setActions((prev) => prev.map((a) => a.id === id ? { ...a, [field]: value || null } as ActionRow : a));
+        setActions((prev) => prev.map((a) => a.id === id ? { ...a, [field]: value } as ActionRow : a));
       }
     }
 
@@ -1566,10 +1566,10 @@ function ActionItemsPanel({
         if (aiUpdates.title) merged.title = aiUpdates.title;
         if (aiUpdates.priority) merged.priority = aiUpdates.priority;
         if (aiUpdates.status) merged.status = aiUpdates.status;
-        if (aiUpdates.description !== undefined) merged.description = aiUpdates.description;
-        if (aiUpdates.notes !== undefined) merged.notes = aiUpdates.notes;
-        if (aiUpdates.next_steps !== undefined) merged.next_steps = aiUpdates.next_steps;
-        if (aiUpdates.due_date !== undefined) merged.due_date = aiUpdates.due_date;
+        if (aiUpdates.description) merged.description = aiUpdates.description;
+        if (aiUpdates.notes) merged.notes = aiUpdates.notes;
+        if (aiUpdates.next_steps) merged.next_steps = aiUpdates.next_steps;
+        if (aiUpdates.due_date) merged.due_date = aiUpdates.due_date;
 
         // Resolve owner_name to owner_id
         if (aiUpdates.owner_name) {
@@ -1928,7 +1928,7 @@ function ActionItemsPanel({
                       <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Meeting Notes</span>
                       <textarea
                         defaultValue={a.notes || ""}
-                        onBlur={(e) => { saveField(a.id, "notes", e.target.value); }}
+                        onBlur={(e) => { if (e.target.value !== (a.notes || "")) saveField(a.id, "notes", e.target.value); }}
                         placeholder="Add meeting notes..."
                         rows={6}
                         className="w-full rounded border border-gray-300 bg-white px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y mt-1"
@@ -1942,7 +1942,7 @@ function ActionItemsPanel({
                     <textarea
                       defaultValue={a.next_steps || ""}
                       onBlur={(e) => {
-                        saveField(a.id, "next_steps", e.target.value);
+                        if (e.target.value !== (a.next_steps || "")) saveField(a.id, "next_steps", e.target.value);
                       }}
                       placeholder="Next steps..."
                       rows={2}
