@@ -124,14 +124,14 @@ The app uses a consistent Asana-inspired visual style across all pages:
 - **Priority group headers (agenda view):** Dark bars with colored priority dots, collapsible
 - **Expanded detail panels:** Property-table layout — editable title, label/value grid rows (`grid-cols-[120px_1fr_120px_1fr]`), description/notes below. Consistent across RAID log, blockers, action items.
 - **Reporter column:** Purple initials avatar (`bg-purple-100 text-purple-700`) — distinct from blue owner avatar
-- **RAID log filters:** Priority, status, owner, age dropdowns; active filters highlight blue; header shows filtered/total count
+- **RAID log filters:** Priority, status, owner dropdowns + New/Updated checkboxes; active filters highlight blue; header shows filtered/total count. New/Updated filters snapshot matching item IDs so items don't vanish when expanded (marked as read).
 - **RAID archived view:** "Archived (N)" text link below type tabs; flat list sorted by resolved_at desc; type label, priority, owner, resolved date columns; reopen button
 - **RAID subtasks:** Self-referencing `parent_id` on raid_entries. Subtask disclosure triangle (▶) before the complete circle; children hidden by default, click to expand. Child rows indented with ↳ arrow. Count badge next to parent title.
-- **RAID drag-and-drop:** Native HTML5 drag-and-drop for reordering and nesting. Cursor position determines action: top 25% = insert above (blue line), middle 50% = nest as subtask (blue highlight), bottom 25% = insert below (blue line). Sort order persisted via `sort_order` integer column with midpoint calculation.
+- **RAID drag-and-drop:** Native HTML5 drag-and-drop for reordering and nesting. Cursor position determines action: top 25% = insert above (blue line), middle 50% = nest as subtask (blue highlight), bottom 25% = insert below (blue line). Sort order persisted via `sort_order` integer column with midpoint calculation. Same drag-and-drop also ported to Action Items panel.
 - **RAID row dividers:** `border-gray-400` for list rows
 - **Expanded detail panels:** No duplicate title (shown in row). Property-table grid with `items-stretch` for aligned borders. Impact as Low/Medium/High select (not free text). All detail borders `border-gray-200`.
 - **Resolve animation:** Inline `transition: all 350ms ease-out` — green flash + fade + collapse
-- **Comments:** Below description in expanded detail panels; auto-author from logged-in user; Cmd+Enter posting; file attachments via Supabase Storage bucket `comment-attachments`
+- **Comments:** Below description in expanded detail panels; auto-author from logged-in user; Cmd+Enter posting; file attachments via Supabase Storage bucket `comment-attachments` (public bucket). Posting a comment bumps parent item's `updated_at` to trigger unread indicators for other users.
 - **VendorPicker:** Inline "+ Add Vendor" creation, same pattern as OwnerPicker
 - **Meeting Agenda:** Same RAID-style layout — complete circles with resolve animation, disclosure triangles for subtask groups, bell toggles, collapsible priority groups. Fully editable detail panels: title, owner (OwnerPicker), vendor (VendorPicker), priority, status, due date, RAID type (risk/issue/assumption/decision dropdown), context, ask. Call Notes textarea with AI "Process Notes" button. Vendor agenda also shows linked project names.
 - **Cross-tab state sync:** ALL field edits from Meeting Agenda sync to source tabs (Action Items, Blockers, RAID Log) via `registerUpdater` callback pattern on `itemAddersRef`. Resolving uses `registerResolver`. Undo restores both agenda and source tab state. Same ref pattern used for `registerAdder` when creating items from RAID log conversions or AI suggestions.
@@ -148,9 +148,9 @@ Defined in `src/lib/types.ts`:
 - **ActionItem** — tasks with owner, priority, due date, age, parent_id for subtask nesting
 - **Blocker** — blocking issues with impact description
 - **AgendaItem** — vendor meeting topics with severity/context/ask
-- **RaidEntry** — risks, assumptions, issues, decisions (with owner, reporter, parent_id for subtasks, sort_order for drag-and-drop, sf_case_id/sf_case_number/sf_case_url for Salesforce integration)
+- **RaidEntry** — risks, assumptions, issues, decisions (with owner, reporter, parent_id for subtasks, sort_order for drag-and-drop, due_date, sf_case_id/sf_case_number/sf_case_url for Salesforce integration)
 - **Comment** — threaded comments on RAID entries, action items, blockers (polymorphic parent)
-- **CommentAttachment** — file attachments on comments (Supabase Storage)
+- **CommentAttachment** — file attachments on comments (Supabase Storage, public bucket). Filenames sanitized (spaces/special chars → underscores) for storage path, original name kept for display.
 - **SupportTicket** — external support requests
 - **Intake** — raw text submissions for AI extraction
 - **ProjectAgendaRow** — RPC output for project agenda (includes status, due_date, owner_id, vendor_id)
@@ -322,6 +322,22 @@ Decisions have a distinct UX from other RAID types (risks, assumptions, issues):
 - **Two statuses only** — Pending and Final (Final maps to `complete` in DB, displayed as "Final")
 - **Inline-editable title** — clicking the title in the row allows direct editing
 
+## RAID Log — Due Date
+
+RAID entries have a `due_date` column (migration: `20260327000002_raid_due_date.sql`):
+- Editable in detail panel via InlineDate picker
+- Available as a column toggle and in bulk editor toolbar
+- Column display: past due = red italic MM/DD/YY, today = red "today", tomorrow = "tomorrow", future = short date
+- Stage field removed from RAID detail panel and column toggles
+- Parent dropdown removed from issue detail panel (nesting is visually obvious via parent-child display)
+
+## RAID Log — Changelog
+
+"View changelog" link in RAID detail panel opens a modal showing activity history:
+- Uses the existing `activity_log` table
+- All RAID field edits and comments are logged with person, date/time, field name, old/new values
+- Human-readable labels for owner, vendor, status, priority fields (resolves IDs to names)
+
 ## AI Contact Extraction
 
 The `/api/extract` route includes a `contacts` array in the AI extraction schema. When intake text mentions people with titles, emails, or phone numbers, the AI extracts them. On confirm in the review page, the app:
@@ -418,9 +434,10 @@ Bot name: **Ed** (capybara 🐾, company mascot). Slack App ID: `A0AMR4A6Y2H`.
 
 Action items and RAID entries show indicators before the title:
 - **Blue `NEW` pill** — item has never been viewed by the user
-- **Red `❗` emoji** — item was updated since the user last viewed it
+- **Red `❗` emoji** — item was updated since the user last viewed it (includes comments bumping `updated_at`)
 - `item_reads` table tracks `(profile_id, entity_type, entity_id, read_at)`
 - Expanding an item marks it as read (fire-and-forget upsert)
+- **Own changes don't trigger indicators** — after editing a field or posting a comment, the user's `read_at` is set to the DB-returned `updated_at`, preventing their own changes from showing the red indicator. This correctly handles the `BEFORE UPDATE` trigger that always sets `updated_at = now()` on the server.
 - One batch query per panel on mount (no N+1)
 - Migration: `20260326000001_item_reads.sql`
 
@@ -430,6 +447,8 @@ Action items support parent/child nesting (mirrors RAID log pattern):
 - `parent_id` and `sort_order` columns on `action_items`
 - Disclosure triangles (▶) to expand/collapse children, ↳ arrow on child rows
 - Child count badges on parent items
+- HTML5 drag-and-drop for reordering and nesting (ported from RAID log): top 25% = insert above, middle 50% = nest as subtask, bottom 25% = insert below. Cycle prevention for nesting.
+- Row layout order: checkbox → child arrow → disclosure triangle → complete circle → bell → NEW/indicators → title. Click row to toggle detail (no expand chevron). Auto-select children when selecting parent.
 - Intake extraction uses native `parent_id` instead of writing "Parent:"/"Related to:" text in notes
 - Type conversion dropdown: action items can be converted to Risk/Issue/Assumption/Decision/Blocker (and vice versa from RAID log)
 - Migration: `20260324000002_action_item_subtasks.sql`
@@ -445,12 +464,13 @@ Comments use TipTap editor with `@tiptap/extension-mention`:
 
 ### Email Notification Digest
 - `comment_notifications` table queues notifications for: @mentions, item owner comments, and assignment changes
+- Each notification block has its own "Open in Tracker" deep link to the specific project page (`/projects/[slug]`) using `entity_id` and `project_slug` columns on `comment_notifications`
 - Vercel Cron (`/api/notify/digest`) runs every 2 hours, batches notifications per recipient
 - Sent via Gmail SMTP (nodemailer) from `support@edcet.com`
 - Green border for assignments, blue for @mentions, purple for owner comments
 - Env vars: `SMTP_USER`, `SMTP_PASS`, `CRON_SECRET`
 - Middleware excludes `/api/notify` from auth redirect
-- Migrations: `20260326000004_comment_notifications.sql`, `20260326000005_assignment_notifications.sql`
+- Migrations: `20260326000004_comment_notifications.sql`, `20260326000005_assignment_notifications.sql`, `20260327000001_notification_deep_links.sql`
 
 ## Salesforce Case Ingest
 
@@ -493,7 +513,7 @@ Action items, blockers, and RAID entries support multi-select:
 - Shift+click for range selection
 - Selecting a RAID parent auto-selects children
 - Floating dark toolbar appears at bottom with bulk operations:
-  - Priority, Status, Owner dropdowns (bulk update)
+  - Priority, Status, Owner, Due Date dropdowns (bulk update)
   - RAID log: "Nest under..." dropdown + "Group" button
   - Delete button (confirmation dialog)
   - Clear selection

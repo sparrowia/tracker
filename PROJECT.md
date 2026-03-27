@@ -104,12 +104,12 @@ src/
 | `projects` | Tracked projects with health status |
 | `action_items` | Tasks with owner, priority, due date, meeting toggle |
 | `blockers` | Blocking issues with impact description |
-| `raid_entries` | Risks, assumptions, issues, decisions (owner, reporter, parent_id subtasks, sort_order) |
+| `raid_entries` | Risks, assumptions, issues, decisions (owner, reporter, parent_id subtasks, sort_order, due_date) |
 | `agenda_items` | Vendor/project meeting topics with severity/context/ask |
 | `support_tickets` | External support requests |
 | `intakes` | Raw text submissions for AI extraction |
 | `comments` | Threaded comments on RAID entries, action items, blockers (polymorphic) |
-| `comment_attachments` | File attachments on comments (Supabase Storage) |
+| `comment_attachments` | File attachments on comments (Supabase Storage, public bucket) |
 | `meetings` | Meeting records |
 | `activity_log` | Audit trail |
 | `term_corrections` | AI extraction glossary (wrong_term → correct_term) |
@@ -156,9 +156,13 @@ All tables have row-level security policies scoped to `org_id` via the `user_org
 12. **RAID Archived View** — "Archived" link below RAID type tabs shows all resolved items sorted by resolution date. Type label replaces ID, reopen button on each row. Resolve animation: green flash + collapse (350ms ease-out).
 13. **Vendor Picker** — all org vendors shown in RAID/Actions/Blockers detail panels with inline "+ Add Vendor" creation (like OwnerPicker for people)
 14. **RAID Subtasks** — self-referencing `parent_id` on raid_entries. Disclosure triangle toggles children visible/hidden. Children indented with ↳ arrow. Parent dropdown in detail panel.
-15. **RAID Drag-and-Drop** — native HTML5 drag-and-drop for reordering and nesting. Top/bottom 25% = reorder (blue line indicator), middle 50% = nest as subtask (blue highlight). Sort order via `sort_order` integer column with midpoint gaps.
+15. **RAID Drag-and-Drop** — native HTML5 drag-and-drop for reordering and nesting. Top/bottom 25% = reorder (blue line indicator), middle 50% = nest as subtask (blue highlight). Sort order via `sort_order` integer column with midpoint gaps. Same drag-and-drop ported to Action Items panel with cycle prevention.
 16. **Company Timeline** — three-view timeline (Timeline, Calendar, Gantt) with milestone parent/child grouping, linked and proposed project/initiative milestones, "create from proposed" flow.
 17. **Wiki** — block-based wiki pages with parent/child hierarchy, hosted at `/wiki`.
+18. **RAID Due Date** — due_date column on raid_entries with InlineDate picker in detail panel, column toggle, and bulk editor. Smart display: past due (red italic), today/tomorrow labels, short date for future.
+19. **RAID Changelog** — "View changelog" link in detail panel opens modal with activity history from `activity_log` table. Human-readable labels for owner, vendor, status, priority fields.
+20. **Digest Deep Links** — each notification block in email digest links to the specific project page instead of just `/dashboard`.
+21. **Unread Indicators** — NEW pill (never viewed) and red indicator (updated since last view). Comments bump `updated_at`. Own changes don't trigger indicators (read_at set to DB-returned updated_at).
 
 ## UI Design System
 
@@ -226,6 +230,9 @@ All in `supabase/migrations/`:
 | `20260326000007_initiative_owner_visibility.sql` | Initiative owners see all projects under their initiatives |
 | `20260326000008_initiative_owners.sql` | Junction table for multiple initiative owners |
 | `20260326000009_mark_invite_accepted_on_signup.sql` | Auto-mark invitation accepted on signup |
+| `20260327000001_notification_deep_links.sql` | Add `entity_id` + `project_slug` to comment_notifications for deep links |
+| `20260327000002_raid_due_date.sql` | Add `due_date` column to raid_entries |
+| `20260327000003_public_attachment_bucket.sql` | Make `comment-attachments` storage bucket public |
 
 ## Deployment
 
@@ -245,6 +252,6 @@ All docs live in this repo: [github.com/sparrowia/tracker](https://github.com/sp
 | [`CLAUDE.md`](https://github.com/sparrowia/tracker/blob/main/CLAUDE.md) | AI assistant instructions, conventions, and guardrails |
 | [`src/lib/types.ts`](https://github.com/sparrowia/tracker/blob/main/src/lib/types.ts) | All TypeScript interfaces and enums |
 | [`src/lib/utils.ts`](https://github.com/sparrowia/tracker/blob/main/src/lib/utils.ts) | Formatting helpers (priority colors, status badges, dates) |
-| [`supabase/migrations/`](https://github.com/sparrowia/tracker/tree/main/supabase/migrations) | Full database schema history (31 migrations) |
+| [`supabase/migrations/`](https://github.com/sparrowia/tracker/tree/main/supabase/migrations) | Full database schema history (34 migrations) |
 | [`.env.local.example`](https://github.com/sparrowia/tracker/blob/main/.env.local.example) | Required environment variables |
 | [`PROMPT.md`](https://github.com/sparrowia/tracker/blob/main/PROMPT.md) | Bootstrap prompt for AI assistants |
