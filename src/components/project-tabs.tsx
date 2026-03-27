@@ -321,7 +321,7 @@ export default function ProjectTabs({
         </div>
 
         <div style={{ display: active === "blockers" ? "block" : "none" }}>
-          <BlockersPanel blockers={blockers} people={peopleList} vendors={vendorsList} onPersonAdded={addPerson} onVendorAdded={addVendor} addUndo={addUndo} onCountChange={setBlockerCount} intakeSourceMap={intakeSourceMap} onNewItemsSuggested={onNewItemsSuggested} registerAdder={(fn) => { itemAddersRef.current.addBlocker = fn; return () => { itemAddersRef.current.addBlocker = undefined; }; }} registerResolver={(fn) => { itemAddersRef.current.resolveBlocker = fn; return () => { itemAddersRef.current.resolveBlocker = undefined; }; }} registerUpdater={(fn) => { itemAddersRef.current.updateBlocker = fn; return () => { itemAddersRef.current.updateBlocker = undefined; }; }} onMeetingToggle={bumpAgendaRefresh} orgId={project.org_id} searchFilter={searchFilter} />
+          <BlockersPanel blockers={blockers} people={peopleList} vendors={vendorsList} onPersonAdded={addPerson} onVendorAdded={addVendor} addUndo={addUndo} onCountChange={setBlockerCount} intakeSourceMap={intakeSourceMap} onNewItemsSuggested={onNewItemsSuggested} registerAdder={(fn) => { itemAddersRef.current.addBlocker = fn; return () => { itemAddersRef.current.addBlocker = undefined; }; }} registerResolver={(fn) => { itemAddersRef.current.resolveBlocker = fn; return () => { itemAddersRef.current.resolveBlocker = undefined; }; }} registerUpdater={(fn) => { itemAddersRef.current.updateBlocker = fn; return () => { itemAddersRef.current.updateBlocker = undefined; }; }} onMeetingToggle={bumpAgendaRefresh} orgId={project.org_id} projectSlug={project.slug} searchFilter={searchFilter} />
         </div>
 
         <div style={{ display: active === "raid" ? "block" : "none" }}>
@@ -344,7 +344,7 @@ export default function ProjectTabs({
         </div>
 
         <div style={{ display: active === "actions" ? "block" : "none" }}>
-          <ActionItemsPanel actions={actions} people={peopleList} vendors={vendorsList} onPersonAdded={addPerson} onVendorAdded={addVendor} addUndo={addUndo} onCountChange={setActionCount} intakeSourceMap={intakeSourceMap} onNewItemsSuggested={onNewItemsSuggested} registerAdder={(fn) => { itemAddersRef.current.addAction = fn; return () => { itemAddersRef.current.addAction = undefined; }; }} registerResolver={(fn) => { itemAddersRef.current.resolveAction = fn; return () => { itemAddersRef.current.resolveAction = undefined; }; }} registerUpdater={(fn) => { itemAddersRef.current.updateAction = fn; return () => { itemAddersRef.current.updateAction = undefined; }; }} onMeetingToggle={bumpAgendaRefresh} orgId={project.org_id} projectId={project.id} searchFilter={searchFilter} deepLinkItemId={urlItem}
+          <ActionItemsPanel actions={actions} people={peopleList} vendors={vendorsList} onPersonAdded={addPerson} onVendorAdded={addVendor} addUndo={addUndo} onCountChange={setActionCount} intakeSourceMap={intakeSourceMap} onNewItemsSuggested={onNewItemsSuggested} registerAdder={(fn) => { itemAddersRef.current.addAction = fn; return () => { itemAddersRef.current.addAction = undefined; }; }} registerResolver={(fn) => { itemAddersRef.current.resolveAction = fn; return () => { itemAddersRef.current.resolveAction = undefined; }; }} registerUpdater={(fn) => { itemAddersRef.current.updateAction = fn; return () => { itemAddersRef.current.updateAction = undefined; }; }} onMeetingToggle={bumpAgendaRefresh} orgId={project.org_id} projectId={project.id} projectSlug={project.slug} searchFilter={searchFilter} deepLinkItemId={urlItem}
             onConvertedToRaid={async (raidId) => {
               const { data } = await supabase.from("raid_entries").select("*, owner:people!raid_entries_owner_id_fkey(*), reporter:people!raid_entries_reporter_id_fkey(*), vendor:vendors(*)").eq("id", raidId).single();
               if (data && itemAddersRef.current.addRaid) {
@@ -734,6 +734,7 @@ function BlockersPanel({
   registerUpdater,
   onMeetingToggle,
   orgId,
+  projectSlug,
   searchFilter = "",
 }: {
   blockers: BlockerRow[];
@@ -750,6 +751,7 @@ function BlockersPanel({
   registerUpdater?: (fn: (id: string, field: string, value: string, person?: Person | null, vendor?: Vendor | null) => void) => () => void;
   onMeetingToggle?: () => void;
   orgId: string;
+  projectSlug: string;
   searchFilter?: string;
 }) {
   const { role, profileId, userPersonId } = useRole();
@@ -864,7 +866,7 @@ function BlockersPanel({
     }
   }
 
-  function notifyBlockerAssignment(personId: string, itemTitle: string) {
+  function notifyBlockerAssignment(personId: string, itemTitle: string, blockerId?: string) {
     const person = people.find((p) => p.id === personId);
     if (!person?.email || personId === userPersonId) return;
     const currentPerson = people.find((p) => p.id === userPersonId);
@@ -879,6 +881,8 @@ function BlockersPanel({
       item_type: "blocker",
       mention_type: "assignment",
       assigned_by: currentPerson?.full_name || "Someone",
+      entity_id: blockerId || null,
+      project_slug: projectSlug,
     }).then(() => {});
   }
 
@@ -891,7 +895,7 @@ function BlockersPanel({
       setBlockers((prev) => prev.map((b) => b.id === id ? { ...b, owner_id: value || null, owner: newOwner } as BlockerRow : b));
       if (value) {
         const blocker = blockers.find((b) => b.id === id);
-        if (blocker) notifyBlockerAssignment(value, blocker.title);
+        if (blocker) notifyBlockerAssignment(value, blocker.title, blocker.id);
       }
     } else if (field === "vendor_id") {
       const newVendor = vendors.find((v) => v.id === value) || null;
@@ -1241,6 +1245,7 @@ function BlockersPanel({
                       people={people}
                       itemTitle={b.title}
                       itemType="blocker"
+                      projectSlug={projectSlug}
                       ownerId={b.owner_id}
                     />
                   </div>
@@ -1357,6 +1362,7 @@ function ActionItemsPanel({
   onMeetingToggle,
   orgId,
   projectId,
+  projectSlug,
   searchFilter = "",
   deepLinkItemId,
   onConvertedToRaid,
@@ -1377,6 +1383,7 @@ function ActionItemsPanel({
   onMeetingToggle?: () => void;
   orgId: string;
   projectId: string;
+  projectSlug: string;
   searchFilter?: string;
   deepLinkItemId?: string | null;
   onConvertedToRaid?: (raidId: string) => void;
@@ -1548,7 +1555,7 @@ function ActionItemsPanel({
     }
   }
 
-  function notifyAssignment(personId: string, itemTitle: string, itemType: string) {
+  function notifyAssignment(personId: string, itemTitle: string, itemType: string, entityId?: string) {
     const person = people.find((p) => p.id === personId);
     if (!person?.email) return;
     // Don't notify yourself
@@ -1565,6 +1572,8 @@ function ActionItemsPanel({
       item_type: itemType,
       mention_type: "assignment",
       assigned_by: currentPerson?.full_name || "Someone",
+      entity_id: entityId || null,
+      project_slug: projectSlug,
     }).then(() => {});
   }
 
@@ -1578,7 +1587,7 @@ function ActionItemsPanel({
       // Notify new owner
       if (value) {
         const action = actions.find((a) => a.id === id);
-        if (action) notifyAssignment(value, action.title, "action item");
+        if (action) notifyAssignment(value, action.title, "action item", action.id);
       }
     } else if (field === "vendor_id") {
       const newVendor = vendors.find((v) => v.id === value) || null;
@@ -2186,6 +2195,7 @@ function ActionItemsPanel({
                       people={people}
                       itemTitle={a.title}
                       itemType="action item"
+                      projectSlug={projectSlug}
                       ownerId={a.owner_id}
                     />
                   </div>

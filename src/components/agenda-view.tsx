@@ -377,6 +377,8 @@ export function AgendaView({
             item_type: i.entity_type.replace(/_/g, " "),
             mention_type: "assignment",
             assigned_by: currentPerson?.full_name || "Someone",
+            entity_id: i.entity_id,
+            project_slug: project.slug,
           }).then(() => {});
         }
         return { ...i, owner_id: value || null, owner_name: person?.full_name || null };
@@ -736,7 +738,7 @@ export function AgendaView({
           const descValue = detail.description ?? (descField === "context" ? item.context : null) ?? "";
           const notesValue = detail.notes ?? (notesField === "context" ? item.context : notesField === "impact_description" ? item.context : null) ?? "";
           const showNextSteps = item.entity_type === "action_item" || item.entity_type === "raid_issue";
-          const commentBase = { itemTitle: item.title, itemType: item.entity_type.replace(/_/g, " "), projectName: project.name, ownerId: item.owner_id };
+          const commentBase = { itemTitle: item.title, itemType: item.entity_type.replace(/_/g, " "), projectName: project.name, projectSlug: project.slug, ownerId: item.owner_id };
           const commentProps = item.entity_type === "action_item" ? { actionItemId: item.entity_id, ...commentBase }
             : item.entity_type === "blocker" ? { blockerId: item.entity_id, ...commentBase }
             : item.entity_type.startsWith("raid_") ? { raidEntryId: item.entity_id, ...commentBase }

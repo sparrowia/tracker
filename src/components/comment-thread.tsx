@@ -19,6 +19,7 @@ interface CommentThreadProps {
   itemTitle?: string;
   itemType?: string;
   projectName?: string;
+  projectSlug?: string;
   ownerId?: string | null;
 }
 
@@ -72,7 +73,7 @@ function renderBody(body: string) {
   return elements.length > 0 ? <>{elements}</> : <span>{body}</span>;
 }
 
-export default function CommentThread({ raidEntryId, actionItemId, blockerId, orgId, people, itemTitle, itemType, projectName, ownerId }: CommentThreadProps) {
+export default function CommentThread({ raidEntryId, actionItemId, blockerId, orgId, people, itemTitle, itemType, projectName, projectSlug, ownerId }: CommentThreadProps) {
   const { role } = useRole();
   const [comments, setComments] = useState<CommentRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -159,6 +160,12 @@ export default function CommentThread({ raidEntryId, actionItemId, blockerId, or
     // Queue notifications
     queueNotifications(comment.id, storedBody, mentionIds);
 
+    // Bump parent item's updated_at so the ❗ indicator shows for other users
+    const now = new Date().toISOString();
+    if (raidEntryId) supabase.from("raid_entries").update({ updated_at: now }).eq("id", raidEntryId).then(() => {});
+    if (actionItemId) supabase.from("action_items").update({ updated_at: now }).eq("id", actionItemId).then(() => {});
+    if (blockerId) supabase.from("blockers").update({ updated_at: now }).eq("id", blockerId).then(() => {});
+
     editorRef.current.clear();
     setFiles([]);
     setPosting(false);
@@ -190,6 +197,8 @@ export default function CommentThread({ raidEntryId, actionItemId, blockerId, or
         item_type: itemType || "item",
         project_name: projectName || null,
         mention_type: mentionedIds.has(personId) ? "mention" : "owner",
+        entity_id: raidEntryId || actionItemId || blockerId || null,
+        project_slug: projectSlug || null,
       });
     }
 

@@ -47,11 +47,17 @@ export async function GET(req: NextRequest) {
         : `New comment on ${items[0].item_type}: ${items[0].item_title}`
       : `${totalCount} new notifications from Edcetera Tracker`;
 
+    function itemLink(n: typeof items[0]): string {
+      if (n.project_slug) return `${siteUrl}/projects/${n.project_slug}`;
+      return `${siteUrl}/dashboard`;
+    }
+
     const assignmentBlocks = assignments.map((n) => `
       <div style="margin-bottom: 16px; padding: 12px; background: #f0fdf4; border-radius: 8px; border-left: 3px solid #22c55e;">
-        <p style="margin: 0; font-size: 12px; color: #6b7280;">
+        <p style="margin: 0 0 4px; font-size: 12px; color: #6b7280;">
           <strong>${n.assigned_by || "Someone"}</strong> assigned you to ${n.item_type}: <strong>${n.item_title}</strong>${n.project_name ? ` · ${n.project_name}` : ""}
         </p>
+        <a href="${itemLink(n)}" style="color: #3b82f6; text-decoration: none; font-size: 12px;">Open in Tracker →</a>
       </div>
     `).join("");
 
@@ -61,6 +67,7 @@ export async function GET(req: NextRequest) {
           <strong>${n.commenter_name || "Someone"}</strong> ${n.mention_type === "mention" ? "mentioned you" : "commented on your item"} · ${n.item_type}: <strong>${n.item_title}</strong>${n.project_name ? ` · ${n.project_name}` : ""}
         </p>
         ${n.comment_body ? `<p style="margin: 0; font-size: 14px; color: #374151; white-space: pre-wrap;">${n.comment_body.replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br>")}</p>` : ""}
+        <a href="${itemLink(n)}" style="color: #3b82f6; text-decoration: none; font-size: 12px;">Open in Tracker →</a>
       </div>
     `).join("");
 
@@ -76,9 +83,6 @@ export async function GET(req: NextRequest) {
           ${heading}
         </h2>
         ${assignmentBlocks}${commentBlocks}
-        <p style="margin-top: 20px;">
-          <a href="${siteUrl}/dashboard" style="color: #3b82f6; text-decoration: none; font-size: 13px;">Open Tracker →</a>
-        </p>
         <p style="margin-top: 16px; font-size: 11px; color: #9ca3af;">
           Edcetera Tracker · You received this because you were mentioned or are the item owner.
         </p>

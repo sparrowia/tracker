@@ -419,6 +419,8 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
             item_type: entry.raid_type,
             mention_type: "assignment",
             assigned_by: currentPerson?.full_name || "Someone",
+            entity_id: entry.id,
+            project_slug: project.slug,
           }).then(() => {});
         }
       }
@@ -1347,6 +1349,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                           itemTitle={entry.title}
                           itemType={entry.raid_type}
                           projectName={project.name}
+                          projectSlug={project.slug}
                           ownerId={entry.owner_id}
                         />
                       </div>
