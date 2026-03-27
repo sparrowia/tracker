@@ -66,7 +66,10 @@ src/
 │       │   └── accept/           # POST: mark invitation accepted
 │       ├── issues/
 │       │   ├── submit/           # POST: public issue submission (service-role, no auth)
+│       │   ├── salesforce/       # POST: Salesforce case ingest (X-API-Key auth)
 │       │   └── project/          # GET: project info for public form
+│       ├── notify/
+│       │   └── digest/           # GET: Vercel cron — sends batched email notifications (every 2h)
 │       ├── slack/
 │       │   └── command/          # POST: /ed slash command handler
 │       └── users/
@@ -84,6 +87,8 @@ src/
 │   ├── comment-thread.tsx        # Threaded comments with file attachments
 │   ├── owner-picker.tsx          # Person selection dropdown with inline creation
 │   ├── vendor-picker.tsx         # Vendor selection dropdown with inline creation
+│   ├── comment-editor.tsx         # TipTap-based comment input with @mention autocomplete
+│   ├── vendor-contacts.tsx       # Vendor detail page contacts with invite/edit/delete
 │   ├── role-context.tsx          # React context providing role, profileId, vendorId, userPersonId + impersonation
 │   ├── sidebar.tsx               # App navigation sidebar (role-aware)
 │   └── topbar.tsx                # Top bar with impersonation banner
@@ -91,7 +96,8 @@ src/
     ├── types.ts                  # All TypeScript interfaces
     ├── utils.ts                  # Formatting helpers (priorityColor, formatAge, etc.)
     ├── permissions.ts            # Role-based permission helpers (canCreate, canDelete, canEditItem, canEditWikiPage, etc.)
-    ├── slack.ts                  # Slack Bot notification utility (sendSlackMessage, notifyNewIssue, notifyExtractionComplete)
+    ├── slack.ts                  # Slack Bot notification utility (sendSlackMessage, notifyNewIssue, notifyNewBlocker)
+    ├── email.ts                  # Gmail SMTP email utility (nodemailer) for notification digests
     ├── pdf.ts                    # Client-side PDF text extraction
     ├── ai/                       # DeepSeek client, context builder, prompts
     ├── parsers/asana.ts          # Deterministic Asana PDF export parser
@@ -139,10 +145,10 @@ Defined in `src/lib/types.ts`:
 - **Vendor** — external companies (Silk, BenchPrep, etc.)
 - **Person** — internal team or vendor contacts (includes `slack_member_id` for Slack DM links)
 - **Project** — tracked projects with health status
-- **ActionItem** — tasks with owner, priority, due date, age
+- **ActionItem** — tasks with owner, priority, due date, age, parent_id for subtask nesting
 - **Blocker** — blocking issues with impact description
 - **AgendaItem** — vendor meeting topics with severity/context/ask
-- **RaidEntry** — risks, assumptions, issues, decisions (with owner, reporter, parent_id for subtasks, sort_order for drag-and-drop)
+- **RaidEntry** — risks, assumptions, issues, decisions (with owner, reporter, parent_id for subtasks, sort_order for drag-and-drop, sf_case_id/sf_case_number/sf_case_url for Salesforce integration)
 - **Comment** — threaded comments on RAID entries, action items, blockers (polymorphic parent)
 - **CommentAttachment** — file attachments on comments (Supabase Storage)
 - **SupportTicket** — external support requests
@@ -216,16 +222,18 @@ Super admins can impersonate any person from the People page (`/settings/people`
 - All permission checks (sidebar, create/edit/delete buttons) reflect the impersonated role
 - RLS still uses the real auth user, so all data remains visible — impersonation is UI-level only
 
-### People Page (`/settings/people`)
+### People Page (`/settings/people`) — also serves as Team Management
 
-Client component `people-list.tsx` with two tabs: **Internal Team** and **Vendors**.
+Client component `people-list.tsx` with two tabs: **Internal Team** and **Vendors**. Replaces the separate Team Management page.
 
 **Internal Team tab:**
 - Alphabetically sorted by first name
 - Click-to-expand inline editing for all person fields (name, title, email, phone, Slack ID, vendor, internal, notes)
 - Checking "Internal" clears vendor assignment and hides vendor field
 - Contact status badges: **Joined** (has profile_id), **Invited** (pending invitation by email match), **Added** (manually created)
-- Invite button on "Added" contacts with email — calls `POST /api/invite` with role inferred from vendor_id
+- Invite with role/vendor picker — click "Invite" → select role (User/Admin/Vendor) + vendor → "Send"
+- Role editing dropdown for joined members (Admin/User/Vendor) — in expanded detail panel
+- Deactivate button for joined members (admin/super_admin, not for super_admin accounts)
 - "+ Add Person" button in dark header
 - Delete via trash icon in full-width action bar (matching RAID log pattern)
 - Impersonate button for super_admin
@@ -257,9 +265,11 @@ Client component (`/dashboard`) with role-scoped data:
 
 Client component (`/initiatives/[slug]`) with inline editing:
 - **Click-to-edit name** — click title to edit inline
-- **Properties grid** — Health (dropdown), Owner (OwnerPicker), Target date (date picker), Slug (read-only)
+- **Properties grid** — Health (dropdown), Owners (multiple, blue pills with OwnerPicker), Target date (date picker), Slug (read-only)
+- **Multiple owners** — `initiative_owners` junction table; owners shown as blue pills with X to remove, OwnerPicker to add
 - **Editable Description and Notes** — click to open textarea
-- Editing gated to admins (`super_admin`/`admin`) and initiative owner (`owner_id` match via `userPersonId`)
+- Editing gated to admins (`super_admin`/`admin`) and any initiative owner (checked via junction table)
+- **Project visibility** — non-admin users only see projects they have access to (via `user_visible_project_ids` RPC)
 - `+ Add Project` button also hidden for non-editors
 
 ## Company Timeline
@@ -403,6 +413,78 @@ Bot name: **Ed** (capybara 🐾, company mascot). Slack App ID: `A0AMR4A6Y2H`.
 ### Environment Variables
 - `SLACK_BOT_TOKEN` — Bot User OAuth Token (xoxb-...)
 - `SLACK_DEFAULT_CHANNEL` — Fallback channel (currently `#uat-unified-ce-platform`)
+
+## Unread/Updated Indicators
+
+Action items and RAID entries show indicators before the title:
+- **Blue `NEW` pill** — item has never been viewed by the user
+- **Red `❗` emoji** — item was updated since the user last viewed it
+- `item_reads` table tracks `(profile_id, entity_type, entity_id, read_at)`
+- Expanding an item marks it as read (fire-and-forget upsert)
+- One batch query per panel on mount (no N+1)
+- Migration: `20260326000001_item_reads.sql`
+
+## Action Item Subtasks
+
+Action items support parent/child nesting (mirrors RAID log pattern):
+- `parent_id` and `sort_order` columns on `action_items`
+- Disclosure triangles (▶) to expand/collapse children, ↳ arrow on child rows
+- Child count badges on parent items
+- Intake extraction uses native `parent_id` instead of writing "Parent:"/"Related to:" text in notes
+- Type conversion dropdown: action items can be converted to Risk/Issue/Assumption/Decision/Blocker (and vice versa from RAID log)
+- Migration: `20260324000002_action_item_subtasks.sql`
+
+## @Mentions & Comment Notifications
+
+Comments use TipTap editor with `@tiptap/extension-mention`:
+- Type `@` to see a dropdown of people at cursor position (tippy.js)
+- Mentions render as blue bold atomic nodes (can't partially edit)
+- Stored as `@[Name](person_id)` format in comment body
+- Rendered as styled blue text when displaying comments
+- Dynamic import with `ssr: false` (same pattern as wiki editor)
+
+### Email Notification Digest
+- `comment_notifications` table queues notifications for: @mentions, item owner comments, and assignment changes
+- Vercel Cron (`/api/notify/digest`) runs every 2 hours, batches notifications per recipient
+- Sent via Gmail SMTP (nodemailer) from `support@edcet.com`
+- Green border for assignments, blue for @mentions, purple for owner comments
+- Env vars: `SMTP_USER`, `SMTP_PASS`, `CRON_SECRET`
+- Middleware excludes `/api/notify` from auth redirect
+- Migrations: `20260326000004_comment_notifications.sql`, `20260326000005_assignment_notifications.sql`
+
+## Salesforce Case Ingest
+
+`POST /api/issues/salesforce` — accepts Salesforce case payload, creates RAID entry (type: issue):
+- Auth via `X-API-Key` header (`SALESFORCE_API_KEY` env var)
+- Duplicate detection via `sf_case_id` unique index (returns 409)
+- Maps SF priority to tracker priority
+- Stores `sf_case_id`, `sf_case_number`, `sf_case_url` on raid_entries
+- Returns `{ success, issue: { id, url, number } }` for Salesforce Flow callback
+- Migration: `20260326000002_salesforce_case_fields.sql`
+
+## Vendor Contacts Management
+
+`VendorContacts` client component on vendor detail page (`/settings/vendors/[id]`):
+- Status badges: **Joined** (green), **Invited** (blue), **Added** (gray)
+- "Invite to Tracker" button with vendor role — sends invitation via `/api/invite`
+- Click-to-expand inline editing (name, title, email, phone, Slack ID)
+- Delete cascade: cancels pending invitation or deactivates joined user before removing contact
+- "+ Add Contact" button in dark header
+
+## Vendor RLS — Personal Items
+
+Vendor-role users see items where:
+- `vendor_id` matches their vendor (original behavior), OR
+- `owner_id` matches their person record (added)
+- `user_person_id()` helper function maps `auth.uid()` to `people.id`
+- Migration: `20260326000003_vendor_see_personal_items.sql`
+
+## Password Reset
+
+Login page includes "Forgot password?" link:
+- Sends Supabase reset email via `resetPasswordForEmail`
+- Redirects directly to `/set-password` (not through `/auth/callback` — avoids PKCE storage issues)
+- Set-password page parses hash tokens on mount to establish session
 
 ## Multi-Select & Bulk Operations
 

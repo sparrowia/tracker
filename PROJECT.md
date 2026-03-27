@@ -216,6 +216,16 @@ All in `supabase/migrations/`:
 | `20260318000001_public_issue_form.sql` | Public issue form toggle on projects |
 | `20260320000001_reminders.sql` | Reminders table for action/blocker/RAID items |
 | `20260324000001_slack_member_id.sql` | Add `slack_member_id` to people for Slack DM links |
+| `20260324000002_action_item_subtasks.sql` | Add `parent_id` + `sort_order` to action_items for subtask nesting |
+| `20260326000001_item_reads.sql` | Item read tracking for unread/updated indicators |
+| `20260326000002_salesforce_case_fields.sql` | Add `sf_case_id`, `sf_case_number`, `sf_case_url` to raid_entries |
+| `20260326000003_vendor_see_personal_items.sql` | Vendor RLS: also see items assigned to them personally |
+| `20260326000004_comment_notifications.sql` | Comment notification queue for email digests |
+| `20260326000005_assignment_notifications.sql` | Extend notifications for assignment changes |
+| `20260326000006_link_people_on_signup.sql` | Auto-link people.profile_id on user signup |
+| `20260326000007_initiative_owner_visibility.sql` | Initiative owners see all projects under their initiatives |
+| `20260326000008_initiative_owners.sql` | Junction table for multiple initiative owners |
+| `20260326000009_mark_invite_accepted_on_signup.sql` | Auto-mark invitation accepted on signup |
 
 ## Deployment
 
