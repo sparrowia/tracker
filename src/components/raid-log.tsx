@@ -210,11 +210,11 @@ function ChangelogPanel({ entryId, orgId, people }: { entryId: string; orgId: st
     return d.toLocaleDateString("en-US", { month: "short", day: "numeric" }) + " " + d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
   }
 
-  if (loading) return <div className="px-5 py-3 text-xs text-gray-400">Loading changelog...</div>;
-  if (logs.length === 0) return <div className="px-5 py-3 text-xs text-gray-400">No changes recorded yet.</div>;
+  if (loading) return <div className="px-5 py-4 text-xs text-gray-400">Loading changelog...</div>;
+  if (logs.length === 0) return <div className="px-5 py-4 text-xs text-gray-400">No changes recorded yet.</div>;
 
   return (
-    <div className="border-t border-gray-200 bg-gray-50/50 px-5 py-3 max-h-[200px] overflow-y-auto">
+    <div className="px-5 py-4">
       <div className="space-y-1.5">
         {logs.map((log) => {
           const fieldLabel = FIELD_LABELS[log.field_name || ""] || log.field_name || log.action;
@@ -1407,10 +1407,10 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                           <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-200">Changelog</span>
                           <div className="px-3 py-2.5 border-b border-gray-200">
                             <button
-                              onClick={() => setChangelogEntryId(changelogEntryId === entry.id ? null : entry.id)}
-                              className="text-xs text-blue-600 hover:text-blue-800"
+                              onClick={() => setChangelogEntryId(entry.id)}
+                              className="text-xs text-blue-600 hover:text-blue-800 cursor-pointer"
                             >
-                              👀 {changelogEntryId === entry.id ? "Hide" : "View"} changelog
+                              👀 View changelog
                             </button>
                           </div>
 
@@ -1439,11 +1439,6 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                           ownerId={entry.owner_id}
                         />
                       </div>
-
-                      {/* Changelog */}
-                      {changelogEntryId === entry.id && (
-                        <ChangelogPanel entryId={entry.id} orgId={project.org_id} people={people} />
-                      )}
 
                       {/* Actions bar */}
                       <div className="flex justify-end items-center gap-3 px-5 py-2 border-t border-gray-200">
@@ -1756,6 +1751,25 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
           >
             Clear
           </button>
+        </div>
+      )}
+
+      {/* Changelog Modal */}
+      {changelogEntryId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setChangelogEntryId(null)}>
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-lg mx-4 max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-200">
+              <h3 className="text-sm font-semibold text-gray-800">👀 Changelog</h3>
+              <button onClick={() => setChangelogEntryId(null)} className="text-gray-400 hover:text-gray-600 cursor-pointer">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+            <div className="overflow-y-auto flex-1">
+              <ChangelogPanel entryId={changelogEntryId} orgId={project.org_id} people={people} />
+            </div>
+          </div>
         </div>
       )}
     </div>
