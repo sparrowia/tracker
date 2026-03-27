@@ -1446,6 +1446,8 @@ function ActionItemsPanel({
   const [addPriority, setAddPriority] = useState<PriorityLevel>("medium");
   const colPickerRef = useRef<HTMLDivElement>(null);
   const [readAtMap, setReadAtMap] = useState<Map<string, string>>(new Map());
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<{ id: string; zone: "above" | "nest" | "below" } | null>(null);
   const supabase = createClient();
 
   // Fetch read timestamps for unread indicators
@@ -1696,6 +1698,85 @@ function ActionItemsPanel({
     });
   }
 
+  function handleDragStart(id: string, e: React.DragEvent) {
+    setDraggedId(id);
+    e.dataTransfer.effectAllowed = "move";
+    if (e.currentTarget instanceof HTMLElement) {
+      e.dataTransfer.setDragImage(e.currentTarget, 0, 0);
+    }
+  }
+
+  function handleDragOver(targetId: string, e: React.DragEvent) {
+    e.preventDefault();
+    if (!draggedId || draggedId === targetId) {
+      setDropTarget(null);
+      return;
+    }
+    const rect = e.currentTarget.getBoundingClientRect();
+    const y = e.clientY - rect.top;
+    const h = rect.height;
+    const pct = y / h;
+    let zone: "above" | "nest" | "below";
+    if (pct < 0.25) zone = "above";
+    else if (pct > 0.75) zone = "below";
+    else zone = "nest";
+    setDropTarget({ id: targetId, zone });
+  }
+
+  function handleDragEnd() {
+    setDraggedId(null);
+    setDropTarget(null);
+  }
+
+  async function handleDrop(targetId: string) {
+    if (!draggedId || draggedId === targetId || !dropTarget) return;
+    const zone = dropTarget.zone;
+    const draggedAction = actions.find((a) => a.id === draggedId);
+    const targetAction = actions.find((a) => a.id === targetId);
+    if (!draggedAction || !targetAction) return;
+
+    let newParentId: string | null = null;
+    let newSortOrder = targetAction.sort_order || 0;
+
+    if (zone === "nest") {
+      // Don't allow nesting under own children
+      const isDescendant = (parentId: string, childId: string): boolean => {
+        const children = actions.filter((a) => a.parent_id === parentId);
+        return children.some((c) => c.id === childId || isDescendant(c.id, childId));
+      };
+      if (isDescendant(draggedId, targetId)) return;
+      newParentId = targetId;
+      // Place at end of children
+      const children = actions.filter((a) => a.parent_id === targetId && a.id !== draggedId);
+      newSortOrder = children.length > 0 ? Math.max(...children.map((c) => c.sort_order || 0)) + 1000 : 1000;
+      setExpandedParents((prev) => new Set([...prev, targetId]));
+    } else {
+      // above/below — sibling of target
+      newParentId = targetAction.parent_id;
+      // Get siblings sorted
+      const siblings = actions
+        .filter((a) => a.parent_id === newParentId && a.id !== draggedId && a.status !== "complete")
+        .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+      const targetIdx = siblings.findIndex((a) => a.id === targetId);
+      if (zone === "above") {
+        const prev = targetIdx > 0 ? (siblings[targetIdx - 1].sort_order || 0) : (targetAction.sort_order || 0) - 1000;
+        newSortOrder = Math.floor((prev + (targetAction.sort_order || 0)) / 2);
+      } else {
+        const next = targetIdx < siblings.length - 1 ? (siblings[targetIdx + 1].sort_order || 0) : (targetAction.sort_order || 0) + 1000;
+        newSortOrder = Math.floor(((targetAction.sort_order || 0) + next) / 2);
+      }
+    }
+
+    // Update DB
+    const { error } = await supabase.from("action_items").update({ parent_id: newParentId, sort_order: newSortOrder }).eq("id", draggedId);
+    if (!error) {
+      setActions((prev) => prev.map((a) => a.id === draggedId ? { ...a, parent_id: newParentId, sort_order: newSortOrder } : a));
+    }
+
+    setDraggedId(null);
+    setDropTarget(null);
+  }
+
   async function handleResolve(id: string) {
     const action = actions.find((a) => a.id === id);
     if (!action) return;
@@ -1919,8 +2000,8 @@ function ActionItemsPanel({
       </div>
       <div>
         {(() => {
-          // Build parent/child ordered list
-          const parentActions = filteredActions.filter((a) => !a.parent_id);
+          // Build parent/child ordered list, sorted by sort_order
+          const parentActions = filteredActions.filter((a) => !a.parent_id).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
           const childMap = new Map<string, ActionRow[]>();
           for (const a of filteredActions) {
             if (a.parent_id) {
@@ -1928,6 +2009,10 @@ function ActionItemsPanel({
               arr.push(a);
               childMap.set(a.parent_id, arr);
             }
+          }
+          // Sort children by sort_order
+          for (const [key, children] of childMap) {
+            childMap.set(key, children.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0)));
           }
           const orderedList: { action: ActionRow; isChild: boolean }[] = [];
           for (const p of parentActions) {
@@ -1948,39 +2033,31 @@ function ActionItemsPanel({
           const isExpanded = expandedId === a.id;
           const badge = statusBadge(a.status);
           const childCount = filteredActions.filter((x) => x.parent_id === a.id).length;
+          const isDragging = draggedId === a.id;
+          const isDropNest = dropTarget?.id === a.id && dropTarget.zone === "nest";
+          const isDropAbove = dropTarget?.id === a.id && dropTarget.zone === "above";
+          const isDropBelow = dropTarget?.id === a.id && dropTarget.zone === "below";
 
           return (
             <Fragment key={a.id}>
               {/* Collapsed row */}
               <div
                 id={`action-${a.id}`}
-                className={`py-2 border-b border-gray-200 last:border-b-0 cursor-pointer ${selectedActionIds.has(a.id) ? "bg-blue-50" : "bg-white hover:bg-gray-50"}`}
-                style={{ paddingLeft: isChild ? "2rem" : "0.75rem", paddingRight: "0.75rem" }}
+                className={`border-b last:border-b-0 cursor-pointer relative overflow-hidden ${isDragging ? "opacity-40 bg-white border-gray-400" : isDropNest ? "bg-blue-50 border-blue-300" : selectedActionIds.has(a.id) ? "bg-blue-50 border-gray-400" : "bg-white hover:bg-gray-50 border-gray-400"}`}
+                style={{ paddingLeft: isChild ? "2rem" : "0.75rem", paddingRight: "0.75rem", paddingTop: "0.5rem", paddingBottom: "0.5rem" }}
                 onClick={() => toggleExpand(a.id)}
+                draggable
+                onDragStart={(e) => handleDragStart(a.id, e)}
+                onDragOver={(e) => handleDragOver(a.id, e)}
+                onDragEnd={handleDragEnd}
+                onDrop={() => handleDrop(a.id)}
+                onDragLeave={() => { if (dropTarget?.id === a.id) setDropTarget(null); }}
               >
+                {/* Drop indicator lines */}
+                {isDropAbove && <div className="absolute top-0 left-0 right-0 h-0.5 bg-blue-500 -translate-y-px z-10" />}
+                {isDropBelow && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500 translate-y-px z-10" />}
                 <div className="flex items-center gap-4 min-w-0">
-                  {/* Child arrow */}
-                  {isChild && <span className="text-gray-300 flex-shrink-0 -ml-2">↳</span>}
-                  {/* Subtask disclosure triangle */}
-                  {!isChild && childCount > 0 ? (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setExpandedParents((prev) => {
-                          const next = new Set(prev);
-                          if (next.has(a.id)) next.delete(a.id); else next.add(a.id);
-                          return next;
-                        });
-                      }}
-                      className="w-[20px] flex items-center justify-center flex-shrink-0 text-gray-400 hover:text-gray-600"
-                      title={expandedParents.has(a.id) ? "Hide subtasks" : "Show subtasks"}
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" className={`transition-transform fill-current ${expandedParents.has(a.id) ? "rotate-90" : ""}`}>
-                        <polygon points="6,4 20,12 6,20" />
-                      </svg>
-                    </button>
-                  ) : !isChild ? <span className="w-[20px] flex-shrink-0" /> : null}
-                  {/* Select hitbox — shift+click for range */}
+                  {/* 1. Select hitbox — shift+click for range */}
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -1993,7 +2070,18 @@ function ActionItemsPanel({
                           setSelectedActionIds((prev) => { const next = new Set(prev); for (let i = start; i <= end; i++) next.add(actionIds[i]); return next; });
                         }
                       } else {
-                        setSelectedActionIds((prev) => { const next = new Set(prev); if (next.has(a.id)) next.delete(a.id); else next.add(a.id); return next; });
+                        const childIds = filteredActions.filter((x) => x.parent_id === a.id).map((x) => x.id);
+                        setSelectedActionIds((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(a.id)) {
+                            next.delete(a.id);
+                            for (const cid of childIds) next.delete(cid);
+                          } else {
+                            next.add(a.id);
+                            for (const cid of childIds) next.add(cid);
+                          }
+                          return next;
+                        });
                       }
                       lastSelectedActionRef.current = a.id;
                     }}
@@ -2002,7 +2090,28 @@ function ActionItemsPanel({
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
                   </button>
-                  {/* Complete button */}
+                  {/* 2. Child arrow */}
+                  {isChild && <span className="text-gray-300 flex-shrink-0 -ml-2">↳</span>}
+                  {/* 3. Subtask disclosure triangle or spacer */}
+                  {!isChild && childCount > 0 ? (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setExpandedParents((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(a.id)) next.delete(a.id); else next.add(a.id);
+                          return next;
+                        });
+                      }}
+                      className="flex items-center gap-1 text-[10px] text-[#000000] hover:text-[#000000] flex-shrink-0 transition-colors w-[20px] justify-center"
+                      title={expandedParents.has(a.id) ? "Hide subtasks" : "Show subtasks"}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="currentColor" stroke="none" className={`transition-transform ${expandedParents.has(a.id) ? "rotate-90" : ""}`}>
+                        <polygon points="6,4 20,12 6,20" />
+                      </svg>
+                    </button>
+                  ) : !isChild ? <span className="w-[20px] flex-shrink-0" /> : null}
+                  {/* 4. Complete button */}
                   <button
                     onClick={(e) => { e.stopPropagation(); handleResolve(a.id); }}
                     className="w-[18px] h-[18px] rounded-full border-2 border-gray-300 hover:border-green-500 hover:bg-green-50 flex items-center justify-center flex-shrink-0 transition-colors group/check"
@@ -2012,27 +2121,22 @@ function ActionItemsPanel({
                       <polyline points="20 6 9 17 4 12" />
                     </svg>
                   </button>
-                  {/* Expand chevron */}
-                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`text-gray-400 transition-transform flex-shrink-0 ${isExpanded ? "rotate-90" : ""}`}>
-                    <polyline points="9 18 15 12 9 6" />
-                  </svg>
-                  {/* Meeting toggle */}
+                  {/* 5. Meeting toggle */}
                   <MeetingToggle active={a.include_in_meeting} onClick={(e) => { e.stopPropagation(); toggleMeeting(a.id); }} />
-                  {/* Unread indicator */}
+                  {/* 6. Unread indicator */}
                   {unreadIndicator(a) === "new" && <span className="text-[9px] font-bold text-white bg-blue-500 rounded px-1 py-0.5 flex-shrink-0">NEW</span>}
                   {unreadIndicator(a) === "updated" && <span className="flex-shrink-0" title="Updated">❗</span>}
-                  {/* Title */}
-                  <span className="text-sm font-semibold text-gray-900 truncate min-w-0">{a.title}</span>
-                  {/* Child count badge */}
+                  {/* 7. Title */}
+                  <span className={`text-sm font-semibold truncate min-w-0 flex-1 ${isChild ? "text-gray-700" : "text-gray-900"}`}>{a.title}</span>
+                  {/* 8. Child count badge */}
                   {childCount > 0 && (
-                    <span className="text-[10px] text-gray-500 bg-gray-200 rounded px-1.5 py-0.5 flex-shrink-0">{childCount}</span>
+                    <span className="text-[10px] text-[#000000] bg-gray-200 rounded px-1.5 py-0.5 flex-shrink-0">{childCount}</span>
                   )}
-                  {/* Spacer */}
-                  <div className="flex-1" />
-                  {/* Metadata — dynamic columns */}
-                  {visibleCols.map((col) => (
-                    <Fragment key={col}>{renderColumnCell(a, col)}</Fragment>
+                  {/* 9. Metadata — dynamic columns */}
+                  {ACTION_COLUMNS.filter((c) => visibleCols.includes(c.key)).map((col) => (
+                    <Fragment key={col.key}>{renderColumnCell(a, col.key)}</Fragment>
                   ))}
+                  {/* 10. Source link */}
                   {intakeSourceMap[a.id] && (
                     <a
                       href={`/intake/${intakeSourceMap[a.id]}/review`}
