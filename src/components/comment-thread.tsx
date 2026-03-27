@@ -74,7 +74,7 @@ function renderBody(body: string) {
 }
 
 export default function CommentThread({ raidEntryId, actionItemId, blockerId, orgId, people, itemTitle, itemType, projectName, projectSlug, ownerId }: CommentThreadProps) {
-  const { role } = useRole();
+  const { role, profileId } = useRole();
   const [comments, setComments] = useState<CommentRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<Person | null>(null);
@@ -162,9 +162,18 @@ export default function CommentThread({ raidEntryId, actionItemId, blockerId, or
 
     // Bump parent item's updated_at so the ❗ indicator shows for other users
     const now = new Date().toISOString();
-    if (raidEntryId) supabase.from("raid_entries").update({ updated_at: now }).eq("id", raidEntryId).then(() => {});
-    if (actionItemId) supabase.from("action_items").update({ updated_at: now }).eq("id", actionItemId).then(() => {});
-    if (blockerId) supabase.from("blockers").update({ updated_at: now }).eq("id", blockerId).then(() => {});
+    if (raidEntryId) {
+      supabase.from("raid_entries").update({ updated_at: now }).eq("id", raidEntryId).then(() => {});
+      supabase.from("activity_log").insert({ org_id: orgId, entity_type: "raid_entry", entity_id: raidEntryId, action: "comment", field_name: "comment", old_value: null, new_value: null, performed_by: profileId }).then(() => {});
+    }
+    if (actionItemId) {
+      supabase.from("action_items").update({ updated_at: now }).eq("id", actionItemId).then(() => {});
+      supabase.from("activity_log").insert({ org_id: orgId, entity_type: "action_item", entity_id: actionItemId, action: "comment", field_name: "comment", old_value: null, new_value: null, performed_by: profileId }).then(() => {});
+    }
+    if (blockerId) {
+      supabase.from("blockers").update({ updated_at: now }).eq("id", blockerId).then(() => {});
+      supabase.from("activity_log").insert({ org_id: orgId, entity_type: "blocker", entity_id: blockerId, action: "comment", field_name: "comment", old_value: null, new_value: null, performed_by: profileId }).then(() => {});
+    }
 
     editorRef.current.clear();
     setFiles([]);

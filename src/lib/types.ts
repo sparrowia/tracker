@@ -198,6 +198,7 @@ export interface RaidEntry {
   reporter_id: string | null;
   vendor_id: string | null;
   decision_date: string | null;
+  due_date: string | null;
   stage: string | null;
   include_in_meeting: boolean;
   parent_id: string | null;

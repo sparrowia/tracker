@@ -39,7 +39,7 @@ const decisionStatusOptions: ItemStatus[] = ["pending", "complete"];
 
 const typePrefix: Record<RaidType, string> = { risk: "R", assumption: "A", issue: "I", decision: "D" };
 
-type RaidColumnKey = "priority" | "status" | "owner" | "reporter" | "vendor" | "stage" | "age" | "first_flagged";
+type RaidColumnKey = "priority" | "status" | "owner" | "reporter" | "vendor" | "due_date" | "age" | "first_flagged";
 
 const RAID_COLUMNS: { key: RaidColumnKey; label: string; width: string }[] = [
   { key: "priority", label: "Priority", width: "w-[68px]" },
@@ -47,7 +47,7 @@ const RAID_COLUMNS: { key: RaidColumnKey; label: string; width: string }[] = [
   { key: "owner", label: "Owner", width: "w-[150px]" },
   { key: "reporter", label: "Reporter", width: "w-[150px]" },
   { key: "vendor", label: "Vendor", width: "w-[100px]" },
-  { key: "stage", label: "Stage", width: "w-[88px]" },
+  { key: "due_date", label: "Due Date", width: "w-[80px]" },
   { key: "age", label: "Age", width: "w-12" },
   { key: "first_flagged", label: "Opened", width: "w-[80px]" },
 ];
@@ -171,6 +171,80 @@ function InlineDate({ value, onSave }: { value: string | null; onSave: (v: strin
   );
 }
 
+const FIELD_LABELS: Record<string, string> = {
+  status: "Status", priority: "Priority", owner_id: "Owner", reporter_id: "Reporter",
+  vendor_id: "Vendor", raid_type: "Type", impact: "Impact", due_date: "Due Date",
+  decision_date: "Decision Date", title: "Title", description: "Description",
+  notes: "Notes", next_steps: "Next Steps", parent_id: "Parent", comment: "Comment",
+  include_in_meeting: "Meeting Toggle", resolved_at: "Resolved",
+};
+
+function ChangelogPanel({ entryId, orgId, people }: { entryId: string; orgId: string; people: Person[] }) {
+  const [logs, setLogs] = useState<{ id: string; action: string; field_name: string | null; old_value: string | null; new_value: string | null; performed_by: string | null; created_at: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+  const supabase = createClient();
+
+  useEffect(() => {
+    supabase
+      .from("activity_log")
+      .select("*")
+      .eq("entity_type", "raid_entry")
+      .eq("entity_id", entryId)
+      .eq("org_id", orgId)
+      .order("created_at", { ascending: false })
+      .limit(50)
+      .then(({ data }) => {
+        if (data) setLogs(data);
+        setLoading(false);
+      });
+  }, [entryId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function personName(profileId: string | null) {
+    if (!profileId) return "System";
+    const person = people.find((p) => p.profile_id === profileId);
+    return person?.full_name || "Unknown";
+  }
+
+  function formatLogTime(date: string) {
+    const d = new Date(date);
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" }) + " " + d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  }
+
+  if (loading) return <div className="px-5 py-3 text-xs text-gray-400">Loading changelog...</div>;
+  if (logs.length === 0) return <div className="px-5 py-3 text-xs text-gray-400">No changes recorded yet.</div>;
+
+  return (
+    <div className="border-t border-gray-200 bg-gray-50/50 px-5 py-3 max-h-[200px] overflow-y-auto">
+      <div className="space-y-1.5">
+        {logs.map((log) => {
+          const fieldLabel = FIELD_LABELS[log.field_name || ""] || log.field_name || log.action;
+          const who = personName(log.performed_by);
+          const when = formatLogTime(log.created_at);
+
+          if (log.action === "comment") {
+            return (
+              <div key={log.id} className="flex items-baseline gap-2 text-xs">
+                <span className="text-gray-400 flex-shrink-0 w-[110px]">{when}</span>
+                <span className="text-gray-600"><span className="font-medium text-gray-700">{who}</span> — Comment Made</span>
+              </div>
+            );
+          }
+
+          return (
+            <div key={log.id} className="flex items-baseline gap-2 text-xs">
+              <span className="text-gray-400 flex-shrink-0 w-[110px]">{when}</span>
+              <span className="text-gray-600">
+                <span className="font-medium text-gray-700">{who}</span> — {fieldLabel} Updated
+                {log.old_value && log.new_value ? <span className="text-gray-400"> ({log.old_value} → {log.new_value})</span> : log.new_value ? <span className="text-gray-400"> (→ {log.new_value})</span> : null}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function RaidLog({ initialEntries, project, people, vendors, onPersonAdded, onVendorAdded, addUndo, onCountChange, intakeSourceMap = {}, onMeetingToggle, onConvertedToAction, onConvertedToBlocker, registerUpdater, registerAdder, searchFilter = "" }: RaidLogProps) {
   const { role, profileId, userPersonId } = useRole();
   const [entries, setEntries] = useState<RaidRow[]>(initialEntries);
@@ -219,6 +293,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
   const [filterNew, setFilterNew] = useState(false);
   const [filterUpdated, setFilterUpdated] = useState(false);
   const [pinnedUnreadIds, setPinnedUnreadIds] = useState<Set<string>>(new Set());
+  const [changelogEntryId, setChangelogEntryId] = useState<string | null>(null);
   const [titleSort, setTitleSort] = useState<"asc" | "desc" | null>(null);
   const [prioritySort, setPrioritySort] = useState<"asc" | "desc" | null>(null);
   const [statusSort, setStatusSort] = useState<"asc" | "desc" | null>(null);
@@ -377,10 +452,8 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
             <span className="text-xs text-gray-600 truncate block">{entry.vendor?.name || "—"}</span>
           </div>
         );
-      case "stage": {
-        const stageLabel = entry.stage === "pre_launch" ? "Pre-Launch" : entry.stage === "post_launch" ? "Post-Launch" : "—";
-        return <span className="text-xs text-gray-600 flex-shrink-0 w-[88px] text-right">{stageLabel}</span>;
-      }
+      case "due_date":
+        return <span className="text-xs text-gray-600 flex-shrink-0 w-[80px] text-right">{entry.due_date ? formatDateShort(entry.due_date) : "—"}</span>;
       case "age":
         return <span className="text-xs text-gray-500 font-medium flex-shrink-0 w-12 text-right">{formatAge(age)}</span>;
       case "first_flagged":
@@ -388,9 +461,36 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
     }
   }
 
+  function logChange(entryId: string, field: string, oldValue: string | null, newValue: string | null) {
+    supabase.from("activity_log").insert({
+      org_id: project.org_id,
+      entity_type: "raid_entry",
+      entity_id: entryId,
+      action: "update",
+      field_name: field,
+      old_value: oldValue || null,
+      new_value: newValue || null,
+      performed_by: profileId,
+    }).then(() => {});
+  }
+
+  function readableValue(field: string, value: string | null | undefined): string | null {
+    if (!value) return null;
+    if (field === "owner_id" || field === "reporter_id") return people.find((p) => p.id === value)?.full_name || value;
+    if (field === "vendor_id") return vendors.find((v) => v.id === value)?.name || value;
+    if (field === "status") return value.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+    if (field === "priority") return value.charAt(0).toUpperCase() + value.slice(1);
+    if (field === "raid_type") return value.charAt(0).toUpperCase() + value.slice(1);
+    return value;
+  }
+
   function saveField(id: string, field: string, value: string) {
     const entry = entries.find((e) => e.id === id);
     if (!entry) return;
+
+    const oldValue = readableValue(field, String((entry as unknown as Record<string, unknown>)[field] ?? ""));
+    const newValue = readableValue(field, value);
+    if (oldValue !== newValue) logChange(id, field, oldValue, newValue);
 
     const dbUpdates: Record<string, unknown> = {};
 
@@ -1299,37 +1399,20 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                             </select>
                           </div>
 
-                          {/* Row: Parent / Stage */}
-                          <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-200">Parent</span>
-                          <div className={`px-3 py-2.5 border-b border-gray-200${entry.raid_type !== "issue" ? " col-span-3" : ""}`}>
-                            <select
-                              value={entry.parent_id || ""}
-                              onChange={(e) => saveField(entry.id, "parent_id", e.target.value)}
-                              className="text-sm rounded border border-transparent hover:border-gray-300 bg-transparent py-0 focus:border-blue-500 focus:outline-none cursor-pointer -ml-0.5 max-w-full"
-                            >
-                              <option value="">None</option>
-                              {entries.filter((e) => e.id !== entry.id && e.raid_type === entry.raid_type && !e.parent_id && !e.resolved_at).map((e) => {
-                                const label = `${e.display_id} — ${e.title}`;
-                                return <option key={e.id} value={e.id}>{label.length > 75 ? label.slice(0, 75) + "…" : label}</option>;
-                              })}
-                            </select>
+                          {/* Row: Due Date / Changelog */}
+                          <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-200">Due Date</span>
+                          <div className="px-3 py-2.5 border-b border-gray-200">
+                            <InlineDate value={entry.due_date} onSave={(v) => saveField(entry.id, "due_date", v)} />
                           </div>
-                          {entry.raid_type === "issue" && (
-                            <>
-                              <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-200">Stage</span>
-                              <div className="px-3 py-2.5 border-b border-gray-200">
-                                <select
-                                  value={entry.stage || ""}
-                                  onChange={(e) => saveField(entry.id, "stage", e.target.value)}
-                                  className="text-sm rounded border border-transparent hover:border-gray-300 bg-transparent py-0 focus:border-blue-500 focus:outline-none cursor-pointer -ml-0.5"
-                                >
-                                  <option value="">None</option>
-                                  <option value="pre_launch">Pre-Launch</option>
-                                  <option value="post_launch">Post-Launch</option>
-                                </select>
-                              </div>
-                            </>
-                          )}
+                          <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-200">Changelog</span>
+                          <div className="px-3 py-2.5 border-b border-gray-200">
+                            <button
+                              onClick={() => setChangelogEntryId(changelogEntryId === entry.id ? null : entry.id)}
+                              className="text-xs text-blue-600 hover:text-blue-800"
+                            >
+                              👀 {changelogEntryId === entry.id ? "Hide" : "View"} changelog
+                            </button>
+                          </div>
 
                           {entry.resolved_at && (
                             <>
@@ -1356,6 +1439,11 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                           ownerId={entry.owner_id}
                         />
                       </div>
+
+                      {/* Changelog */}
+                      {changelogEntryId === entry.id && (
+                        <ChangelogPanel entryId={entry.id} orgId={project.org_id} people={people} />
+                      )}
 
                       {/* Actions bar */}
                       <div className="flex justify-end items-center gap-3 px-5 py-2 border-t border-gray-200">
