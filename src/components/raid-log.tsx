@@ -216,7 +216,8 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
   const [filterPriority, setFilterPriority] = useState<PriorityLevel | "">("");
   const [filterStatus, setFilterStatus] = useState<ItemStatus | "">("");
   const [filterOwner, setFilterOwner] = useState("");
-  const [filterAge, setFilterAge] = useState("");
+  const [filterNew, setFilterNew] = useState(false);
+  const [filterUpdated, setFilterUpdated] = useState(false);
   const [titleSort, setTitleSort] = useState<"asc" | "desc" | null>(null);
   const [prioritySort, setPrioritySort] = useState<"asc" | "desc" | null>(null);
   const [statusSort, setStatusSort] = useState<"asc" | "desc" | null>(null);
@@ -263,7 +264,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
     setReadAtMap((prev) => new Map(prev).set(id, now));
   }
 
-  const hasActiveFilters = filterPriority || filterStatus || filterOwner || filterAge || searchFilter;
+  const hasActiveFilters = filterPriority || filterStatus || filterOwner || filterNew || filterUpdated || searchFilter;
 
   function applyFilters(items: RaidRow[]): RaidRow[] {
     let filtered = items;
@@ -276,17 +277,13 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
         filtered = filtered.filter((e) => e.owner_id === filterOwner);
       }
     }
-    if (filterAge) {
+    if (filterNew || filterUpdated) {
       filtered = filtered.filter((e) => {
-        const age = ageFromDate(e.first_flagged_at);
-        switch (filterAge) {
-          case "today": return age === 0;
-          case "1-3": return age >= 1 && age <= 3;
-          case "4-7": return age >= 4 && age <= 7;
-          case "8-14": return age >= 8 && age <= 14;
-          case "15+": return age >= 15;
-          default: return true;
-        }
+        const indicator = raidUnreadIndicator(e);
+        if (filterNew && filterUpdated) return indicator === "new" || indicator === "updated";
+        if (filterNew) return indicator === "new";
+        if (filterUpdated) return indicator === "updated";
+        return true;
       });
     }
     if (searchFilter) {
@@ -845,21 +842,17 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                   <option key={id} value={id}>{name}</option>
                 ))}
               </select>
-              <select
-                value={filterAge}
-                onChange={(e) => setFilterAge(e.target.value)}
-                className={`rounded border px-1.5 py-0.5 text-xs focus:border-blue-500 focus:outline-none ${filterAge ? "border-blue-400 bg-blue-50 text-blue-700" : "border-gray-300 text-gray-600"}`}
-              >
-                <option value="">Age</option>
-                <option value="today">Today</option>
-                <option value="1-3">1–3 days</option>
-                <option value="4-7">4–7 days</option>
-                <option value="8-14">1–2 weeks</option>
-                <option value="15+">2+ weeks</option>
-              </select>
+              <label className={`flex items-center gap-1 rounded border px-1.5 py-0.5 text-xs cursor-pointer select-none ${filterNew ? "border-blue-400 bg-blue-50 text-blue-700" : "border-gray-300 text-gray-600"}`}>
+                <input type="checkbox" checked={filterNew} onChange={(e) => setFilterNew(e.target.checked)} className="accent-blue-500 w-3 h-3" />
+                New
+              </label>
+              <label className={`flex items-center gap-1 rounded border px-1.5 py-0.5 text-xs cursor-pointer select-none ${filterUpdated ? "border-blue-400 bg-blue-50 text-blue-700" : "border-gray-300 text-gray-600"}`}>
+                <input type="checkbox" checked={filterUpdated} onChange={(e) => setFilterUpdated(e.target.checked)} className="accent-blue-500 w-3 h-3" />
+                Updated
+              </label>
               {hasActiveFilters && (
                 <button
-                  onClick={() => { setFilterPriority(""); setFilterStatus(""); setFilterOwner(""); setFilterAge(""); }}
+                  onClick={() => { setFilterPriority(""); setFilterStatus(""); setFilterOwner(""); setFilterNew(false); setFilterUpdated(false); }}
                   className="text-[10px] text-gray-400 hover:text-red-500 ml-1"
                 >
                   Clear
