@@ -186,8 +186,8 @@ export default function CommentThread({ raidEntryId, actionItemId, blockerId, or
     queueNotifications(comment.id, storedBody, mentionIds);
 
     // Bump parent item's updated_at so the ❗ indicator shows for other users
-    // Also bump own read_at so our own changes don't trigger ❗ for us
-    const now = new Date().toISOString();
+    // Also bump own read_at (with buffer) so our own changes don't trigger ❗ for us
+    const now = new Date(Date.now() + 2000).toISOString();
     if (raidEntryId) {
       supabase.from("raid_entries").update({ updated_at: now }).eq("id", raidEntryId).then(() => {});
       supabase.from("activity_log").insert({ org_id: orgId, entity_type: "raid_entry", entity_id: raidEntryId, action: "comment", field_name: "comment", old_value: null, new_value: null, performed_by: profileId }).then(() => {});

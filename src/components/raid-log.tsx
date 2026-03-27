@@ -550,13 +550,16 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
       }
     }
 
+    // Use a timestamp slightly in the future for read_at to guarantee it's >= any DB-set updated_at
+    const now = new Date(Date.now() + 2000).toISOString();
+    dbUpdates.updated_at = now;
+
     supabase.from("raid_entries").update(dbUpdates).eq("id", id).then(({ error }) => {
       if (error) console.error("Save failed:", error);
     });
 
     // Bump own read_at so our changes don't trigger ❗ for us on refresh
     if (profileId) {
-      const now = new Date().toISOString();
       supabase.from("item_reads").upsert({ profile_id: profileId, entity_type: "raid_entry", entity_id: id, read_at: now }, { onConflict: "profile_id,entity_type,entity_id" }).then(() => {});
       setReadAtMap((prev) => new Map(prev).set(id, now));
     }
