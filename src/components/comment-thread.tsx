@@ -123,6 +123,7 @@ export default function CommentThread({ raidEntryId, actionItemId, blockerId, or
 
     const storedBody = editorRef.current.getContent();
     const mentionIds = editorRef.current.getMentionIds();
+    const pendingFiles = [...files]; // Capture before any async/state changes
 
     const insert: Record<string, unknown> = {
       org_id: orgId,
@@ -146,8 +147,8 @@ export default function CommentThread({ raidEntryId, actionItemId, blockerId, or
     }
 
     let attachments: CommentAttachment[] = [];
-    if (files.length > 0) {
-      attachments = await uploadAttachments(comment.id);
+    if (pendingFiles.length > 0) {
+      attachments = await uploadAttachments(comment.id, pendingFiles);
     }
 
     const newComment: CommentRow = {
@@ -216,16 +217,16 @@ export default function CommentThread({ raidEntryId, actionItemId, blockerId, or
     }
   }
 
-  async function uploadAttachments(commentId: string): Promise<CommentAttachment[]> {
+  async function uploadAttachments(commentId: string, filesToUpload: File[]): Promise<CommentAttachment[]> {
     const uploaded: CommentAttachment[] = [];
-    for (const file of files) {
+    for (const file of filesToUpload) {
       const path = `${orgId}/${commentId}/${file.name}`;
       const { error: uploadError } = await supabase.storage
         .from("comment-attachments")
         .upload(path, file);
       if (uploadError) { console.error("Upload failed:", uploadError); continue; }
       const { data: urlData } = supabase.storage.from("comment-attachments").getPublicUrl(path);
-      const { data: attachment } = await supabase
+      const { data: attachment, error: insertError } = await supabase
         .from("comment_attachments")
         .insert({
           org_id: orgId,
@@ -237,6 +238,7 @@ export default function CommentThread({ raidEntryId, actionItemId, blockerId, or
         })
         .select("*")
         .single();
+      if (insertError) { console.error("Attachment record insert failed:", insertError); continue; }
       if (attachment) uploaded.push(attachment as CommentAttachment);
     }
     return uploaded;
