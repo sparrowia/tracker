@@ -218,6 +218,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
   const [filterOwner, setFilterOwner] = useState("");
   const [filterNew, setFilterNew] = useState(false);
   const [filterUpdated, setFilterUpdated] = useState(false);
+  const [pinnedUnreadIds, setPinnedUnreadIds] = useState<Set<string>>(new Set());
   const [titleSort, setTitleSort] = useState<"asc" | "desc" | null>(null);
   const [prioritySort, setPrioritySort] = useState<"asc" | "desc" | null>(null);
   const [statusSort, setStatusSort] = useState<"asc" | "desc" | null>(null);
@@ -278,13 +279,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
       }
     }
     if (filterNew || filterUpdated) {
-      filtered = filtered.filter((e) => {
-        const indicator = raidUnreadIndicator(e);
-        if (filterNew && filterUpdated) return indicator === "new" || indicator === "updated";
-        if (filterNew) return indicator === "new";
-        if (filterUpdated) return indicator === "updated";
-        return true;
-      });
+      filtered = filtered.filter((e) => pinnedUnreadIds.has(e.id));
     }
     if (searchFilter) {
       const lower = searchFilter.toLowerCase();
@@ -295,6 +290,21 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
     }
     return filtered;
   }
+
+  // Snapshot matching item IDs when New/Updated filters are toggled on so items don't vanish when marked as read
+  useEffect(() => {
+    if (!filterNew && !filterUpdated) {
+      setPinnedUnreadIds(new Set());
+      return;
+    }
+    const ids = new Set<string>();
+    for (const e of entries) {
+      const indicator = raidUnreadIndicator(e);
+      if (filterNew && indicator === "new") ids.add(e.id);
+      if (filterUpdated && indicator === "updated") ids.add(e.id);
+    }
+    setPinnedUnreadIds(ids);
+  }, [filterNew, filterUpdated]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
