@@ -1724,6 +1724,17 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
               <option key={p.id} value={p.id}>{p.full_name}</option>
             ))}
           </select>
+          <input
+            type="date"
+            defaultValue=""
+            onChange={(e) => {
+              if (!e.target.value) return;
+              const val = e.target.value;
+              for (const id of selectedIds) { saveField(id, "due_date", val); }
+            }}
+            className="bg-gray-700 text-white text-xs rounded border border-gray-600 px-2 py-1 focus:outline-none focus:border-blue-400"
+            title="Set due date"
+          />
           <div className="w-px h-5 bg-gray-600" />
           {/* Nest as children of... */}
           <select
