@@ -80,6 +80,7 @@ export default function CommentThread({ raidEntryId, actionItemId, blockerId, or
   const [currentUser, setCurrentUser] = useState<Person | null>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [posting, setPosting] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editorRef = useRef<CommentEditorRef>(null);
   const supabase = createClient();
@@ -120,6 +121,7 @@ export default function CommentThread({ raidEntryId, actionItemId, blockerId, or
   async function handlePost() {
     if (!editorRef.current || editorRef.current.isEmpty() || posting) return;
     setPosting(true);
+    setUploadError(null);
 
     const storedBody = editorRef.current.getContent();
     const mentionIds = editorRef.current.getMentionIds();
@@ -146,17 +148,38 @@ export default function CommentThread({ raidEntryId, actionItemId, blockerId, or
       return;
     }
 
-    let attachments: CommentAttachment[] = [];
+    // Upload attachments if any
+    const errors: string[] = [];
     if (pendingFiles.length > 0) {
-      attachments = await uploadAttachments(comment.id, pendingFiles);
+      for (const file of pendingFiles) {
+        const path = `${orgId}/${comment.id}/${file.name}`;
+        const { error: uploadErr } = await supabase.storage
+          .from("comment-attachments")
+          .upload(path, file);
+        if (uploadErr) {
+          errors.push(`Upload "${file.name}": ${uploadErr.message}`);
+          continue;
+        }
+        const { data: urlData } = supabase.storage.from("comment-attachments").getPublicUrl(path);
+        const { error: insertErr } = await supabase
+          .from("comment_attachments")
+          .insert({
+            org_id: orgId,
+            comment_id: comment.id,
+            file_name: file.name,
+            file_url: urlData.publicUrl,
+            file_size: file.size,
+            mime_type: file.type || null,
+          });
+        if (insertErr) {
+          errors.push(`Save "${file.name}": ${insertErr.message}`);
+        }
+      }
     }
 
-    const newComment: CommentRow = {
-      ...(comment as Comment & { author: Person | null }),
-      attachments,
-    };
-
-    setComments((prev) => [newComment, ...prev]);
+    if (errors.length > 0) {
+      setUploadError(errors.join("; "));
+    }
 
     // Queue notifications
     queueNotifications(comment.id, storedBody, mentionIds);
@@ -179,6 +202,9 @@ export default function CommentThread({ raidEntryId, actionItemId, blockerId, or
     editorRef.current.clear();
     setFiles([]);
     setPosting(false);
+
+    // Refetch comments from DB to ensure attachments show correctly
+    fetchComments();
   }
 
   async function queueNotifications(commentId: string, commentBody: string, mentionIds: string[]) {
@@ -217,32 +243,6 @@ export default function CommentThread({ raidEntryId, actionItemId, blockerId, or
     }
   }
 
-  async function uploadAttachments(commentId: string, filesToUpload: File[]): Promise<CommentAttachment[]> {
-    const uploaded: CommentAttachment[] = [];
-    for (const file of filesToUpload) {
-      const path = `${orgId}/${commentId}/${file.name}`;
-      const { error: uploadError } = await supabase.storage
-        .from("comment-attachments")
-        .upload(path, file);
-      if (uploadError) { console.error("Upload failed:", uploadError); continue; }
-      const { data: urlData } = supabase.storage.from("comment-attachments").getPublicUrl(path);
-      const { data: attachment, error: insertError } = await supabase
-        .from("comment_attachments")
-        .insert({
-          org_id: orgId,
-          comment_id: commentId,
-          file_name: file.name,
-          file_url: urlData.publicUrl,
-          file_size: file.size,
-          mime_type: file.type || null,
-        })
-        .select("*")
-        .single();
-      if (insertError) { console.error("Attachment record insert failed:", insertError); continue; }
-      if (attachment) uploaded.push(attachment as CommentAttachment);
-    }
-    return uploaded;
-  }
 
   async function handleDelete(commentId: string) {
     const comment = comments.find((c) => c.id === commentId);
@@ -302,6 +302,12 @@ export default function CommentThread({ raidEntryId, actionItemId, blockerId, or
                 </button>
               </span>
             ))}
+          </div>
+        )}
+
+        {uploadError && (
+          <div className="ml-9 mb-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded px-2 py-1.5">
+            Attachment failed: {uploadError}
           </div>
         )}
 
