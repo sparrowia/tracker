@@ -129,7 +129,7 @@ export default function ReminderButton({ entityType, entityId, entityTitle, orgI
   }
 
   return (
-    <div className="relative" ref={popoverRef}>
+    <div className="relative inline-flex items-center" ref={popoverRef}>
       <button
         onClick={(e) => {
           e.stopPropagation();
