@@ -152,7 +152,8 @@ export default function CommentThread({ raidEntryId, actionItemId, blockerId, or
     const errors: string[] = [];
     if (pendingFiles.length > 0) {
       for (const file of pendingFiles) {
-        const path = `${orgId}/${comment.id}/${file.name}`;
+        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+        const path = `${orgId}/${comment.id}/${safeName}`;
         const { error: uploadErr } = await supabase.storage
           .from("comment-attachments")
           .upload(path, file);
