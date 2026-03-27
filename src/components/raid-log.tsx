@@ -452,8 +452,30 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
             <span className="text-xs text-gray-600 truncate block">{entry.vendor?.name || "—"}</span>
           </div>
         );
-      case "due_date":
-        return <span className="text-xs text-gray-600 flex-shrink-0 w-[80px] text-right">{entry.due_date ? formatDateShort(entry.due_date) : "—"}</span>;
+      case "due_date": {
+        if (!entry.due_date) return <span className="text-xs text-gray-600 flex-shrink-0 w-[80px] text-right">—</span>;
+        const [dy, dm, dd] = entry.due_date.split("-").map(Number);
+        const dueDate = new Date(dy, dm - 1, dd);
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
+        const diffDays = Math.floor((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+        let dueLabel: string;
+        let dueClass = "text-xs flex-shrink-0 w-[80px] text-right ";
+        if (diffDays < 0) {
+          dueLabel = `${String(dm).padStart(2, "0")}/${String(dd).padStart(2, "0")}/${String(dy).slice(2)}`;
+          dueClass += "text-red-600 italic";
+        } else if (diffDays === 0) {
+          dueLabel = "today";
+          dueClass += "text-red-600 font-medium";
+        } else if (diffDays === 1) {
+          dueLabel = "tomorrow";
+          dueClass += "text-gray-600";
+        } else {
+          dueLabel = formatDateShort(entry.due_date);
+          dueClass += "text-gray-600";
+        }
+        return <span className={dueClass}>{dueLabel}</span>;
+      }
       case "age":
         return <span className="text-xs text-gray-500 font-medium flex-shrink-0 w-12 text-right">{formatAge(age)}</span>;
       case "first_flagged":
