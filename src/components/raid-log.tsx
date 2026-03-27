@@ -1234,8 +1234,8 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                         <span className="text-[10px] text-[#000000] bg-gray-200 rounded px-1.5 py-0.5 flex-shrink-0">{childCount}</span>
                       )}
                       {/* Metadata — dynamic columns */}
-                      {visibleCols.map((col) => (
-                        <Fragment key={col}>{renderColumnCell(entry, col)}</Fragment>
+                      {RAID_COLUMNS.filter((c) => visibleCols.includes(c.key)).map((col) => (
+                        <Fragment key={col.key}>{renderColumnCell(entry, col.key)}</Fragment>
                       ))}
                       {intakeSourceMap[entry.id] && (
                         <a
