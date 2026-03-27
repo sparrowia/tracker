@@ -106,7 +106,7 @@ function InlineText({ value, onSave, placeholder, multiline }: { value: string; 
     }
     return (
       <p
-        className="text-gray-900 mt-0.5 hover:bg-gray-100 rounded cursor-pointer px-1 -mx-1 py-0.5"
+        className="text-sm text-gray-900 mt-0.5 hover:bg-gray-100 rounded cursor-pointer px-1 -mx-1 py-0.5"
         onClick={(e) => { e.stopPropagation(); setEditing(true); }}
       >
         {value || <span className="text-gray-400">{placeholder || "—"}</span>}
@@ -149,7 +149,7 @@ function InlineDate({ value, onSave }: { value: string | null; onSave: (v: strin
   if (!editing) {
     return (
       <p
-        className="text-gray-900 mt-0.5 hover:bg-gray-100 rounded cursor-pointer px-1 -mx-1 py-0.5"
+        className="text-sm text-gray-900 mt-0.5 hover:bg-gray-100 rounded cursor-pointer px-1 -mx-1 py-0.5"
         onClick={(e) => { e.stopPropagation(); setEditing(true); }}
       >
         {value ? formatDateShort(value) : <span className="text-gray-400">—</span>}
