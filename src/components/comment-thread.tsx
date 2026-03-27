@@ -186,18 +186,22 @@ export default function CommentThread({ raidEntryId, actionItemId, blockerId, or
     queueNotifications(comment.id, storedBody, mentionIds);
 
     // Bump parent item's updated_at so the ❗ indicator shows for other users
+    // Also bump own read_at so our own changes don't trigger ❗ for us
     const now = new Date().toISOString();
     if (raidEntryId) {
       supabase.from("raid_entries").update({ updated_at: now }).eq("id", raidEntryId).then(() => {});
       supabase.from("activity_log").insert({ org_id: orgId, entity_type: "raid_entry", entity_id: raidEntryId, action: "comment", field_name: "comment", old_value: null, new_value: null, performed_by: profileId }).then(() => {});
+      if (profileId) supabase.from("item_reads").upsert({ profile_id: profileId, entity_type: "raid_entry", entity_id: raidEntryId, read_at: now }, { onConflict: "profile_id,entity_type,entity_id" }).then(() => {});
     }
     if (actionItemId) {
       supabase.from("action_items").update({ updated_at: now }).eq("id", actionItemId).then(() => {});
       supabase.from("activity_log").insert({ org_id: orgId, entity_type: "action_item", entity_id: actionItemId, action: "comment", field_name: "comment", old_value: null, new_value: null, performed_by: profileId }).then(() => {});
+      if (profileId) supabase.from("item_reads").upsert({ profile_id: profileId, entity_type: "action_item", entity_id: actionItemId, read_at: now }, { onConflict: "profile_id,entity_type,entity_id" }).then(() => {});
     }
     if (blockerId) {
       supabase.from("blockers").update({ updated_at: now }).eq("id", blockerId).then(() => {});
       supabase.from("activity_log").insert({ org_id: orgId, entity_type: "blocker", entity_id: blockerId, action: "comment", field_name: "comment", old_value: null, new_value: null, performed_by: profileId }).then(() => {});
+      if (profileId) supabase.from("item_reads").upsert({ profile_id: profileId, entity_type: "blocker", entity_id: blockerId, read_at: now }, { onConflict: "profile_id,entity_type,entity_id" }).then(() => {});
     }
 
     editorRef.current.clear();
