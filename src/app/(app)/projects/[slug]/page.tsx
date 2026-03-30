@@ -33,6 +33,7 @@ export default async function ProjectDetailPage({
     { data: allPeople },
     { data: initiativeData },
     { data: intakeData },
+    { data: projectVendorLinks },
   ] = await Promise.all([
     supabase
       .from("action_item_ages")
@@ -72,6 +73,10 @@ export default async function ProjectDetailPage({
       .select("*")
       .eq("project_id", p.id)
       .order("created_at", { ascending: false }),
+    supabase
+      .from("project_vendors")
+      .select("vendor_id")
+      .eq("project_id", p.id),
   ]);
 
   const initiative = initiativeData as Initiative | null;
@@ -80,6 +85,8 @@ export default async function ProjectDetailPage({
   const typedRaid = (raidEntries || []) as (RaidEntry & { owner: Person | null; reporter: Person | null; vendor: Vendor | null })[];
   const typedBlockers = (blockers || []) as (Blocker & { owner: Person | null; vendor: Vendor | null })[];
   const typedVendors = (vendors || []) as Vendor[];
+  const projectVendorIds = new Set((projectVendorLinks || []).map((pv: { vendor_id: string }) => pv.vendor_id));
+  const projectVendors = typedVendors.filter((v) => projectVendorIds.has(v.id));
   const typedPeople = (allPeople || []) as Person[];
   const typedIntakes = (intakeData || []) as Intake[];
 
@@ -109,7 +116,7 @@ export default async function ProjectDetailPage({
       )}
 
       {/* Header */}
-      <ProjectHeader project={p} vendors={typedVendors} />
+      <ProjectHeader project={p} vendors={projectVendors} />
 
       {/* Tabbed content: Agenda, Blockers, RAID, Action Items */}
       <ProjectTabs
