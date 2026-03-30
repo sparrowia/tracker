@@ -65,7 +65,7 @@ const priorityLabels: Record<PriorityLevel, string> = {
 const typeLabels: Record<string, string> = {
   blocker: "Blocker",
   action_item: "Action Item",
-  agenda_item: "Agenda",
+  agenda_item: "Discussion",
   raid_risk: "Risk",
   raid_issue: "Issue",
   raid_action: "RAID Action",
