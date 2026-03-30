@@ -2953,7 +2953,8 @@ function IntakePanel({
 
 const DOC_TEMPLATE_SECTIONS = [
   { key: "key_dates", title: "Key Dates" },
-  { key: "project_details", title: "Project Details & Key Resources" },
+  { key: "key_resources", title: "Key Resources" },
+  { key: "project_details", title: "Project Details" },
   { key: "core_audiences", title: "Core Audiences" },
   { key: "value_props", title: "Value Props" },
   { key: "marketing", title: "Marketing" },
