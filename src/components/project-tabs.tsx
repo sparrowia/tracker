@@ -14,6 +14,10 @@ import VendorPicker from "@/components/vendor-picker";
 import { useRole } from "@/components/role-context";
 import { canCreate, canDelete, canEditItem } from "@/lib/permissions";
 import ReminderButton from "@/components/reminder-button";
+import dynamic from "next/dynamic";
+import type { DocsEditorHandle } from "@/components/docs-editor";
+
+const DocsEditorLazy = dynamic(() => import("@/components/docs-editor").then((m) => ({ default: m.DocsEditor })), { ssr: false });
 
 type Tab = "actions" | "blockers" | "raid" | "agenda" | "intake" | "docs";
 
@@ -2981,6 +2985,7 @@ function DocsPanel({ projectId, projectCreatedBy }: { projectId: string; project
   const [editing, setEditing] = useState(false);
   const [editContent, setEditContent] = useState("");
   const [saving, setSaving] = useState(false);
+  const editorRef = useRef<DocsEditorHandle>(null);
 
   // Ask feature state
   const [question, setQuestion] = useState("");
@@ -3071,12 +3076,13 @@ function DocsPanel({ projectId, projectCreatedBy }: { projectId: string; project
   async function saveEdit() {
     if (!current || saving) return;
     setSaving(true);
+    const md = editorRef.current?.getMarkdown() ?? editContent;
     const { error: err } = await supabase
       .from("project_documents")
-      .update({ content: editContent, updated_at: new Date().toISOString() })
+      .update({ content: md, updated_at: new Date().toISOString() })
       .eq("id", current.id);
     if (!err) {
-      setSections((prev) => prev.map((s) => s.id === current.id ? { ...s, content: editContent } : s));
+      setSections((prev) => prev.map((s) => s.id === current.id ? { ...s, content: md } : s));
       setEditing(false);
       setEditContent("");
     }
@@ -3239,12 +3245,7 @@ function DocsPanel({ projectId, projectCreatedBy }: { projectId: string; project
                         )}
                       </div>
                       {editing ? (
-                        <textarea
-                          value={editContent}
-                          onChange={(e) => setEditContent(e.target.value)}
-                          className="w-full flex-1 min-h-[350px] text-sm font-mono text-gray-700 border border-gray-300 rounded p-3 focus:border-blue-500 focus:outline-none resize-y"
-                          placeholder="Markdown content..."
-                        />
+                        <DocsEditorLazy ref={editorRef} markdown={dbSection.content} />
                       ) : (
                         <div className="prose prose-sm max-w-none prose-headings:text-gray-900 prose-p:text-gray-700 prose-li:text-gray-700 prose-strong:text-gray-900">
                           <MarkdownRenderer content={dbSection.content} />
@@ -3369,41 +3370,33 @@ function DocsPanel({ projectId, projectCreatedBy }: { projectId: string; project
                   )}
                 </div>
               ) : current ? (
-                <>
-                  {/* Edit toolbar */}
-                  {canEditDocs && (
-                    <div className="flex items-center justify-end gap-2 px-6 pt-3 pb-0">
-                      {editing ? (
-                        <>
-                          <button onClick={cancelEditing} className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1 rounded transition-colors">Cancel</button>
-                          <button onClick={saveEdit} disabled={saving} className="text-xs bg-blue-600 hover:bg-blue-500 disabled:bg-gray-400 text-white px-3 py-1 rounded transition-colors font-medium">{saving ? "Saving..." : "Save"}</button>
-                        </>
-                      ) : (
-                        <button onClick={startEditing} className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1 transition-colors">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                          Edit
-                        </button>
-                      )}
-                    </div>
-                  )}
-                  {/* Content */}
-                  {editing ? (
-                    <div className="flex-1 px-6 py-3">
-                      <textarea
-                        value={editContent}
-                        onChange={(e) => setEditContent(e.target.value)}
-                        className="w-full h-full min-h-[350px] text-sm font-mono text-gray-700 border border-gray-300 rounded p-3 focus:border-blue-500 focus:outline-none resize-y"
-                        placeholder="Markdown content..."
-                      />
-                    </div>
-                  ) : (
-                    <div className="flex-1 overflow-auto px-6 py-4">
-                      <div className="prose prose-sm max-w-none prose-headings:text-gray-900 prose-p:text-gray-700 prose-li:text-gray-700 prose-strong:text-gray-900">
-                        <MarkdownRenderer content={current.content} />
+                <div className="flex-1 flex flex-col overflow-auto px-6 py-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-semibold text-gray-700">{current.section_title}</h3>
+                    {canEditDocs && (
+                      <div className="flex items-center gap-2">
+                        {editing ? (
+                          <>
+                            <button onClick={cancelEditing} className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1 rounded transition-colors">Cancel</button>
+                            <button onClick={saveEdit} disabled={saving} className="text-xs bg-blue-600 hover:bg-blue-500 disabled:bg-gray-400 text-white px-3 py-1 rounded transition-colors font-medium">{saving ? "Saving..." : "Save"}</button>
+                          </>
+                        ) : (
+                          <button onClick={startEditing} className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1 transition-colors">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                            Edit
+                          </button>
+                        )}
                       </div>
+                    )}
+                  </div>
+                  {editing ? (
+                    <DocsEditorLazy ref={editorRef} markdown={current.content} />
+                  ) : (
+                    <div className="prose prose-sm max-w-none prose-headings:text-gray-900 prose-p:text-gray-700 prose-li:text-gray-700 prose-strong:text-gray-900">
+                      <MarkdownRenderer content={current.content} />
                     </div>
                   )}
-                </>
+                </div>
               ) : (
                 <div className="flex items-center justify-center text-gray-400 text-sm h-full">Select a section from the index</div>
               )}
