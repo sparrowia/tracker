@@ -389,7 +389,13 @@ export const DocsEditor = forwardRef<DocsEditorHandle, DocsEditorProps>(
           )}
         </div>
         {/* Editor */}
-        <div className="p-4">
+        <div className="docs-editor-content p-4">
+          <style>{`
+            .docs-editor-content table { border-collapse: collapse; width: 100%; margin: 0.75rem 0; }
+            .docs-editor-content th, .docs-editor-content td { border: 1px solid #d1d5db; padding: 0.25rem 0.5rem; font-size: 0.875rem; min-width: 80px; }
+            .docs-editor-content th { background: #f9fafb; font-weight: 500; font-size: 0.75rem; color: #6b7280; text-align: left; }
+            .docs-editor-content .selectedCell { background: #dbeafe; }
+          `}</style>
           <EditorContent editor={editor} />
         </div>
       </div>
