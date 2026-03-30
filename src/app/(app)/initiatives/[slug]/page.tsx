@@ -79,6 +79,20 @@ export default function InitiativeDetailPage() {
     setPeople((prev) => [...prev, person]);
   }, []);
 
+  const refetchProjects = useCallback(async () => {
+    if (!initiative) return;
+    const { data: projs } = await supabase.from("projects").select("*").eq("initiative_id", initiative.id).order("name");
+    const allProjects = (projs || []) as Project[];
+    if (!isAdmin && userPersonId && profileId) {
+      const { data: ids } = await supabase.rpc("user_visible_project_ids", { p_person_id: userPersonId, p_profile_id: profileId });
+      const visibleIds = new Set((ids || []).map(String));
+      setProjects(allProjects.filter((p) => visibleIds.has(p.id)));
+    } else {
+      setProjects(allProjects);
+    }
+    window.dispatchEvent(new Event("sidebar:refresh"));
+  }, [initiative, isAdmin, userPersonId, profileId]);
+
   if (loading) {
     return (
       <div className="max-w-5xl mx-auto space-y-8 animate-pulse">
@@ -314,7 +328,7 @@ export default function InitiativeDetailPage() {
       <section>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-gray-900">Projects</h2>
-          {canEdit && <AddProjectButton initiativeId={initiative.id} />}
+          {canEdit && <AddProjectButton initiativeId={initiative.id} onSaved={refetchProjects} />}
         </div>
 
         {projects.length === 0 ? (
