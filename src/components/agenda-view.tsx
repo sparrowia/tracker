@@ -352,7 +352,12 @@ export function AgendaView({
         dbUpdates.resolved_at = null;
       }
     }
-    supabase.from(table).update(dbUpdates).eq("id", item.entity_id).then(() => {});
+    supabase.from(table).update(dbUpdates).eq("id", item.entity_id).select("updated_at").single().then(({ data }) => {
+      if (data && profileId && item.entity_type !== "agenda_item") {
+        const entityType = item.entity_type.startsWith("raid_") ? "raid_entry" : item.entity_type;
+        supabase.from("item_reads").upsert({ profile_id: profileId, entity_type: entityType, entity_id: item.entity_id, read_at: data.updated_at }, { onConflict: "profile_id,entity_type,entity_id" }).then(() => {});
+      }
+    });
     setItems((prev) => prev.map((i) => {
       if (i.entity_id !== item.entity_id) return i;
       if (field === "title") return { ...i, title: value };
@@ -548,7 +553,12 @@ export function AgendaView({
       setSavingNotes(false);
 
       if (Object.keys(dbUpdates).length > 0) {
-        supabase.from(table).update(dbUpdates).eq("id", item.entity_id).then(() => {});
+        supabase.from(table).update(dbUpdates).eq("id", item.entity_id).select("updated_at").single().then(({ data }) => {
+          if (data && profileId && item.entity_type !== "agenda_item") {
+            const entityType = item.entity_type.startsWith("raid_") ? "raid_entry" : item.entity_type;
+            supabase.from("item_reads").upsert({ profile_id: profileId, entity_type: entityType, entity_id: item.entity_id, read_at: data.updated_at }, { onConflict: "profile_id,entity_type,entity_id" }).then(() => {});
+          }
+        });
       }
 
       // Notify parent of field changes for cross-tab sync
