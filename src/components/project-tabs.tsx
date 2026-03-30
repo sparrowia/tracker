@@ -1397,6 +1397,7 @@ function ActionItemsPanel({
   const [actions, setActions] = useState<ActionRow[]>(initialActions);
   const [selectedActionIds, setSelectedActionIds] = useState<Set<string>>(new Set());
   const lastSelectedActionRef = useRef<string | null>(null);
+  const [changelogItemId, setChangelogItemId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!registerAdder) return;
@@ -2281,7 +2282,7 @@ function ActionItemsPanel({
 
                       {/* Row: Stage */}
                       <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-100">Stage</span>
-                      <div className="px-3 py-2.5 border-b border-gray-100 col-span-3">
+                      <div className="px-3 py-2.5 border-b border-gray-100 border-r border-gray-100">
                         <select
                           value={a.stage || ""}
                           onChange={(e) => saveField(a.id, "stage", e.target.value)}
@@ -2291,6 +2292,17 @@ function ActionItemsPanel({
                           <option value="pre_launch">Pre-Launch</option>
                           <option value="post_launch">Post-Launch</option>
                         </select>
+                      </div>
+
+                      {/* Row: Changelog */}
+                      <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-100">Changelog</span>
+                      <div className="px-3 py-2.5 border-b border-gray-100">
+                        <button
+                          onClick={() => setChangelogItemId(a.id)}
+                          className="text-xs text-blue-600 hover:text-blue-800 cursor-pointer"
+                        >
+                          View changelog
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -2427,6 +2439,100 @@ function ActionItemsPanel({
           <button onClick={() => setSelectedActionIds(new Set())} className="text-gray-400 hover:text-white transition-colors text-xs">Clear</button>
         </div>
       )}
+
+      {/* Changelog Modal */}
+      {changelogItemId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setChangelogItemId(null)}>
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-lg mx-4 max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-200">
+              <h3 className="text-sm font-semibold text-gray-800">Changelog</h3>
+              <button onClick={() => setChangelogItemId(null)} className="text-gray-400 hover:text-gray-600 cursor-pointer">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+            <div className="overflow-y-auto flex-1">
+              <ActionChangelogPanel itemId={changelogItemId} orgId={orgId} people={people} />
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Action Item Changelog ─── */
+
+const ACTION_FIELD_LABELS: Record<string, string> = {
+  status: "Status", priority: "Priority", owner_id: "Owner", vendor_id: "Vendor",
+  title: "Title", description: "Description", notes: "Notes", next_steps: "Next Steps",
+  due_date: "Due Date", stage: "Stage", parent_id: "Parent", comment: "Comment",
+  include_in_meeting: "Meeting Toggle", resolved_at: "Resolved",
+};
+
+function ActionChangelogPanel({ itemId, orgId, people }: { itemId: string; orgId: string; people: Person[] }) {
+  const [logs, setLogs] = useState<{ id: string; action: string; field_name: string | null; old_value: string | null; new_value: string | null; performed_by: string | null; created_at: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+  const supabase = createClient();
+
+  useEffect(() => {
+    supabase
+      .from("activity_log")
+      .select("*")
+      .eq("entity_type", "action_item")
+      .eq("entity_id", itemId)
+      .eq("org_id", orgId)
+      .order("created_at", { ascending: false })
+      .limit(50)
+      .then(({ data }) => {
+        if (data) setLogs(data);
+        setLoading(false);
+      });
+  }, [itemId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function personName(profileId: string | null) {
+    if (!profileId) return "System";
+    const person = people.find((p) => p.profile_id === profileId);
+    return person?.full_name || "Unknown";
+  }
+
+  function formatLogTime(date: string) {
+    const d = new Date(date);
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" }) + " " + d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  }
+
+  if (loading) return <div className="px-5 py-4 text-xs text-gray-400">Loading changelog...</div>;
+  if (logs.length === 0) return <div className="px-5 py-4 text-xs text-gray-400">No changes recorded yet.</div>;
+
+  return (
+    <div className="px-5 py-4">
+      <div className="space-y-1.5">
+        {logs.map((log) => {
+          const fieldLabel = ACTION_FIELD_LABELS[log.field_name || ""] || log.field_name || log.action;
+          const who = personName(log.performed_by);
+          const when = formatLogTime(log.created_at);
+
+          if (log.action === "comment") {
+            return (
+              <div key={log.id} className="flex items-baseline gap-2 text-xs">
+                <span className="text-gray-400 flex-shrink-0 w-[110px]">{when}</span>
+                <span className="text-gray-600"><span className="font-medium text-gray-700">{who}</span> — Comment Made</span>
+              </div>
+            );
+          }
+
+          return (
+            <div key={log.id} className="flex items-baseline gap-2 text-xs">
+              <span className="text-gray-400 flex-shrink-0 w-[110px]">{when}</span>
+              <span className="text-gray-600">
+                <span className="font-medium text-gray-700">{who}</span> — {fieldLabel} Updated
+                {log.old_value && log.new_value ? <span className="text-gray-400"> ({log.old_value} → {log.new_value})</span> : log.new_value ? <span className="text-gray-400"> (→ {log.new_value})</span> : null}
+              </span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
