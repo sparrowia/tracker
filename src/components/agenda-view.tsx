@@ -335,7 +335,7 @@ export function AgendaView({
       : item.entity_type === "action_item" ? "action_items"
       : "raid_entries";
     setItems((prev) => prev.filter((i) => i.entity_id !== item.entity_id));
-    supabase.from(table).update({ include_in_meeting: false }).eq("id", item.entity_id).then(() => {});
+    supabase.from(table).update({ include_in_project_meeting: false }).eq("id", item.entity_id).then(() => {});
   }
 
   function saveField(item: ProjectAgendaRow, field: string, value: string) {

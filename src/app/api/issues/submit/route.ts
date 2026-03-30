@@ -100,7 +100,8 @@ export async function POST(req: NextRequest) {
         org_id: project.org_id,
         display_id: displayId,
         sort_order: 0,
-        include_in_meeting: false,
+        include_in_project_meeting: false,
+        include_in_vendor_meeting: false,
         created_by: null,
       })
       .select("id")

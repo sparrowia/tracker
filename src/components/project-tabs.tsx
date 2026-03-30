@@ -573,7 +573,7 @@ function StagingArea({
       priority: item.priority,
       status: "pending" as const,
       first_flagged_at: now,
-      include_in_meeting: false,
+      include_in_project_meeting: false,
       created_by: profileId,
       ...(item.owner_id ? { owner_id: item.owner_id } : {}),
     };
@@ -989,9 +989,9 @@ function BlockersPanel({
   function toggleMeeting(id: string) {
     const blocker = blockers.find((b) => b.id === id);
     if (!blocker) return;
-    const newVal = !blocker.include_in_meeting;
-    setBlockers((prev) => prev.map((b) => b.id === id ? { ...b, include_in_meeting: newVal } : b));
-    supabase.from("blockers").update({ include_in_meeting: newVal }).eq("id", id).then(({ error }) => {
+    const newVal = !blocker.include_in_project_meeting;
+    setBlockers((prev) => prev.map((b) => b.id === id ? { ...b, include_in_project_meeting: newVal } : b));
+    supabase.from("blockers").update({ include_in_project_meeting: newVal }).eq("id", id).then(({ error }) => {
       if (error) console.error("Toggle failed:", error);
       else onMeetingToggle?.();
     });
@@ -1127,7 +1127,7 @@ function BlockersPanel({
                     <polyline points="9 18 15 12 9 6" />
                   </svg>
                   {/* Meeting toggle */}
-                  <MeetingToggle active={b.include_in_meeting} onClick={(e) => { e.stopPropagation(); toggleMeeting(b.id); }} />
+                  <MeetingToggle active={b.include_in_project_meeting} onClick={(e) => { e.stopPropagation(); toggleMeeting(b.id); }} />
                   {/* Title */}
                   <span className="text-sm font-semibold text-gray-900 truncate min-w-0">{b.title}</span>
                   {/* Spacer */}
@@ -1687,9 +1687,9 @@ function ActionItemsPanel({
   function toggleMeeting(id: string) {
     const action = actions.find((a) => a.id === id);
     if (!action) return;
-    const newVal = !action.include_in_meeting;
-    setActions((prev) => prev.map((a) => a.id === id ? { ...a, include_in_meeting: newVal } : a));
-    supabase.from("action_items").update({ include_in_meeting: newVal }).eq("id", id).then(({ error }) => {
+    const newVal = !action.include_in_project_meeting;
+    setActions((prev) => prev.map((a) => a.id === id ? { ...a, include_in_project_meeting: newVal } : a));
+    supabase.from("action_items").update({ include_in_project_meeting: newVal }).eq("id", id).then(({ error }) => {
       if (error) console.error("Toggle failed:", error);
       else onMeetingToggle?.();
     });
@@ -1835,7 +1835,8 @@ function ActionItemsPanel({
       first_flagged_at: action.first_flagged_at,
       created_by: profileId,
       sort_order: 0,
-      include_in_meeting: action.include_in_meeting,
+      include_in_project_meeting: action.include_in_project_meeting,
+      include_in_vendor_meeting: action.include_in_vendor_meeting,
     }).select("id").single();
     if (error) { console.error("Convert failed:", error); return; }
     // Move comments to the new raid entry
@@ -1861,7 +1862,8 @@ function ActionItemsPanel({
       status: action.status === "pending" || action.status === "in_progress" ? action.status : "pending",
       first_flagged_at: action.first_flagged_at,
       created_by: profileId,
-      include_in_meeting: action.include_in_meeting,
+      include_in_project_meeting: action.include_in_project_meeting,
+      include_in_vendor_meeting: action.include_in_vendor_meeting,
     }).select("id").single();
     if (error) { console.error("Convert failed:", error); return; }
     await supabase.from("comments").update({ blocker_id: data.id, action_item_id: null }).eq("action_item_id", id);
@@ -2127,7 +2129,7 @@ function ActionItemsPanel({
                     </svg>
                   </button>
                   {/* 5. Meeting toggle */}
-                  <MeetingToggle active={a.include_in_meeting} onClick={(e) => { e.stopPropagation(); toggleMeeting(a.id); }} />
+                  <MeetingToggle active={a.include_in_project_meeting} onClick={(e) => { e.stopPropagation(); toggleMeeting(a.id); }} />
                   {/* 6. Unread indicator */}
                   {unreadIndicator(a) === "new" && <span className="text-[9px] font-bold text-white bg-blue-500 rounded px-1 py-0.5 flex-shrink-0">NEW</span>}
                   {unreadIndicator(a) === "updated" && <span className="flex-shrink-0" title="Updated">❗</span>}
@@ -2468,7 +2470,7 @@ const ACTION_FIELD_LABELS: Record<string, string> = {
   status: "Status", priority: "Priority", owner_id: "Owner", vendor_id: "Vendor",
   title: "Title", description: "Description", notes: "Notes", next_steps: "Next Steps",
   due_date: "Due Date", stage: "Stage", parent_id: "Parent", comment: "Comment",
-  include_in_meeting: "Meeting Toggle", resolved_at: "Resolved",
+  include_in_project_meeting: "Project Meeting", include_in_vendor_meeting: "Vendor Meeting", resolved_at: "Resolved",
 };
 
 function ActionChangelogPanel({ itemId, orgId, people }: { itemId: string; orgId: string; people: Person[] }) {

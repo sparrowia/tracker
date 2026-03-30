@@ -167,6 +167,8 @@ export interface ActionItem {
   next_steps: string | null;
   stage: string | null;
   include_in_meeting: boolean;
+  include_in_project_meeting: boolean;
+  include_in_vendor_meeting: boolean;
   parent_id: string | null;
   sort_order: number;
   created_by: string | null;
@@ -201,6 +203,8 @@ export interface RaidEntry {
   due_date: string | null;
   stage: string | null;
   include_in_meeting: boolean;
+  include_in_project_meeting: boolean;
+  include_in_vendor_meeting: boolean;
   parent_id: string | null;
   sort_order: number;
   first_flagged_at: string;
@@ -231,6 +235,8 @@ export interface Blocker {
   resolved_at: string | null;
   due_date: string | null;
   include_in_meeting: boolean;
+  include_in_project_meeting: boolean;
+  include_in_vendor_meeting: boolean;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -313,7 +319,7 @@ export interface Intake {
 }
 
 export interface VendorAccountabilityRow {
-  entity_type: "action_item" | "blocker";
+  entity_type: "action_item" | "blocker" | "raid_entry";
   entity_id: string;
   vendor_id: string;
   org_id: string;

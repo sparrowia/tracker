@@ -176,7 +176,7 @@ const FIELD_LABELS: Record<string, string> = {
   vendor_id: "Vendor", raid_type: "Type", impact: "Impact", due_date: "Due Date",
   decision_date: "Decision Date", title: "Title", description: "Description",
   notes: "Notes", next_steps: "Next Steps", parent_id: "Parent", comment: "Comment",
-  include_in_meeting: "Meeting Toggle", resolved_at: "Resolved",
+  include_in_project_meeting: "Project Meeting", include_in_vendor_meeting: "Vendor Meeting", resolved_at: "Resolved",
 };
 
 function ChangelogPanel({ entryId, orgId, people }: { entryId: string; orgId: string; people: Person[] }) {
@@ -634,9 +634,9 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
   function toggleMeeting(id: string) {
     const entry = entries.find((e) => e.id === id);
     if (!entry) return;
-    const newVal = !entry.include_in_meeting;
-    setEntries((prev) => prev.map((e) => e.id === id ? { ...e, include_in_meeting: newVal } : e));
-    supabase.from("raid_entries").update({ include_in_meeting: newVal }).eq("id", id).then(({ error }) => {
+    const newVal = !entry.include_in_project_meeting;
+    setEntries((prev) => prev.map((e) => e.id === id ? { ...e, include_in_project_meeting: newVal } : e));
+    supabase.from("raid_entries").update({ include_in_project_meeting: newVal }).eq("id", id).then(({ error }) => {
       if (error) console.error("Toggle failed:", error);
       else onMeetingToggle?.();
     });
@@ -1211,10 +1211,10 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                       {/* Meeting toggle */}
                       <button
                         onClick={(e) => { e.stopPropagation(); toggleMeeting(entry.id); }}
-                        className={`p-0.5 rounded transition-colors flex-shrink-0 ${entry.include_in_meeting ? "text-blue-600" : "text-gray-400 hover:text-gray-500"}`}
-                        title={entry.include_in_meeting ? "Remove from meeting" : "Include in meeting"}
+                        className={`p-0.5 rounded transition-colors flex-shrink-0 ${entry.include_in_project_meeting ? "text-blue-600" : "text-gray-400 hover:text-gray-500"}`}
+                        title={entry.include_in_project_meeting ? "Remove from meeting" : "Include in meeting"}
                       >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill={entry.include_in_meeting ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill={entry.include_in_project_meeting ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
                           <path d="M13.73 21a2 2 0 0 1-3.46 0" />
                         </svg>
