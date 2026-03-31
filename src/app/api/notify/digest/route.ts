@@ -38,12 +38,15 @@ export async function GET(req: NextRequest) {
 
   for (const [email, items] of byRecipient) {
     const assignments = items.filter((n) => n.mention_type === "assignment");
-    const comments = items.filter((n) => n.mention_type !== "assignment");
+    const statusChanges = items.filter((n) => n.mention_type === "status_change");
+    const comments = items.filter((n) => n.mention_type !== "assignment" && n.mention_type !== "status_change");
     const totalCount = items.length;
 
     const subject = totalCount === 1
       ? items[0].mention_type === "assignment"
         ? `You've been assigned: ${items[0].item_title}`
+        : items[0].mention_type === "status_change"
+        ? `Status updated: ${items[0].item_title}`
         : `New comment on ${items[0].item_type}: ${items[0].item_title}`
       : `${totalCount} new notifications from Edcetera Tracker`;
 
@@ -61,6 +64,15 @@ export async function GET(req: NextRequest) {
       </div>
     `).join("");
 
+    const statusChangeBlocks = statusChanges.map((n) => `
+      <div style="margin-bottom: 16px; padding: 12px; background: #fefce8; border-radius: 8px; border-left: 3px solid #eab308;">
+        <p style="margin: 0 0 4px; font-size: 12px; color: #6b7280;">
+          <strong>${n.changed_by || "Someone"}</strong> changed status to <strong>${n.new_status || "unknown"}</strong> · ${n.item_type}: <strong>${n.item_title}</strong>${n.project_name ? ` · ${n.project_name}` : ""}
+        </p>
+        <a href="${itemLink(n)}" style="color: #3b82f6; text-decoration: none; font-size: 12px;">Open in Tracker →</a>
+      </div>
+    `).join("");
+
     const commentBlocks = comments.map((n) => `
       <div style="margin-bottom: 16px; padding: 12px; background: #f9fafb; border-radius: 8px; border-left: 3px solid ${n.mention_type === "mention" ? "#3b82f6" : "#8b5cf6"};">
         <p style="margin: 0 0 4px; font-size: 12px; color: #6b7280;">
@@ -71,18 +83,19 @@ export async function GET(req: NextRequest) {
       </div>
     `).join("");
 
-    const heading = assignments.length > 0 && comments.length > 0
+    const categoryCount = [assignments.length > 0, statusChanges.length > 0, comments.length > 0].filter(Boolean).length;
+    const heading = categoryCount > 1 || totalCount > 1
       ? `${totalCount} New Notifications`
-      : assignments.length > 0
-      ? assignments.length === 1 ? "New Assignment" : `${assignments.length} New Assignments`
-      : comments.length === 1 ? "New Comment" : `${comments.length} New Comments`;
+      : assignments.length === 1 ? "New Assignment"
+      : statusChanges.length === 1 ? "Status Update"
+      : "New Comment";
 
     const html = `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2 style="color: #1f2937; font-size: 16px; margin-bottom: 16px;">
           ${heading}
         </h2>
-        ${assignmentBlocks}${commentBlocks}
+        ${assignmentBlocks}${statusChangeBlocks}${commentBlocks}
         <p style="margin-top: 16px; font-size: 11px; color: #9ca3af;">
           Edcetera Tracker · You received this because you were mentioned or are the item owner.
         </p>

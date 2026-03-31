@@ -890,6 +890,23 @@ function BlockersPanel({
     }).then(() => {});
   }
 
+  function notifyBlockerStatusChange(blocker: BlockerRow, newStatus: string) {
+    const currentPerson = people.find((p) => p.id === userPersonId);
+    const changedBy = currentPerson?.full_name || "Someone";
+    const statusLabel = newStatus.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+    if (blocker.owner_id && blocker.owner_id !== userPersonId) {
+      const owner = people.find((p) => p.id === blocker.owner_id);
+      if (owner?.email) {
+        supabase.from("comment_notifications").insert({
+          org_id: orgId, recipient_person_id: owner.id, recipient_email: owner.email,
+          comment_id: null, commenter_name: null, comment_body: null,
+          item_title: blocker.title, item_type: "blocker", mention_type: "status_change",
+          changed_by: changedBy, new_status: statusLabel, entity_id: blocker.id, project_slug: projectSlug,
+        }).then(() => {});
+      }
+    }
+  }
+
   function saveField(id: string, field: string, value: string) {
     const dbUpdates: Record<string, unknown> = {};
 
@@ -913,6 +930,7 @@ function BlockersPanel({
       } else {
         setBlockers((prev) => prev.map((b) => b.id === id ? { ...b, [field]: value } as BlockerRow : b));
       }
+      if (field === "status") { const b = blockers.find((b) => b.id === id); if (b) notifyBlockerStatusChange(b, value); }
     }
 
     supabase.from("blockers").update(dbUpdates).eq("id", id).then(({ error }) => {
@@ -1008,6 +1026,7 @@ function BlockersPanel({
     const now = new Date().toISOString();
     const { error } = await supabase.from("blockers").update({ status: "complete", resolved_at: now }).eq("id", id);
     if (!error) {
+      notifyBlockerStatusChange(blocker, "complete");
       setBlockers((prev) => prev.filter((b) => b.id !== id));
       if (expandedId === id) setExpandedId(null);
       addUndo(`Resolved "${blocker.title}"`, async () => {
@@ -1584,6 +1603,23 @@ function ActionItemsPanel({
     }).then(() => {});
   }
 
+  function notifyActionStatusChange(action: ActionRow, newStatus: string) {
+    const currentPerson = people.find((p) => p.id === userPersonId);
+    const changedBy = currentPerson?.full_name || "Someone";
+    const statusLabel = newStatus.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+    if (action.owner_id && action.owner_id !== userPersonId) {
+      const owner = people.find((p) => p.id === action.owner_id);
+      if (owner?.email) {
+        supabase.from("comment_notifications").insert({
+          org_id: orgId, recipient_person_id: owner.id, recipient_email: owner.email,
+          comment_id: null, commenter_name: null, comment_body: null,
+          item_title: action.title, item_type: "action item", mention_type: "status_change",
+          changed_by: changedBy, new_status: statusLabel, entity_id: action.id, project_slug: projectSlug,
+        }).then(() => {});
+      }
+    }
+  }
+
   function saveField(id: string, field: string, value: string) {
     const dbUpdates: Record<string, unknown> = {};
 
@@ -1609,6 +1645,7 @@ function ActionItemsPanel({
       } else {
         setActions((prev) => prev.map((a) => a.id === id ? { ...a, [field]: value } as ActionRow : a));
       }
+      if (field === "status") { const a = actions.find((a) => a.id === id); if (a) notifyActionStatusChange(a, value); }
     }
 
     supabase.from("action_items").update(dbUpdates).eq("id", id).then(({ error }) => {
@@ -1789,6 +1826,7 @@ function ActionItemsPanel({
     const now = new Date().toISOString();
     const { error } = await supabase.from("action_items").update({ status: "complete", resolved_at: now }).eq("id", id);
     if (!error) {
+      notifyActionStatusChange(action, "complete");
       setActions((prev) => prev.map((a) => a.id === id ? { ...a, status: "complete" as ItemStatus, resolved_at: now } : a));
       if (expandedId === id) setExpandedId(null);
       addUndo(`Resolved "${action.title}"`, async () => {

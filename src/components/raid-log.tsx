@@ -570,6 +570,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
       } else {
         setEntries((prev) => prev.map((e) => e.id === id ? { ...e, [field]: value } as RaidRow : e));
       }
+      if (field === "status") notifyStatusChange(entry, value);
     }
 
     supabase.from("raid_entries").update(dbUpdates).eq("id", id).select("updated_at").single().then(({ data, error }) => {
@@ -581,6 +582,40 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
         setReadAtMap((prev) => new Map(prev).set(id, dbUpdatedAt));
       }
     });
+  }
+
+  function notifyStatusChange(entry: RaidRow, newStatus: string) {
+    const currentPerson = people.find((p) => p.id === userPersonId);
+    const changedBy = currentPerson?.full_name || "Someone";
+    const statusLabel = newStatus.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+    const recipients: { personId: string; email: string }[] = [];
+    // Notify reporter if not the current user
+    if (entry.reporter_id && entry.reporter_id !== userPersonId) {
+      const reporter = people.find((p) => p.id === entry.reporter_id);
+      if (reporter?.email) recipients.push({ personId: reporter.id, email: reporter.email });
+    }
+    // Notify owner if not the current user and not already notified as reporter
+    if (entry.owner_id && entry.owner_id !== userPersonId && entry.owner_id !== entry.reporter_id) {
+      const owner = people.find((p) => p.id === entry.owner_id);
+      if (owner?.email) recipients.push({ personId: owner.id, email: owner.email });
+    }
+    for (const r of recipients) {
+      supabase.from("comment_notifications").insert({
+        org_id: project.org_id,
+        recipient_person_id: r.personId,
+        recipient_email: r.email,
+        comment_id: null,
+        commenter_name: null,
+        comment_body: null,
+        item_title: entry.title,
+        item_type: entry.raid_type,
+        mention_type: "status_change",
+        changed_by: changedBy,
+        new_status: statusLabel,
+        entity_id: entry.id,
+        project_slug: project.slug,
+      }).then(() => {});
+    }
   }
 
   async function convertToActionItem(id: string) {
@@ -674,6 +709,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
     setResolvingId(null);
     if (!error) {
       setEntries((prev) => prev.map((e) => e.id === id ? { ...e, status: resolveStatus as ItemStatus, resolved_at: now } : e));
+      notifyStatusChange(entry, resolveStatus);
       addUndo(`Resolved "${entry.title}"`, async () => {
         const { error: err } = await supabase.from("raid_entries").update({ status: prevStatus, resolved_at: null }).eq("id", id);
         if (!err) setEntries((prev) => prev.map((e) => e.id === id ? { ...e, status: prevStatus, resolved_at: null } : e));
