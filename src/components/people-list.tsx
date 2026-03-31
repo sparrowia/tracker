@@ -124,6 +124,28 @@ export default function PeopleList({ initialPeople, vendors, profiles, initialIn
     }
   }
 
+  async function handleResendInvite(person: PersonRow) {
+    if (!person.email) return;
+    setInvitingId(person.id);
+    try {
+      const res = await fetch("/api/invite/resend-link", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: person.email }),
+      });
+      const result = await res.json();
+      if (res.ok) {
+        alert("Invite email sent to " + person.email);
+      } else {
+        alert(result.error || "Failed to send invite");
+      }
+    } catch {
+      alert("Failed to send invite");
+    } finally {
+      setInvitingId(null);
+    }
+  }
+
   async function handleInvite(person: PersonRow) {
     if (!person.email) return;
     setInvitingId(person.id);
@@ -282,21 +304,33 @@ export default function PeopleList({ initialPeople, vendors, profiles, initialIn
                 Impersonate
               </button>
             )}
-            {status === "added" && person.email && inviteFormId !== person.id && (
-              <button
-                onClick={() => {
-                  setInviteFormId(person.id);
-                  setInviteRole(person.vendor_id ? "vendor" : "user");
-                  setInviteVendorId(person.vendor_id || "");
-                }}
-                className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
-                  <polyline points="22,6 12,13 2,6"/>
-                </svg>
-                Invite
-              </button>
+            {status !== "joined" && person.email && inviteFormId !== person.id && (
+              <>
+                <button
+                  onClick={() => {
+                    setInviteFormId(person.id);
+                    setInviteRole(person.vendor_id ? "vendor" : "user");
+                    setInviteVendorId(person.vendor_id || "");
+                  }}
+                  className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                    <polyline points="22,6 12,13 2,6"/>
+                  </svg>
+                  Invite
+                </button>
+                <button
+                  onClick={() => handleResendInvite(person)}
+                  disabled={invitingId === person.id}
+                  className="flex items-center gap-1.5 text-xs text-amber-600 hover:text-amber-800 font-medium transition-colors"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                  </svg>
+                  {invitingId === person.id ? "Sending..." : "Resend"}
+                </button>
+              </>
             )}
             {inviteFormId === person.id && (
               <div className="flex items-center gap-2">
