@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRole } from "@/components/role-context";
 import Link from "next/link";
-import { formatAge, priorityColor, priorityLabel, healthColor, healthLabel, formatDateShort } from "@/lib/utils";
+import { formatAge, priorityColor, priorityLabel, healthColor, healthLabel, formatDateShort, statusBadge } from "@/lib/utils";
 import type { ActionItem, Blocker, RaidEntry, Project, Initiative, Person, Vendor } from "@/lib/types";
 
 type ActionRow = ActionItem & { owner: Pick<Person, "id" | "full_name" | "email" | "slack_member_id"> | null; project: Pick<Project, "id" | "name" | "slug"> | null };
@@ -18,6 +18,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [overdue, setOverdue] = useState<ActionRow[]>([]);
   const [dueThisWeek, setDueThisWeek] = useState<ActionRow[]>([]);
+  const [myTasks, setMyTasks] = useState<ActionRow[]>([]);
   const [blockers, setBlockers] = useState<BlockerRow[]>([]);
   const [risksIssues, setRisksIssues] = useState<RaidRow[]>([]);
   const [decisions, setDecisions] = useState<RaidRow[]>([]);
@@ -45,6 +46,7 @@ export default function DashboardPage() {
       const [
         { data: overdueData },
         { data: dueWeekData },
+        { data: myTasksData },
         { data: blockerData },
         { data: riskData },
         { data: decisionData },
@@ -63,15 +65,25 @@ export default function DashboardPage() {
           .eq("owner_id", userPersonId || "00000000-0000-0000-0000-000000000000")
           .order("due_date")
           .limit(20),
-        // Due this week
+        // Due this week — only items owned by the current user
         supabase
           .from("action_item_ages")
           .select("*, owner:people(id, full_name, email, slack_member_id), project:projects(id, name, slug)")
           .gte("due_date", today)
           .lte("due_date", weekFromNow)
           .in("status", ["pending", "in_progress", "at_risk", "blocked"])
+          .eq("owner_id", userPersonId || "00000000-0000-0000-0000-000000000000")
           .order("due_date")
           .limit(20),
+        // My Tasks — all active tasks owned by the current user
+        supabase
+          .from("action_item_ages")
+          .select("*, owner:people(id, full_name, email, slack_member_id), project:projects(id, name, slug)")
+          .in("status", ["pending", "in_progress", "at_risk", "blocked", "needs_verification"])
+          .eq("owner_id", userPersonId || "00000000-0000-0000-0000-000000000000")
+          .order("priority")
+          .order("due_date", { ascending: true, nullsFirst: false })
+          .limit(50),
         // Active blockers
         supabase
           .from("blocker_ages")
@@ -126,6 +138,7 @@ export default function DashboardPage() {
 
       setOverdue(scopeByProject((overdueData || []) as ActionRow[]));
       setDueThisWeek(scopeByProject((dueWeekData || []) as ActionRow[]));
+      setMyTasks(scopeByProject((myTasksData || []) as ActionRow[]));
       setBlockers(scopeByProject((blockerData || []) as BlockerRow[]));
       setRisksIssues(scopeByProject((riskData || []) as RaidRow[]));
       setDecisions(scopeByProject((decisionData || []) as RaidRow[]));
@@ -427,10 +440,54 @@ export default function DashboardPage() {
         </section>
       )}
 
+      {/* My Tasks */}
+      {myTasks.length > 0 && (
+        <section>
+          <div className="bg-white rounded-lg border border-gray-300 overflow-hidden">
+            <div className="bg-gray-800 px-4 py-2.5">
+              <h2 className="text-xs font-semibold text-white uppercase tracking-wide">My Tasks ({myTasks.length})</h2>
+            </div>
+            <table className="min-w-full">
+              <thead className="bg-gray-50 border-b border-gray-300">
+                <tr>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Item</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Project</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Priority</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Due</th>
+                </tr>
+              </thead>
+              <tbody>
+                {myTasks.map((item) => {
+                  const badge = statusBadge(item.status);
+                  return (
+                    <tr key={item.id} className="border-b border-gray-200 hover:bg-blue-50/60 relative group">
+                      <td className="px-4 py-3 text-sm text-gray-900 font-semibold">
+                        {item.project ? (
+                          <Link href={`/projects/${item.project.slug}?tab=actions&item=${item.id}`} className="before:absolute before:inset-0">{item.title}</Link>
+                        ) : item.title}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-blue-600">{item.project?.name || "—"}</td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full border ${priorityColor(item.priority)}`}>{priorityLabel(item.priority)}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${badge.className}`}>{badge.label}</span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600">{formatDateShort(item.due_date)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
       {/* No overdue or due items */}
-      {overdue.length === 0 && dueThisWeek.length === 0 && (
+      {overdue.length === 0 && dueThisWeek.length === 0 && myTasks.length === 0 && (
         <div className="bg-white rounded-lg border border-gray-300 p-6 text-center">
-          <p className="text-sm text-gray-500">No overdue or upcoming items this week.</p>
+          <p className="text-sm text-gray-500">No overdue or upcoming items.</p>
         </div>
       )}
 
