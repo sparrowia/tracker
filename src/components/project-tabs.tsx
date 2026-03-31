@@ -3096,8 +3096,8 @@ function DocsPanel({ projectId, projectCreatedBy, orgId }: { projectId: string; 
   const editorRef = useRef<DocsEditorHandle>(null);
 
   // People state
-  const [projectMembers, setProjectMembers] = useState<{ id: string; full_name: string; vendor_id: string | null }[]>([]);
-  const [allPeople, setAllPeople] = useState<{ id: string; full_name: string; vendor_id: string | null }[]>([]);
+  const [projectMembers, setProjectMembers] = useState<{ id: string; full_name: string; vendor_id: string | null; vendor?: { name: string } | null }[]>([]);
+  const [allPeople, setAllPeople] = useState<{ id: string; full_name: string; vendor_id: string | null; vendor?: { name: string } | null }[]>([]);
 
   // Ask feature state
   const [question, setQuestion] = useState("");
@@ -3131,13 +3131,13 @@ function DocsPanel({ projectId, projectCreatedBy, orgId }: { projectId: string; 
       }
     });
     // Load project members
-    supabase.from("project_members").select("person_id, person:people(id, full_name, vendor_id)").eq("project_id", projectId).then(({ data }) => {
+    supabase.from("project_members").select("person_id, person:people(id, full_name, vendor_id, vendor:vendors(name))").eq("project_id", projectId).then(({ data }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       setProjectMembers((data || []).map((d: any) => d.person).filter(Boolean));
     });
     // Load all people for the add dropdown
-    supabase.from("people").select("id, full_name, vendor_id").eq("org_id", orgId).order("full_name").then(({ data }) => {
-      setAllPeople((data || []) as { id: string; full_name: string; vendor_id: string | null }[]);
+    supabase.from("people").select("id, full_name, vendor_id, vendor:vendors(name)").eq("org_id", orgId).order("full_name").then(({ data }) => {
+      setAllPeople((data || []) as unknown as { id: string; full_name: string; vendor_id: string | null; vendor?: { name: string } | null }[]);
     });
   }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -3414,7 +3414,7 @@ function DocsPanel({ projectId, projectCreatedBy, orgId }: { projectId: string; 
                       >
                         <option value="">+ Add person...</option>
                         {allPeople.filter((p) => !projectMembers.some((m) => m.id === p.id)).map((p) => (
-                          <option key={p.id} value={p.id}>{p.full_name}{p.vendor_id ? " (Vendor)" : ""}</option>
+                          <option key={p.id} value={p.id}>{p.full_name}{p.vendor_id ? ` - ${p.vendor?.name || "Vendor"}` : ""}</option>
                         ))}
                       </select>
                     </div>
@@ -3430,7 +3430,7 @@ function DocsPanel({ projectId, projectCreatedBy, orgId }: { projectId: string; 
                               {m.full_name.split(" ").map((n) => n[0]).join("").slice(0, 2)}
                             </span>
                             <span className="text-sm text-gray-900">{m.full_name}</span>
-                            {m.vendor_id && <span className="text-xs text-gray-400 ml-1">(Vendor)</span>}
+                            {m.vendor_id && <span className="text-xs text-gray-400"> - {m.vendor?.name || "Vendor"}</span>}
                           </div>
                           {canEditDocs && (
                             <button
