@@ -551,6 +551,13 @@ npx supabase --workdir /Users/matthewlobel/projects/edcetera-pm db push
 
 This connects to the remote database and applies any pending migrations from `supabase/migrations/`. Do NOT waste time trying psql, pg clients, REST API workarounds, or telling the user to do it manually — just run `npx supabase db push` with the `--workdir` flag.
 
+**CRITICAL: Bulk UPDATE in migrations** — `action_items`, `blockers`, and `raid_entries` have a `BEFORE UPDATE` trigger (`set_updated_at`) that sets `updated_at = now()` on every touched row. Bulk UPDATE statements in migrations (e.g., backfills) will poison `updated_at` on every row, causing false unread indicators for all users. To avoid this, disable the trigger around bulk updates:
+```sql
+ALTER TABLE action_items DISABLE TRIGGER set_updated_at;
+UPDATE action_items SET new_column = old_column;
+ALTER TABLE action_items ENABLE TRIGGER set_updated_at;
+```
+
 ## Deployment
 
 - Commits to `main` auto-deploy to production via Vercel
