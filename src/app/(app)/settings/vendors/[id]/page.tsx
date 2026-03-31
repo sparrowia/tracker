@@ -24,68 +24,83 @@ export default async function VendorDetailPage({
 
   const v = vendor as Vendor;
 
-  const [{ data: accountability }, { data: contacts }, { data: projects }, { data: allPeople }, { data: invitationData }] =
-    await Promise.all([
-      supabase
-        .from("vendor_accountability")
-        .select("*")
-        .eq("vendor_id", v.id),
-      supabase
-        .from("people")
-        .select("*")
-        .eq("vendor_id", v.id)
-        .order("full_name"),
-      supabase
-        .from("project_vendors")
-        .select("project:projects(*)")
-        .eq("vendor_id", v.id),
-      supabase
-        .from("people")
-        .select("*")
-        .eq("org_id", v.org_id)
-        .order("full_name"),
-      supabase
-        .from("invitations")
-        .select("id, email, accepted_at")
-        .eq("vendor_id", v.id),
+  let items: VendorAccountabilityRow[] = [];
+  let people: Person[] = [];
+  let peopleList: Person[] = [];
+  let vendorProjects: Project[] = [];
+  let ownerMap = new Map<string, string>();
+  let projectMap = new Map<string, { id: string; name: string; slug: string }>();
+  let invitations: { id: string; email: string; accepted_at: string | null }[] = [];
+
+  try {
+    const [{ data: accountability, error: accErr }, { data: contacts }, { data: projects }, { data: allPeople }, { data: invitationData }] =
+      await Promise.all([
+        supabase
+          .from("vendor_accountability")
+          .select("*")
+          .eq("vendor_id", v.id),
+        supabase
+          .from("people")
+          .select("*")
+          .eq("vendor_id", v.id)
+          .order("full_name"),
+        supabase
+          .from("project_vendors")
+          .select("project:projects(*)")
+          .eq("vendor_id", v.id),
+        supabase
+          .from("people")
+          .select("*")
+          .eq("org_id", v.org_id)
+          .order("full_name"),
+        supabase
+          .from("invitations")
+          .select("id, email, accepted_at")
+          .eq("vendor_id", v.id),
+      ]);
+
+    if (accErr) console.error("vendor_accountability error:", accErr);
+
+    items = (accountability || []) as VendorAccountabilityRow[];
+    people = (contacts || []) as Person[];
+    peopleList = (allPeople || []) as Person[];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vendorProjects = ((projects || []).map((p: any) => p.project).filter(Boolean)) as Project[];
+    invitations = (invitationData || []) as { id: string; email: string; accepted_at: string | null }[];
+
+    // Fetch owner and project names for accountability items
+    const ownerIds = [...new Set(items.map((i) => i.owner_id).filter(Boolean))] as string[];
+    const projectIds = [...new Set(items.map((i) => i.project_id).filter(Boolean))] as string[];
+
+    // Also get project IDs from action_items, blockers, raid_entries, agenda_items for this vendor
+    const [{ data: aiProjs }, { data: blProjs }, { data: reProjs }, { data: agProjs }] = await Promise.all([
+      supabase.from("action_items").select("project_id").eq("vendor_id", v.id).not("project_id", "is", null),
+      supabase.from("blockers").select("project_id").eq("vendor_id", v.id).not("project_id", "is", null),
+      supabase.from("raid_entries").select("project_id").eq("vendor_id", v.id).not("project_id", "is", null),
+      supabase.from("agenda_items").select("project_id").eq("vendor_id", v.id).not("project_id", "is", null),
+    ]);
+    const allVendorProjectIds = new Set([
+      ...projectIds,
+      ...(aiProjs || []).map((r: { project_id: string }) => r.project_id),
+      ...(blProjs || []).map((r: { project_id: string }) => r.project_id),
+      ...(reProjs || []).map((r: { project_id: string }) => r.project_id),
+      ...(agProjs || []).map((r: { project_id: string }) => r.project_id),
     ]);
 
-  const items = (accountability || []) as VendorAccountabilityRow[];
-  const people = (contacts || []) as Person[];
-  const peopleList = (allPeople || []) as Person[];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const vendorProjects = ((projects || []).map((p: any) => p.project).filter(Boolean)) as Project[];
+    const [{ data: owners }, { data: relatedProjects }] = await Promise.all([
+      ownerIds.length > 0
+        ? supabase.from("people").select("id, full_name").in("id", ownerIds)
+        : { data: [] as { id: string; full_name: string }[] },
+      allVendorProjectIds.size > 0
+        ? supabase.from("projects").select("id, name, slug").in("id", [...allVendorProjectIds])
+        : { data: [] as { id: string; name: string; slug: string }[] },
+    ]);
 
-  // Fetch owner and project names for accountability items
-  const ownerIds = [...new Set(items.map((i) => i.owner_id).filter(Boolean))];
-  const projectIds = [...new Set(items.map((i) => i.project_id).filter(Boolean))];
-
-  // Also get project IDs from action_items, blockers, raid_entries, agenda_items for this vendor
-  const [{ data: aiProjs }, { data: blProjs }, { data: reProjs }, { data: agProjs }] = await Promise.all([
-    supabase.from("action_items").select("project_id").eq("vendor_id", v.id).not("project_id", "is", null),
-    supabase.from("blockers").select("project_id").eq("vendor_id", v.id).not("project_id", "is", null),
-    supabase.from("raid_entries").select("project_id").eq("vendor_id", v.id).not("project_id", "is", null),
-    supabase.from("agenda_items").select("project_id").eq("vendor_id", v.id).not("project_id", "is", null),
-  ]);
-  const allVendorProjectIds = new Set([
-    ...projectIds,
-    ...(aiProjs || []).map((r: { project_id: string }) => r.project_id),
-    ...(blProjs || []).map((r: { project_id: string }) => r.project_id),
-    ...(reProjs || []).map((r: { project_id: string }) => r.project_id),
-    ...(agProjs || []).map((r: { project_id: string }) => r.project_id),
-  ]);
-
-  const [{ data: owners }, { data: relatedProjects }] = await Promise.all([
-    ownerIds.length > 0
-      ? supabase.from("people").select("id, full_name").in("id", ownerIds)
-      : { data: [] },
-    allVendorProjectIds.size > 0
-      ? supabase.from("projects").select("id, name, slug").in("id", [...allVendorProjectIds])
-      : { data: [] },
-  ]);
-
-  const ownerMap = new Map((owners || []).map((o: { id: string; full_name: string }) => [o.id, o.full_name]));
-  const projectMap = new Map((relatedProjects || []).map((p: { id: string; name: string; slug: string }) => [p.id, p]));
+    ownerMap = new Map((owners || []).map((o: { id: string; full_name: string }) => [o.id, o.full_name]));
+    projectMap = new Map((relatedProjects || []).map((p: { id: string; name: string; slug: string }) => [p.id, p]));
+  } catch (err) {
+    console.error("Vendor detail page data error:", err);
+  }
 
   return (
     <div className="max-w-6xl mx-auto space-y-8">
@@ -99,7 +114,7 @@ export default async function VendorDetailPage({
       </div>
 
       {/* Contacts */}
-      <VendorContacts initialContacts={people} vendorId={v.id} orgId={v.org_id} initialInvitations={(invitationData || []) as { id: string; email: string; accepted_at: string | null }[]} />
+      <VendorContacts initialContacts={people} vendorId={v.id} orgId={v.org_id} initialInvitations={invitations} />
 
       {/* Related Projects — derived from all items linked to this vendor */}
       {(() => {
