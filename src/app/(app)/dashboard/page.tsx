@@ -14,7 +14,7 @@ type ProjectRow = Project & { actionCount: number; blockerCount: number };
 type InitiativeGroup = Initiative & { projects: ProjectRow[] };
 
 export default function DashboardPage() {
-  const { role, profileId, userPersonId } = useRole();
+  const { role, profileId, userPersonId, impersonation } = useRole();
   const [loading, setLoading] = useState(true);
   const [overdue, setOverdue] = useState<ActionRow[]>([]);
   const [dueThisWeek, setDueThisWeek] = useState<ActionRow[]>([]);
@@ -32,8 +32,9 @@ export default function DashboardPage() {
 
       // Get visible project IDs for regular users
       let visibleProjectIds: Set<string> | null = null;
-      if (!isAdmin && userPersonId && profileId) {
-        const { data: ids } = await supabase.rpc("user_visible_project_ids", { p_person_id: userPersonId, p_profile_id: profileId });
+      const effectiveProfileId = impersonation && !isAdmin ? "00000000-0000-0000-0000-000000000000" : profileId;
+      if (!isAdmin && userPersonId) {
+        const { data: ids } = await supabase.rpc("user_visible_project_ids", { p_person_id: userPersonId, p_profile_id: effectiveProfileId });
         visibleProjectIds = new Set((ids || []).map(String));
       }
 

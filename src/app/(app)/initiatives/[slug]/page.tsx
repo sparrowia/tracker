@@ -20,7 +20,7 @@ const HEALTH_OPTIONS: { value: string; label: string }[] = [
 
 export default function InitiativeDetailPage() {
   const { slug } = useParams<{ slug: string }>();
-  const { role, profileId, userPersonId } = useRole();
+  const { role, profileId, userPersonId, impersonation } = useRole();
   const [initiative, setInitiative] = useState<Initiative | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [people, setPeople] = useState<Person[]>([]);
@@ -47,8 +47,9 @@ export default function InitiativeDetailPage() {
 
       // Get visible project IDs for non-admin users
       let visibleProjectIds: Set<string> | null = null;
-      if (!isAdmin && userPersonId && profileId) {
-        const { data: ids } = await supabase.rpc("user_visible_project_ids", { p_person_id: userPersonId, p_profile_id: profileId });
+      const effectiveProfileId = impersonation && !isAdmin ? "00000000-0000-0000-0000-000000000000" : profileId;
+      if (!isAdmin && userPersonId) {
+        const { data: ids } = await supabase.rpc("user_visible_project_ids", { p_person_id: userPersonId, p_profile_id: effectiveProfileId });
         visibleProjectIds = new Set((ids || []).map(String));
       }
 
@@ -84,7 +85,8 @@ export default function InitiativeDetailPage() {
     const { data: projs } = await supabase.from("projects").select("*").eq("initiative_id", initiative.id).order("name");
     const allProjects = (projs || []) as Project[];
     if (!isAdmin && userPersonId && profileId) {
-      const { data: ids } = await supabase.rpc("user_visible_project_ids", { p_person_id: userPersonId, p_profile_id: profileId });
+      const rpcProfileId = impersonation && !isAdmin ? "00000000-0000-0000-0000-000000000000" : profileId;
+      const { data: ids } = await supabase.rpc("user_visible_project_ids", { p_person_id: userPersonId, p_profile_id: rpcProfileId });
       const visibleIds = new Set((ids || []).map(String));
       setProjects(allProjects.filter((p) => visibleIds.has(p.id)));
     } else {

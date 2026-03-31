@@ -3324,7 +3324,7 @@ function DocsPanel({ projectId, projectCreatedBy, orgId }: { projectId: string; 
                       : "text-gray-600 hover:bg-gray-100 border-l-2 border-transparent"
                   }`}
                 >
-                  People{projectMembers.length > 0 ? ` (${projectMembers.length})` : ""}
+                  People {projectMembers.length > 0 ? `(${projectMembers.length})` : ""}
                 </button>
                 <button
                   onClick={() => { setActiveSection("__files__"); setEditing(false); }}
