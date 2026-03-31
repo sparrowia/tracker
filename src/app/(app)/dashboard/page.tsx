@@ -19,6 +19,7 @@ export default function DashboardPage() {
   const [overdue, setOverdue] = useState<ActionRow[]>([]);
   const [dueThisWeek, setDueThisWeek] = useState<ActionRow[]>([]);
   const [myTasks, setMyTasks] = useState<ActionRow[]>([]);
+  const [myRaidTasks, setMyRaidTasks] = useState<RaidRow[]>([]);
   const [blockers, setBlockers] = useState<BlockerRow[]>([]);
   const [risksIssues, setRisksIssues] = useState<RaidRow[]>([]);
   const [decisions, setDecisions] = useState<RaidRow[]>([]);
@@ -47,6 +48,7 @@ export default function DashboardPage() {
         { data: overdueData },
         { data: dueWeekData },
         { data: myTasksData },
+        { data: myRaidData },
         { data: blockerData },
         { data: riskData },
         { data: decisionData },
@@ -81,6 +83,16 @@ export default function DashboardPage() {
           .select("*, owner:people(id, full_name, email, slack_member_id), project:projects(id, name, slug)")
           .in("status", ["pending", "in_progress", "at_risk", "blocked", "needs_verification"])
           .eq("owner_id", userPersonId || "00000000-0000-0000-0000-000000000000")
+          .order("priority")
+          .order("due_date", { ascending: true, nullsFirst: false })
+          .limit(50),
+        // My RAID tasks — all active RAID entries owned by the current user
+        supabase
+          .from("raid_entries")
+          .select("*, owner:people!raid_entries_owner_id_fkey(id, full_name, email, slack_member_id), project:projects(id, name, slug)")
+          .in("status", ["pending", "in_progress", "at_risk", "blocked", "needs_verification", "identified", "assessing"])
+          .eq("owner_id", userPersonId || "00000000-0000-0000-0000-000000000000")
+          .is("resolved_at", null)
           .order("priority")
           .order("due_date", { ascending: true, nullsFirst: false })
           .limit(50),
@@ -139,6 +151,7 @@ export default function DashboardPage() {
       setOverdue(scopeByProject((overdueData || []) as ActionRow[]));
       setDueThisWeek(scopeByProject((dueWeekData || []) as ActionRow[]));
       setMyTasks(scopeByProject((myTasksData || []) as ActionRow[]));
+      setMyRaidTasks(scopeByProject((myRaidData || []) as RaidRow[]));
       setBlockers(scopeByProject((blockerData || []) as BlockerRow[]));
       setRisksIssues(scopeByProject((riskData || []) as RaidRow[]));
       setDecisions(scopeByProject((decisionData || []) as RaidRow[]));
@@ -441,15 +454,16 @@ export default function DashboardPage() {
       )}
 
       {/* My Tasks */}
-      {myTasks.length > 0 && (
+      {(myTasks.length > 0 || myRaidTasks.length > 0) && (
         <section>
           <div className="bg-white rounded-lg border border-gray-300 overflow-hidden">
             <div className="bg-gray-800 px-4 py-2.5">
-              <h2 className="text-xs font-semibold text-white uppercase tracking-wide">My Tasks ({myTasks.length})</h2>
+              <h2 className="text-xs font-semibold text-white uppercase tracking-wide">My Tasks ({myTasks.length + myRaidTasks.length})</h2>
             </div>
             <table className="min-w-full">
               <thead className="bg-gray-50 border-b border-gray-300">
                 <tr>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Item</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Project</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Priority</th>
@@ -461,10 +475,34 @@ export default function DashboardPage() {
                 {myTasks.map((item) => {
                   const badge = statusBadge(item.status);
                   return (
-                    <tr key={item.id} className="border-b border-gray-200 hover:bg-blue-50/60 relative group">
+                    <tr key={`a-${item.id}`} className="border-b border-gray-200 hover:bg-blue-50/60 relative group">
+                      <td className="px-4 py-3"><span className="inline-flex px-1.5 py-0.5 text-xs rounded bg-blue-100 text-blue-700">Action</span></td>
                       <td className="px-4 py-3 text-sm text-gray-900 font-semibold">
                         {item.project ? (
                           <Link href={`/projects/${item.project.slug}?tab=actions&item=${item.id}`} className="before:absolute before:inset-0">{item.title}</Link>
+                        ) : item.title}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-blue-600">{item.project?.name || "—"}</td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full border ${priorityColor(item.priority)}`}>{priorityLabel(item.priority)}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${badge.className}`}>{badge.label}</span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600">{formatDateShort(item.due_date)}</td>
+                    </tr>
+                  );
+                })}
+                {myRaidTasks.map((item) => {
+                  const badge = statusBadge(item.status);
+                  const typeLabel = item.raid_type === "risk" ? "Risk" : item.raid_type === "issue" ? "Issue" : item.raid_type === "assumption" ? "Assumption" : "Decision";
+                  const typeColor = item.raid_type === "risk" ? "bg-red-100 text-red-700" : item.raid_type === "issue" ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-700";
+                  return (
+                    <tr key={`r-${item.id}`} className="border-b border-gray-200 hover:bg-blue-50/60 relative group">
+                      <td className="px-4 py-3"><span className={`inline-flex px-1.5 py-0.5 text-xs rounded ${typeColor}`}>{typeLabel}</span></td>
+                      <td className="px-4 py-3 text-sm text-gray-900 font-semibold">
+                        {item.project ? (
+                          <Link href={`/projects/${item.project.slug}?tab=raid`} className="before:absolute before:inset-0">{item.title}</Link>
                         ) : item.title}
                       </td>
                       <td className="px-4 py-3 text-sm text-blue-600">{item.project?.name || "—"}</td>
