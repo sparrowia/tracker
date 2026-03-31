@@ -54,12 +54,13 @@ export default function DashboardPage() {
         { data: blockerCounts },
         { data: reminderData },
       ] = await Promise.all([
-        // Overdue action items
+        // Overdue action items — only items owned by the current user
         supabase
           .from("action_item_ages")
           .select("*, owner:people(id, full_name, email, slack_member_id), project:projects(id, name, slug)")
           .lt("due_date", today)
           .in("status", ["pending", "in_progress", "at_risk", "blocked"])
+          .eq("owner_id", userPersonId || "00000000-0000-0000-0000-000000000000")
           .order("due_date")
           .limit(20),
         // Due this week
