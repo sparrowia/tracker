@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
+import { sendEmail } from "@/lib/email";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -102,21 +103,54 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: inviteError.message }, { status: 500 });
   }
 
-  // Send auth invite email via Supabase
+  // Create auth user and generate invite link (without Supabase sending email)
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://edcet-tracker.vercel.app";
-  const { error: authError } = await admin.auth.admin.inviteUserByEmail(email, {
-    data: {
-      org_id: profile.org_id,
-      role,
-      vendor_id: vendor_id || null,
+  const { data: linkData, error: authError } = await admin.auth.admin.generateLink({
+    type: "invite",
+    email,
+    options: {
+      data: {
+        org_id: profile.org_id,
+        role,
+        vendor_id: vendor_id || null,
+      },
+      redirectTo: `${siteUrl}/auth/callback`,
     },
-    redirectTo: `${siteUrl}/auth/callback`,
   });
 
   if (authError) {
-    // Clean up invitation if email send failed
+    // Clean up invitation if user creation failed
     await admin.from("invitations").delete().eq("id", invitation.id);
     return NextResponse.json({ error: authError.message }, { status: 500 });
+  }
+
+  // Send invite email through our own Gmail SMTP
+  const inviteLink = linkData?.properties?.action_link;
+  if (inviteLink) {
+    await sendEmail({
+      to: email,
+      subject: "You're invited to Edcetera Tracker",
+      html: `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 0;">
+          <h2 style="color: #1f2937; margin-bottom: 16px;">You've been invited to Edcetera Tracker</h2>
+          <p style="color: #4b5563; font-size: 14px; line-height: 1.6;">
+            You've been invited to join the Edcetera project management tracker as a <strong>${role}</strong>.
+          </p>
+          <p style="color: #4b5563; font-size: 14px; line-height: 1.6;">
+            Click the button below to set up your password and get started.
+          </p>
+          <div style="margin: 24px 0;">
+            <a href="${inviteLink}" style="display: inline-block; background: #2563eb; color: #fff; padding: 10px 24px; border-radius: 6px; text-decoration: none; font-size: 14px; font-weight: 500;">
+              Accept Invitation
+            </a>
+          </div>
+          <p style="color: #9ca3af; font-size: 12px;">
+            If the button doesn't work, copy and paste this link into your browser:<br/>
+            <a href="${inviteLink}" style="color: #6b7280;">${inviteLink}</a>
+          </p>
+        </div>
+      `,
+    });
   }
 
   return NextResponse.json({ invitation });
