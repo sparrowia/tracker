@@ -87,6 +87,36 @@ export default async function VendorDetailPage({
   const ownerMap = new Map((owners || []).map((o: { id: string; full_name: string }) => [o.id, o.full_name]));
   const projectMap = new Map((relatedProjects || []).map((p: { id: string; name: string; slug: string }) => [p.id, p]));
 
+  // Group items by project for the Open Items section
+  const TYPE_LABELS: Record<string, string> = { action_item: "Action", blocker: "Blocker", raid_entry: "RAID" };
+  const TYPE_COLORS: Record<string, string> = { action_item: "bg-blue-100 text-blue-700", blocker: "bg-red-100 text-red-700", raid_entry: "bg-amber-100 text-amber-700" };
+
+  const projectGroups: { projectId: string | null; projectName: string; projectSlug: string | null; groupItems: VendorAccountabilityRow[] }[] = [];
+  const groupMap: Record<string, VendorAccountabilityRow[]> = {};
+  for (const item of items) {
+    const key = item.project_id || "__none__";
+    if (!groupMap[key]) groupMap[key] = [];
+    groupMap[key].push(item);
+  }
+  for (const [key, groupItems] of Object.entries(groupMap)) {
+    if (key === "__none__") {
+      projectGroups.push({ projectId: null, projectName: "No Project", projectSlug: null, groupItems });
+    } else {
+      const proj = projectMap.get(key);
+      projectGroups.push({
+        projectId: key,
+        projectName: proj ? (proj as { name: string }).name : "Unknown Project",
+        projectSlug: proj ? (proj as { slug: string }).slug : null,
+        groupItems,
+      });
+    }
+  }
+  projectGroups.sort((a, b) => {
+    if (!a.projectId && b.projectId) return 1;
+    if (a.projectId && !b.projectId) return -1;
+    return a.projectName.localeCompare(b.projectName);
+  });
+
   return (
     <div className="max-w-6xl mx-auto space-y-8">
       <div>
@@ -141,7 +171,7 @@ export default async function VendorDetailPage({
         <VendorAgendaView vendor={v} people={peopleList} />
       </section>
 
-      {/* Accountability */}
+      {/* Open Items — grouped by project */}
       <section>
         {items.length === 0 ? (
           <div>
@@ -149,74 +179,77 @@ export default async function VendorDetailPage({
             <p className="text-sm text-gray-500">No open items for this vendor.</p>
           </div>
         ) : (
-          <div className="bg-white rounded-lg border border-gray-300 overflow-hidden">
-            <div className="bg-gray-800 px-4 py-2.5">
+          <div className="space-y-4">
+            <div className="bg-gray-800 px-4 py-2.5 rounded-t-lg">
               <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Open Items ({items.length})</h2>
             </div>
-            <table className="min-w-full">
-              <thead className="bg-gray-50 border-b border-gray-300">
-                <tr>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Item</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Responsible</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Project</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Priority</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Due</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Age</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((item) => {
-                  const badge = statusBadge(item.status);
-                  const proj = item.project_id ? projectMap.get(item.project_id) : null;
-                  const ownerName = item.owner_id ? ownerMap.get(item.owner_id) : null;
-                  return (
-                    <tr key={`${item.entity_type}-${item.entity_id}`} className="border-b border-gray-200 hover:bg-gray-50">
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex px-1.5 py-0.5 text-xs rounded ${
-                          item.entity_type === "blocker" ? "bg-red-100 text-red-700" : "bg-blue-100 text-blue-700"
-                        }`}>
-                          {item.entity_type === "blocker" ? "Blocker" : "Action"}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-900 font-semibold">{item.title}</td>
-                      <td className="px-4 py-3 text-sm">
-                        {ownerName ? (
-                          <div className="flex items-center gap-1.5">
-                            <span className="w-5 h-5 rounded-full bg-blue-100 text-[10px] font-medium text-blue-700 flex items-center justify-center flex-shrink-0">
-                              {ownerName.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
-                            </span>
-                            <span className="text-gray-700">{ownerName}</span>
-                          </div>
-                        ) : (
-                          <span className="text-gray-400 italic">Unassigned</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-sm">
-                        {proj ? (
-                          <Link href={`/projects/${(proj as { slug: string }).slug}`} className="text-blue-600 hover:underline">
-                            {(proj as { name: string }).name}
-                          </Link>
-                        ) : "—"}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full border ${priorityColor(item.priority)}`}>
-                          {priorityLabel(item.priority)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-600">{formatDateShort(item.due_date)}</td>
-                      <td className="px-4 py-3 text-sm text-gray-600">{formatAge(item.age_days)}</td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${badge.className}`}>
-                          {badge.label}
-                        </span>
-                      </td>
+            {projectGroups.map((group) => (
+              <details key={group.projectId || "__none__"} open className="bg-white rounded-lg border border-gray-300 overflow-hidden">
+                <summary className="bg-gray-700 px-4 py-2 cursor-pointer flex items-center justify-between">
+                  <span className="text-xs font-semibold text-white uppercase tracking-wide">
+                    {group.projectName} ({group.groupItems.length})
+                  </span>
+                  {group.projectSlug && (
+                    <Link href={`/projects/${group.projectSlug}`} className="text-xs text-blue-300 hover:text-blue-200" onClick={(e) => e.stopPropagation()}>
+                      View Project
+                    </Link>
+                  )}
+                </summary>
+                <table className="min-w-full">
+                  <thead className="bg-gray-50 border-b border-gray-300">
+                    <tr>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Item</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Responsible</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Priority</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Due</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Age</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                  </thead>
+                  <tbody>
+                    {group.groupItems.map((item) => {
+                      const badge = statusBadge(item.status);
+                      const ownerName = item.owner_id ? ownerMap.get(item.owner_id) : null;
+                      return (
+                        <tr key={`${item.entity_type}-${item.entity_id}`} className="border-b border-gray-200 hover:bg-gray-50">
+                          <td className="px-4 py-3">
+                            <span className={`inline-flex px-1.5 py-0.5 text-xs rounded ${TYPE_COLORS[item.entity_type] || "bg-gray-100 text-gray-700"}`}>
+                              {TYPE_LABELS[item.entity_type] || item.entity_type}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-900 font-semibold">{item.title}</td>
+                          <td className="px-4 py-3 text-sm">
+                            {ownerName ? (
+                              <div className="flex items-center gap-1.5">
+                                <span className="w-5 h-5 rounded-full bg-blue-100 text-[10px] font-medium text-blue-700 flex items-center justify-center flex-shrink-0">
+                                  {ownerName.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
+                                </span>
+                                <span className="text-gray-700">{ownerName}</span>
+                              </div>
+                            ) : (
+                              <span className="text-gray-400 italic">Unassigned</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full border ${priorityColor(item.priority)}`}>
+                              {priorityLabel(item.priority)}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-600">{formatDateShort(item.due_date)}</td>
+                          <td className="px-4 py-3 text-sm text-gray-600">{formatAge(item.age_days)}</td>
+                          <td className="px-4 py-3">
+                            <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${badge.className}`}>
+                              {badge.label}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </details>
+            ))}
           </div>
         )}
       </section>
