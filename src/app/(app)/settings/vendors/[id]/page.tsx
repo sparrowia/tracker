@@ -11,6 +11,7 @@ export default async function VendorDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  try {
   const { id } = await params;
   const supabase = await createClient();
 
@@ -100,6 +101,13 @@ export default async function VendorDetailPage({
     projectMap = new Map((relatedProjects || []).map((p: { id: string; name: string; slug: string }) => [p.id, p]));
   } catch (err) {
     console.error("Vendor detail page data error:", err);
+    return (
+      <div className="max-w-6xl mx-auto p-8">
+        <h1 className="text-xl font-bold text-red-600 mb-4">Vendor Page Error</h1>
+        <pre className="bg-red-50 p-4 rounded text-sm text-red-800 whitespace-pre-wrap">{String(err)}</pre>
+        <pre className="bg-gray-50 p-4 rounded text-sm text-gray-800 mt-4 whitespace-pre-wrap">{err instanceof Error ? err.stack : ""}</pre>
+      </div>
+    );
   }
 
   return (
@@ -263,4 +271,14 @@ export default async function VendorDetailPage({
       </section>
     </div>
   );
+  } catch (err) {
+    console.error("VENDOR PAGE CRASH:", err);
+    return (
+      <div className="max-w-6xl mx-auto p-8">
+        <h1 className="text-xl font-bold text-red-600 mb-4">Vendor Page Debug</h1>
+        <pre className="bg-red-50 p-4 rounded text-sm text-red-800 whitespace-pre-wrap break-all">{String(err)}</pre>
+        <pre className="bg-gray-50 p-4 rounded text-sm text-gray-600 mt-4 whitespace-pre-wrap break-all">{err instanceof Error ? err.stack : "No stack"}</pre>
+      </div>
+    );
+  }
 }
