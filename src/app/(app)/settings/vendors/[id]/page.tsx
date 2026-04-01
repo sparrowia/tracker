@@ -57,8 +57,8 @@ export default async function VendorDetailPage({
   const vendorProjects = ((projects || []).map((p: any) => p.project).filter(Boolean)) as Project[];
 
   // Fetch owner and project names for accountability items
-  const ownerIds = Array.from(new Set(items.map((i) => i.owner_id).filter(Boolean)));
-  const projectIds = Array.from(new Set(items.map((i) => i.project_id).filter(Boolean)));
+  const ownerIds = [...new Set(items.map((i) => i.owner_id).filter(Boolean))];
+  const projectIds = [...new Set(items.map((i) => i.project_id).filter(Boolean))];
 
   // Also get project IDs from action_items, blockers, raid_entries, agenda_items for this vendor
   const [{ data: aiProjs }, { data: blProjs }, { data: reProjs }, { data: agProjs }] = await Promise.all([
@@ -67,69 +67,25 @@ export default async function VendorDetailPage({
     supabase.from("raid_entries").select("project_id").eq("vendor_id", v.id).not("project_id", "is", null),
     supabase.from("agenda_items").select("project_id").eq("vendor_id", v.id).not("project_id", "is", null),
   ]);
-  const allVendorProjectIds = Array.from(new Set([
+  const allVendorProjectIds = new Set([
     ...projectIds,
     ...(aiProjs || []).map((r: { project_id: string }) => r.project_id),
     ...(blProjs || []).map((r: { project_id: string }) => r.project_id),
     ...(reProjs || []).map((r: { project_id: string }) => r.project_id),
     ...(agProjs || []).map((r: { project_id: string }) => r.project_id),
-  ]));
+  ]);
 
   const [{ data: owners }, { data: relatedProjects }] = await Promise.all([
     ownerIds.length > 0
       ? supabase.from("people").select("id, full_name").in("id", ownerIds)
       : { data: [] },
-    allVendorProjectIds.length > 0
-      ? supabase.from("projects").select("id, name, slug").in("id", allVendorProjectIds)
+    allVendorProjectIds.size > 0
+      ? supabase.from("projects").select("id, name, slug").in("id", [...allVendorProjectIds])
       : { data: [] },
   ]);
 
-  const ownerMap: Record<string, string> = {};
-  for (const o of (owners || []) as { id: string; full_name: string }[]) ownerMap[o.id] = o.full_name;
-  const projectMap: Record<string, { id: string; name: string; slug: string }> = {};
-  for (const p of (relatedProjects || []) as { id: string; name: string; slug: string }[]) projectMap[p.id] = p;
-
-  // Group items by project for the Open Items section
-  const TYPE_LABELS: Record<string, string> = { action_item: "Action", blocker: "Blocker", raid_entry: "RAID" };
-  const TYPE_COLORS: Record<string, string> = { action_item: "bg-blue-100 text-blue-700", blocker: "bg-red-100 text-red-700", raid_entry: "bg-amber-100 text-amber-700" };
-
-  const projectGroups: { projectId: string | null; projectName: string; projectSlug: string | null; groupItems: VendorAccountabilityRow[] }[] = [];
-  const groupMap: Record<string, VendorAccountabilityRow[]> = {};
-  for (const item of items) {
-    const key = item.project_id || "__none__";
-    if (!groupMap[key]) groupMap[key] = [];
-    groupMap[key].push(item);
-  }
-  for (const [key, groupItems] of Object.entries(groupMap)) {
-    if (key === "__none__") {
-      projectGroups.push({ projectId: null, projectName: "No Project", projectSlug: null, groupItems });
-    } else {
-      const proj = projectMap[key];
-      projectGroups.push({
-        projectId: key,
-        projectName: proj ? (proj as { name: string }).name : "Unknown Project",
-        projectSlug: proj ? (proj as { slug: string }).slug : null,
-        groupItems,
-      });
-    }
-  }
-  projectGroups.sort((a, b) => {
-    if (!a.projectId && b.projectId) return 1;
-    if (a.projectId && !b.projectId) return -1;
-    return a.projectName.localeCompare(b.projectName);
-  });
-
-  // Build related projects list (combining project_vendors + projects from items)
-  const relatedIdSet: Record<string, boolean> = {};
-  for (const p of vendorProjects) relatedIdSet[p.id] = true;
-  for (const item of items) { if (item.project_id) relatedIdSet[item.project_id] = true; }
-  const relatedProjectsList = Object.keys(relatedIdSet).map((pid) => {
-    const fromVendor = vendorProjects.find((p) => p.id === pid);
-    if (fromVendor) return { id: fromVendor.id, name: fromVendor.name, slug: fromVendor.slug };
-    const fromMap = projectMap[pid];
-    if (fromMap) return fromMap as { id: string; name: string; slug: string };
-    return null;
-  }).filter(Boolean).sort((a, b) => a!.name.localeCompare(b!.name)) as { id: string; name: string; slug: string }[];
+  const ownerMap = new Map((owners || []).map((o: { id: string; full_name: string }) => [o.id, o.full_name]));
+  const projectMap = new Map((relatedProjects || []).map((p: { id: string; name: string; slug: string }) => [p.id, p]));
 
   return (
     <div className="max-w-6xl mx-auto space-y-8">
@@ -145,32 +101,47 @@ export default async function VendorDetailPage({
       {/* Contacts */}
       <VendorContacts initialContacts={people} vendorId={v.id} orgId={v.org_id} initialInvitations={(invitationData || []) as { id: string; email: string; accepted_at: string | null }[]} />
 
-      {/* Related Projects */}
-      {relatedProjectsList.length > 0 && (
-        <section>
-          <div className="bg-gray-800 px-4 py-2.5 rounded-t-lg">
-            <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Related Projects</h2>
-          </div>
-          <div className="flex gap-2 flex-wrap mt-3">
-            {relatedProjectsList.map((proj) => (
-              <Link
-                key={proj.id}
-                href={`/projects/${proj.slug}`}
-                className="inline-flex px-3 py-1 text-sm rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200"
-              >
-                {proj.name}
-              </Link>
-            ))}
-          </div>
-        </section>
-      )}
+      {/* Related Projects — derived from all items linked to this vendor */}
+      {(() => {
+        // Combine project_vendors projects with projects from accountability items
+        const allProjectIds = new Set<string>();
+        for (const p of vendorProjects) allProjectIds.add(p.id);
+        for (const item of items) {
+          if (item.project_id) allProjectIds.add(item.project_id);
+        }
+        const allProjects = [...allProjectIds].map((pid) => {
+          const fromVendor = vendorProjects.find((p) => p.id === pid);
+          if (fromVendor) return fromVendor;
+          const fromMap = projectMap.get(pid);
+          if (fromMap) return fromMap as { id: string; name: string; slug: string };
+          return null;
+        }).filter(Boolean).sort((a, b) => a!.name.localeCompare(b!.name));
+        return allProjects.length > 0 ? (
+          <section>
+            <div className="bg-gray-800 px-4 py-2.5 rounded-t-lg">
+              <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Related Projects</h2>
+            </div>
+            <div className="flex gap-2 flex-wrap mt-3">
+              {allProjects.map((proj) => (
+                <Link
+                  key={proj!.id}
+                  href={`/projects/${proj!.slug}`}
+                  className="inline-flex px-3 py-1 text-sm rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200"
+                >
+                  {proj!.name}
+                </Link>
+              ))}
+            </div>
+          </section>
+        ) : null;
+      })()}
 
       {/* Meeting Agenda */}
       <section>
         <VendorAgendaView vendor={v} people={peopleList} />
       </section>
 
-      {/* Open Items — grouped by project */}
+      {/* Accountability */}
       <section>
         {items.length === 0 ? (
           <div>
@@ -178,77 +149,74 @@ export default async function VendorDetailPage({
             <p className="text-sm text-gray-500">No open items for this vendor.</p>
           </div>
         ) : (
-          <div className="space-y-4">
-            <div className="bg-gray-800 px-4 py-2.5 rounded-t-lg">
+          <div className="bg-white rounded-lg border border-gray-300 overflow-hidden">
+            <div className="bg-gray-800 px-4 py-2.5">
               <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Open Items ({items.length})</h2>
             </div>
-            {projectGroups.map((group) => (
-              <details key={group.projectId || "__none__"} open className="bg-white rounded-lg border border-gray-300 overflow-hidden">
-                <summary className="bg-gray-700 px-4 py-2 cursor-pointer flex items-center justify-between">
-                  <span className="text-xs font-semibold text-white uppercase tracking-wide">
-                    {group.projectName} ({group.groupItems.length})
-                  </span>
-                  {group.projectSlug && (
-                    <Link href={`/projects/${group.projectSlug}`} className="text-xs text-blue-300 hover:text-blue-200" onClick={(e) => e.stopPropagation()}>
-                      View Project
-                    </Link>
-                  )}
-                </summary>
-                <table className="min-w-full">
-                  <thead className="bg-gray-50 border-b border-gray-300">
-                    <tr>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Item</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Responsible</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Priority</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Due</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Age</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+            <table className="min-w-full">
+              <thead className="bg-gray-50 border-b border-gray-300">
+                <tr>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Item</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Responsible</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Project</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Priority</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Due</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Age</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item) => {
+                  const badge = statusBadge(item.status);
+                  const proj = item.project_id ? projectMap.get(item.project_id) : null;
+                  const ownerName = item.owner_id ? ownerMap.get(item.owner_id) : null;
+                  return (
+                    <tr key={`${item.entity_type}-${item.entity_id}`} className="border-b border-gray-200 hover:bg-gray-50">
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex px-1.5 py-0.5 text-xs rounded ${
+                          item.entity_type === "blocker" ? "bg-red-100 text-red-700" : "bg-blue-100 text-blue-700"
+                        }`}>
+                          {item.entity_type === "blocker" ? "Blocker" : "Action"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-900 font-semibold">{item.title}</td>
+                      <td className="px-4 py-3 text-sm">
+                        {ownerName ? (
+                          <div className="flex items-center gap-1.5">
+                            <span className="w-5 h-5 rounded-full bg-blue-100 text-[10px] font-medium text-blue-700 flex items-center justify-center flex-shrink-0">
+                              {ownerName.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
+                            </span>
+                            <span className="text-gray-700">{ownerName}</span>
+                          </div>
+                        ) : (
+                          <span className="text-gray-400 italic">Unassigned</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-sm">
+                        {proj ? (
+                          <Link href={`/projects/${(proj as { slug: string }).slug}`} className="text-blue-600 hover:underline">
+                            {(proj as { name: string }).name}
+                          </Link>
+                        ) : "—"}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full border ${priorityColor(item.priority)}`}>
+                          {priorityLabel(item.priority)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600">{formatDateShort(item.due_date)}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600">{formatAge(item.age_days)}</td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${badge.className}`}>
+                          {badge.label}
+                        </span>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {group.groupItems.map((item) => {
-                      const badge = statusBadge(item.status);
-                      const ownerName = item.owner_id ? ownerMap[item.owner_id] : null;
-                      return (
-                        <tr key={`${item.entity_type}-${item.entity_id}`} className="border-b border-gray-200 hover:bg-gray-50">
-                          <td className="px-4 py-3">
-                            <span className={`inline-flex px-1.5 py-0.5 text-xs rounded ${TYPE_COLORS[item.entity_type] || "bg-gray-100 text-gray-700"}`}>
-                              {TYPE_LABELS[item.entity_type] || item.entity_type}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-sm text-gray-900 font-semibold">{item.title}</td>
-                          <td className="px-4 py-3 text-sm">
-                            {ownerName ? (
-                              <div className="flex items-center gap-1.5">
-                                <span className="w-5 h-5 rounded-full bg-blue-100 text-[10px] font-medium text-blue-700 flex items-center justify-center flex-shrink-0">
-                                  {ownerName.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
-                                </span>
-                                <span className="text-gray-700">{ownerName}</span>
-                              </div>
-                            ) : (
-                              <span className="text-gray-400 italic">Unassigned</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full border ${priorityColor(item.priority)}`}>
-                              {priorityLabel(item.priority)}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-sm text-gray-600">{formatDateShort(item.due_date)}</td>
-                          <td className="px-4 py-3 text-sm text-gray-600">{formatAge(item.age_days)}</td>
-                          <td className="px-4 py-3">
-                            <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${badge.className}`}>
-                              {badge.label}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </details>
-            ))}
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
       </section>
