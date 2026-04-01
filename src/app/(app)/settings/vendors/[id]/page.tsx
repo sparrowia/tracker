@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
-import type { Vendor, VendorAccountabilityRow } from "@/lib/types";
+import type { Vendor, Person, VendorAccountabilityRow } from "@/lib/types";
+import { VendorContacts } from "@/components/vendor-contacts";
 
 export default async function VendorDetailPage({
   params,
@@ -20,19 +21,32 @@ export default async function VendorDetailPage({
 
   const v = vendor as Vendor;
 
-  const { data: accountability, error: accError } = await supabase
-    .from("vendor_accountability")
-    .select("*")
-    .eq("vendor_id", v.id);
+  const [{ data: accountability }, { data: contacts }, { data: allPeople }, { data: invitationData }] =
+    await Promise.all([
+      supabase.from("vendor_accountability").select("*").eq("vendor_id", v.id),
+      supabase.from("people").select("*").eq("vendor_id", v.id).order("full_name"),
+      supabase.from("people").select("*").eq("org_id", v.org_id).order("full_name"),
+      supabase.from("invitations").select("id, email, accepted_at").eq("vendor_id", v.id),
+    ]);
 
   const items = (accountability || []) as VendorAccountabilityRow[];
+  const people = (contacts || []) as Person[];
 
   return (
     <div className="max-w-6xl mx-auto space-y-8">
-      <h1 className="text-2xl font-bold text-gray-900">{v.name}</h1>
-      <p className="text-sm text-gray-600">Items: {items.length}</p>
-      {accError && <p className="text-red-600">Error: {accError.message}</p>}
-      <pre className="text-xs bg-gray-100 p-4 rounded overflow-auto max-h-64">{JSON.stringify(items.slice(0, 3), null, 2)}</pre>
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900">{v.name}</h1>
+        {v.website && (
+          <a href={v.website} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline">
+            {v.website}
+          </a>
+        )}
+      </div>
+
+      {/* Step 1: Contacts */}
+      <VendorContacts initialContacts={people} vendorId={v.id} orgId={v.org_id} initialInvitations={(invitationData || []) as { id: string; email: string; accepted_at: string | null }[]} />
+
+      <p className="text-sm text-gray-500">Open items: {items.length}</p>
     </div>
   );
 }
