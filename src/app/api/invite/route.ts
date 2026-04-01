@@ -134,12 +134,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: linkError.message }, { status: 500 });
   }
 
-  // Fix redirect URL — Supabase may override with its configured Site URL
-  let inviteLink = linkData?.properties?.action_link;
-  if (inviteLink) {
-    const linkUrl = new URL(inviteLink);
-    linkUrl.searchParams.set("redirect_to", `${siteUrl}/auth/callback`);
-    inviteLink = linkUrl.toString();
+  // Build our own verify URL that goes through our server-side verification
+  // This avoids PKCE issues with Supabase's client-side redirect flow
+  const rawLink = linkData?.properties?.action_link;
+  let inviteLink: string | null = null;
+  if (rawLink) {
+    const parsed = new URL(rawLink);
+    const token = parsed.searchParams.get("token");
+    const type = parsed.searchParams.get("type") || "magiclink";
+    if (token) {
+      inviteLink = `${siteUrl}/api/invite/verify?token=${encodeURIComponent(token)}&type=${type}`;
+    }
   }
   if (inviteLink) {
     const emailResult = await sendEmail({

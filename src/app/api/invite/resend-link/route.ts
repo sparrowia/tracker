@@ -61,10 +61,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Failed to generate link" }, { status: 500 });
   }
 
-  // Fix redirect URL — Supabase may override with its configured Site URL
-  const linkUrl = new URL(link);
-  linkUrl.searchParams.set("redirect_to", `${siteUrl}/auth/callback`);
-  link = linkUrl.toString();
+  // Build our own verify URL to avoid PKCE issues
+  const parsed = new URL(link);
+  const token = parsed.searchParams.get("token");
+  const type = parsed.searchParams.get("type") || "magiclink";
+  if (token) {
+    link = `${siteUrl}/api/invite/verify?token=${encodeURIComponent(token)}&type=${type}`;
+  }
 
   await sendEmail({
     to: email,
