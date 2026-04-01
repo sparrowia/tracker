@@ -460,64 +460,42 @@ export default function DashboardPage() {
             <div className="bg-gray-800 px-4 py-2.5">
               <h2 className="text-xs font-semibold text-white uppercase tracking-wide">My Tasks ({myTasks.length + myRaidTasks.length})</h2>
             </div>
-            <table className="min-w-full">
-              <thead className="bg-gray-50 border-b border-gray-300">
-                <tr>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Item</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Project</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Priority</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Due</th>
-                </tr>
-              </thead>
-              <tbody>
-                {myTasks.map((item) => {
-                  const badge = statusBadge(item.status);
-                  return (
-                    <tr key={`a-${item.id}`} className="border-b border-gray-200 hover:bg-blue-50/60 relative group">
-                      <td className="px-4 py-3"><span className="inline-flex px-1.5 py-0.5 text-xs rounded bg-blue-100 text-blue-700">Action</span></td>
-                      <td className="px-4 py-3 text-sm text-gray-900 font-semibold">
-                        {item.project ? (
-                          <Link href={`/projects/${item.project.slug}?tab=actions&item=${item.id}`} className="before:absolute before:inset-0">{item.title}</Link>
-                        ) : item.title}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-blue-600">{item.project?.name || "—"}</td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full border ${priorityColor(item.priority)}`}>{priorityLabel(item.priority)}</span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${badge.className}`}>{badge.label}</span>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-600">{formatDateShort(item.due_date)}</td>
-                    </tr>
-                  );
-                })}
-                {myRaidTasks.map((item) => {
-                  const badge = statusBadge(item.status);
-                  const typeLabel = item.raid_type === "risk" ? "Risk" : item.raid_type === "issue" ? "Issue" : item.raid_type === "assumption" ? "Assumption" : "Decision";
-                  const typeColor = item.raid_type === "risk" ? "bg-red-100 text-red-700" : item.raid_type === "issue" ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-700";
-                  return (
-                    <tr key={`r-${item.id}`} className="border-b border-gray-200 hover:bg-blue-50/60 relative group">
-                      <td className="px-4 py-3"><span className={`inline-flex px-1.5 py-0.5 text-xs rounded ${typeColor}`}>{typeLabel}</span></td>
-                      <td className="px-4 py-3 text-sm text-gray-900 font-semibold">
-                        {item.project ? (
-                          <Link href={`/projects/${item.project.slug}?tab=raid`} className="before:absolute before:inset-0">{item.title}</Link>
-                        ) : item.title}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-blue-600">{item.project?.name || "—"}</td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full border ${priorityColor(item.priority)}`}>{priorityLabel(item.priority)}</span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${badge.className}`}>{badge.label}</span>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-600">{formatDateShort(item.due_date)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+            <div className="grid grid-cols-[60px_1fr_120px_80px_90px_70px] bg-gray-50 border-b border-gray-300 px-4 py-2">
+              <span className="text-xs font-medium text-gray-500 uppercase">Type</span>
+              <span className="text-xs font-medium text-gray-500 uppercase">Item</span>
+              <span className="text-xs font-medium text-gray-500 uppercase">Project</span>
+              <span className="text-xs font-medium text-gray-500 uppercase">Priority</span>
+              <span className="text-xs font-medium text-gray-500 uppercase">Status</span>
+              <span className="text-xs font-medium text-gray-500 uppercase">Due</span>
+            </div>
+            {myTasks.map((item) => {
+              const badge = statusBadge(item.status);
+              return (
+                <Link key={`a-${item.id}`} href={item.project ? `/projects/${item.project.slug}?tab=actions&item=${item.id}` : "#"} className="grid grid-cols-[60px_1fr_120px_80px_90px_70px] px-4 py-3 border-b border-gray-200 hover:bg-blue-50/60 transition-colors">
+                  <span><span className="inline-flex px-1.5 py-0.5 text-xs rounded bg-blue-100 text-blue-700">Action</span></span>
+                  <span className="text-sm text-gray-900 font-semibold truncate pr-4">{item.title}</span>
+                  <span className="text-sm text-blue-600 truncate">{item.project?.name || "—"}</span>
+                  <span><span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full border ${priorityColor(item.priority)}`}>{priorityLabel(item.priority)}</span></span>
+                  <span><span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${badge.className}`}>{badge.label}</span></span>
+                  <span className="text-sm text-gray-600">{formatDateShort(item.due_date)}</span>
+                </Link>
+              );
+            })}
+            {myRaidTasks.map((item) => {
+              const badge = statusBadge(item.status);
+              const typeLabel = item.raid_type === "risk" ? "Risk" : item.raid_type === "issue" ? "Issue" : item.raid_type === "assumption" ? "Assumption" : "Decision";
+              const typeColor = item.raid_type === "risk" ? "bg-red-100 text-red-700" : item.raid_type === "issue" ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-700";
+              return (
+                <Link key={`r-${item.id}`} href={item.project ? `/projects/${item.project.slug}?tab=raid&item=${item.id}` : "#"} className="grid grid-cols-[60px_1fr_120px_80px_90px_70px] px-4 py-3 border-b border-gray-200 hover:bg-blue-50/60 transition-colors">
+                  <span><span className={`inline-flex px-1.5 py-0.5 text-xs rounded ${typeColor}`}>{typeLabel}</span></span>
+                  <span className="text-sm text-gray-900 font-semibold truncate pr-4">{item.title}</span>
+                  <span className="text-sm text-blue-600 truncate">{item.project?.name || "—"}</span>
+                  <span><span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full border ${priorityColor(item.priority)}`}>{priorityLabel(item.priority)}</span></span>
+                  <span><span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${badge.className}`}>{badge.label}</span></span>
+                  <span className="text-sm text-gray-600">{formatDateShort(item.due_date)}</span>
+                </Link>
+              );
+            })}
           </div>
         </section>
       )}
