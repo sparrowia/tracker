@@ -15,7 +15,7 @@ export function canEditItem(
   userPersonId: string | null
 ): boolean {
   if (role === "super_admin" || role === "admin") return true;
-  if (role === "vendor") return false;
+  if (role === "vendor") return true; // Vendors can edit — changes are tracked in changelog
   // User role: can edit if creator or owner
   if (item.created_by && item.created_by === profileId) return true;
   if (userPersonId && item.owner_id === userPersonId) return true;
