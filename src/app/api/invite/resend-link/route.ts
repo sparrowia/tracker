@@ -61,6 +61,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Failed to generate link" }, { status: 500 });
   }
 
+  // Fix redirect URL — Supabase may override with its configured Site URL
+  link = link.replace(/redirect_to=[^&]+/, `redirect_to=${encodeURIComponent(siteUrl + "/auth/callback")}`);
+
   await sendEmail({
     to: email,
     subject: "Your Edcetera Tracker invitation",

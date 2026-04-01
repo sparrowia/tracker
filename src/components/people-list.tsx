@@ -52,8 +52,10 @@ export default function PeopleList({ initialPeople, vendors, profiles, initialIn
   });
 
   function getContactStatus(person: PersonRow): ContactStatus {
+    const hasPendingInvite = person.email && invitations.some((inv) => inv.email.toLowerCase() === person.email!.toLowerCase() && !inv.accepted_at);
+    if (hasPendingInvite) return "invited";
     if (person.profile_id) return "joined";
-    if (person.email && invitations.some((inv) => inv.email.toLowerCase() === person.email!.toLowerCase() && !inv.accepted_at)) return "invited";
+    if (person.email && invitations.some((inv) => inv.email.toLowerCase() === person.email!.toLowerCase())) return "invited";
     return "added";
   }
 

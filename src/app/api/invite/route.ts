@@ -125,7 +125,11 @@ export async function POST(request: Request) {
   }
 
   // Send invite email through our own Gmail SMTP
-  const inviteLink = linkData?.properties?.action_link;
+  // Fix redirect URL — Supabase may override with its configured Site URL
+  let inviteLink = linkData?.properties?.action_link;
+  if (inviteLink) {
+    inviteLink = inviteLink.replace(/redirect_to=[^&]+/, `redirect_to=${encodeURIComponent(siteUrl + "/auth/callback")}`);
+  }
   if (inviteLink) {
     await sendEmail({
       to: email,
