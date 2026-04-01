@@ -136,10 +136,10 @@ export default async function VendorDetailPage({
         ) : null;
       })()}
 
-      {/* Meeting Agenda */}
-      <section>
+      {/* Meeting Agenda — temporarily disabled for debugging */}
+      {/* <section>
         <VendorAgendaView vendor={v} people={peopleList} />
-      </section>
+      </section> */}
 
       {/* Accountability */}
       <section>
