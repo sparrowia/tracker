@@ -52,10 +52,9 @@ export default function PeopleList({ initialPeople, vendors, profiles, initialIn
   });
 
   function getContactStatus(person: PersonRow): ContactStatus {
-    const hasPendingInvite = person.email && invitations.some((inv) => inv.email.toLowerCase() === person.email!.toLowerCase() && !inv.accepted_at);
-    if (hasPendingInvite) return "invited";
     if (person.profile_id) return "joined";
-    if (person.email && invitations.some((inv) => inv.email.toLowerCase() === person.email!.toLowerCase())) return "invited";
+    const hasInvite = person.email && invitations.some((inv) => inv.email.toLowerCase() === person.email!.toLowerCase());
+    if (hasInvite) return "invited";
     return "added";
   }
 
@@ -306,33 +305,33 @@ export default function PeopleList({ initialPeople, vendors, profiles, initialIn
                 Impersonate
               </button>
             )}
-            {status !== "joined" && person.email && inviteFormId !== person.id && (
-              <>
-                <button
-                  onClick={() => {
-                    setInviteFormId(person.id);
-                    setInviteRole(person.vendor_id ? "vendor" : "user");
-                    setInviteVendorId(person.vendor_id || "");
-                  }}
-                  className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
-                    <polyline points="22,6 12,13 2,6"/>
-                  </svg>
-                  Invite
-                </button>
-                <button
-                  onClick={() => handleResendInvite(person)}
-                  disabled={invitingId === person.id}
-                  className="flex items-center gap-1.5 text-xs text-amber-600 hover:text-amber-800 font-medium transition-colors"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-                  </svg>
-                  {invitingId === person.id ? "Sending..." : "Resend"}
-                </button>
-              </>
+            {status === "added" && person.email && inviteFormId !== person.id && (
+              <button
+                onClick={() => {
+                  setInviteFormId(person.id);
+                  setInviteRole(person.vendor_id ? "vendor" : "user");
+                  setInviteVendorId(person.vendor_id || "");
+                }}
+                className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                  <polyline points="22,6 12,13 2,6"/>
+                </svg>
+                Invite
+              </button>
+            )}
+            {status === "invited" && person.email && (
+              <button
+                onClick={() => handleResendInvite(person)}
+                disabled={invitingId === person.id}
+                className="flex items-center gap-1.5 text-xs text-amber-600 hover:text-amber-800 font-medium transition-colors"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                </svg>
+                {invitingId === person.id ? "Sending..." : "Resend Invite"}
+              </button>
             )}
             {inviteFormId === person.id && (
               <div className="flex items-center gap-2">
