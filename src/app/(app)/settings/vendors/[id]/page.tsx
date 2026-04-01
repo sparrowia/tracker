@@ -57,8 +57,8 @@ export default async function VendorDetailPage({
   const vendorProjects = ((projects || []).map((p: any) => p.project).filter(Boolean)) as Project[];
 
   // Fetch owner and project names for accountability items
-  const ownerIds = [...new Set(items.map((i) => i.owner_id).filter(Boolean))];
-  const projectIds = [...new Set(items.map((i) => i.project_id).filter(Boolean))];
+  const ownerIds = Array.from(new Set(items.map((i) => i.owner_id).filter(Boolean)));
+  const projectIds = Array.from(new Set(items.map((i) => i.project_id).filter(Boolean)));
 
   // Also get project IDs from action_items, blockers, raid_entries, agenda_items for this vendor
   const [{ data: aiProjs }, { data: blProjs }, { data: reProjs }, { data: agProjs }] = await Promise.all([
@@ -67,25 +67,27 @@ export default async function VendorDetailPage({
     supabase.from("raid_entries").select("project_id").eq("vendor_id", v.id).not("project_id", "is", null),
     supabase.from("agenda_items").select("project_id").eq("vendor_id", v.id).not("project_id", "is", null),
   ]);
-  const allVendorProjectIds = new Set([
+  const allVendorProjectIds = Array.from(new Set([
     ...projectIds,
     ...(aiProjs || []).map((r: { project_id: string }) => r.project_id),
     ...(blProjs || []).map((r: { project_id: string }) => r.project_id),
     ...(reProjs || []).map((r: { project_id: string }) => r.project_id),
     ...(agProjs || []).map((r: { project_id: string }) => r.project_id),
-  ]);
+  ]));
 
   const [{ data: owners }, { data: relatedProjects }] = await Promise.all([
     ownerIds.length > 0
       ? supabase.from("people").select("id, full_name").in("id", ownerIds)
       : { data: [] },
-    allVendorProjectIds.size > 0
-      ? supabase.from("projects").select("id, name, slug").in("id", [...allVendorProjectIds])
+    allVendorProjectIds.length > 0
+      ? supabase.from("projects").select("id, name, slug").in("id", allVendorProjectIds)
       : { data: [] },
   ]);
 
-  const ownerMap = new Map((owners || []).map((o: { id: string; full_name: string }) => [o.id, o.full_name]));
-  const projectMap = new Map((relatedProjects || []).map((p: { id: string; name: string; slug: string }) => [p.id, p]));
+  const ownerMap: Record<string, string> = {};
+  for (const o of (owners || []) as { id: string; full_name: string }[]) ownerMap[o.id] = o.full_name;
+  const projectMap: Record<string, { id: string; name: string; slug: string }> = {};
+  for (const p of (relatedProjects || []) as { id: string; name: string; slug: string }[]) projectMap[p.id] = p;
 
   // Group items by project for the Open Items section
   const TYPE_LABELS: Record<string, string> = { action_item: "Action", blocker: "Blocker", raid_entry: "RAID" };
@@ -102,7 +104,7 @@ export default async function VendorDetailPage({
     if (key === "__none__") {
       projectGroups.push({ projectId: null, projectName: "No Project", projectSlug: null, groupItems });
     } else {
-      const proj = projectMap.get(key);
+      const proj = projectMap[key];
       projectGroups.push({
         projectId: key,
         projectName: proj ? (proj as { name: string }).name : "Unknown Project",
@@ -118,13 +120,13 @@ export default async function VendorDetailPage({
   });
 
   // Build related projects list (combining project_vendors + projects from items)
-  const allRelatedProjectIds = new Set<string>();
-  for (const p of vendorProjects) allRelatedProjectIds.add(p.id);
-  for (const item of items) { if (item.project_id) allRelatedProjectIds.add(item.project_id); }
-  const relatedProjectsList = [...allRelatedProjectIds].map((pid) => {
+  const relatedIdSet: Record<string, boolean> = {};
+  for (const p of vendorProjects) relatedIdSet[p.id] = true;
+  for (const item of items) { if (item.project_id) relatedIdSet[item.project_id] = true; }
+  const relatedProjectsList = Object.keys(relatedIdSet).map((pid) => {
     const fromVendor = vendorProjects.find((p) => p.id === pid);
     if (fromVendor) return { id: fromVendor.id, name: fromVendor.name, slug: fromVendor.slug };
-    const fromMap = projectMap.get(pid);
+    const fromMap = projectMap[pid];
     if (fromMap) return fromMap as { id: string; name: string; slug: string };
     return null;
   }).filter(Boolean).sort((a, b) => a!.name.localeCompare(b!.name)) as { id: string; name: string; slug: string }[];
@@ -207,7 +209,7 @@ export default async function VendorDetailPage({
                   <tbody>
                     {group.groupItems.map((item) => {
                       const badge = statusBadge(item.status);
-                      const ownerName = item.owner_id ? ownerMap.get(item.owner_id) : null;
+                      const ownerName = item.owner_id ? ownerMap[item.owner_id] : null;
                       return (
                         <tr key={`${item.entity_type}-${item.entity_id}`} className="border-b border-gray-200 hover:bg-gray-50">
                           <td className="px-4 py-3">
