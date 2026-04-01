@@ -103,28 +103,37 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: inviteError.message }, { status: 500 });
   }
 
-  // Create auth user and generate invite link (without Supabase sending email)
+  // Create auth user, then generate a magic link (avoids PKCE verifier issues)
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://edcet-tracker.vercel.app";
-  const { data: linkData, error: authError } = await admin.auth.admin.generateLink({
-    type: "invite",
+
+  // Step 1: Create the auth user via invite (this creates the user with metadata)
+  const { error: createError } = await admin.auth.admin.createUser({
     email,
-    options: {
-      data: {
-        org_id: profile.org_id,
-        role,
-        vendor_id: vendor_id || null,
-      },
-      redirectTo: `${siteUrl}/auth/callback`,
+    email_confirm: false,
+    user_metadata: {
+      org_id: profile.org_id,
+      role,
+      vendor_id: vendor_id || null,
     },
   });
 
-  if (authError) {
-    // Clean up invitation if user creation failed
+  if (createError) {
     await admin.from("invitations").delete().eq("id", invitation.id);
-    return NextResponse.json({ error: authError.message }, { status: 500 });
+    return NextResponse.json({ error: createError.message }, { status: 500 });
   }
 
-  // Send invite email through our own Gmail SMTP
+  // Step 2: Generate a magic link (uses implicit flow — no PKCE issues)
+  const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
+    type: "magiclink",
+    email,
+    options: { redirectTo: `${siteUrl}/auth/callback` },
+  });
+
+  if (linkError) {
+    await admin.from("invitations").delete().eq("id", invitation.id);
+    return NextResponse.json({ error: linkError.message }, { status: 500 });
+  }
+
   // Fix redirect URL — Supabase may override with its configured Site URL
   let inviteLink = linkData?.properties?.action_link;
   if (inviteLink) {
