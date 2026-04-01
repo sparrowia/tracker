@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import type { Vendor, Person, VendorAccountabilityRow } from "@/lib/types";
+import { VendorAgendaView } from "@/components/vendor-agenda-view";
 import { VendorContacts } from "@/components/vendor-contacts";
 
 export default async function VendorDetailPage({
@@ -31,6 +32,7 @@ export default async function VendorDetailPage({
 
   const items = (accountability || []) as VendorAccountabilityRow[];
   const people = (contacts || []) as Person[];
+  const peopleList = (allPeople || []) as Person[];
 
   return (
     <div className="max-w-6xl mx-auto space-y-8">
@@ -45,6 +47,10 @@ export default async function VendorDetailPage({
 
       {/* Step 1: Contacts */}
       <VendorContacts initialContacts={people} vendorId={v.id} orgId={v.org_id} initialInvitations={(invitationData || []) as { id: string; email: string; accepted_at: string | null }[]} />
+
+      <section>
+        <VendorAgendaView vendor={v} people={peopleList} />
+      </section>
 
       <p className="text-sm text-gray-500">Open items: {items.length}</p>
     </div>
