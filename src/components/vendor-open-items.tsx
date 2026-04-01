@@ -34,7 +34,7 @@ export function VendorOpenItems({
 }) {
   const [items, setItems] = useState(initialItems);
   const [ownerMap, setOwnerMap] = useState(initialOwnerMap);
-  const [activeTab, setActiveTab] = useState<string>(projectTabs.length > 0 ? (projectTabs[0].projectId || "__none__") : "__none__");
+  const [activeTab, setActiveTab] = useState<string>("__urgent__");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<Record<string, unknown> | null>(null);
   const [people, setPeople] = useState<Person[]>([]);
@@ -85,13 +85,23 @@ export function VendorOpenItems({
     );
   }
 
-  const filtered = items.filter((i) => (i.project_id || "__none__") === activeTab);
-  const activeProject = projectTabs.find((t) => (t.projectId || "__none__") === activeTab);
+  const urgentItems = items.filter((i) => i.priority === "critical" || i.priority === "high");
+  const isUrgent = activeTab === "__urgent__";
+  const filtered = isUrgent ? urgentItems : items.filter((i) => (i.project_id || "__none__") === activeTab);
+  const activeProject = isUrgent ? null : projectTabs.find((t) => (t.projectId || "__none__") === activeTab);
 
   return (
     <div>
       {/* Project tabs */}
       <div className="flex items-center border-b border-gray-300 overflow-x-auto">
+        <button
+          onClick={() => { setActiveTab("__urgent__"); setExpandedId(null); setDetail(null); }}
+          className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+            isUrgent ? "border-red-600 text-red-700" : "border-transparent text-gray-500 hover:text-gray-700"
+          }`}
+        >
+          🔥{urgentItems.length > 0 && <span className={`ml-1.5 text-xs ${isUrgent ? "text-red-500" : "text-gray-400"}`}>{urgentItems.length}</span>}
+        </button>
         {projectTabs.map((tab) => {
           const key = tab.projectId || "__none__";
           const isActive = activeTab === key;
