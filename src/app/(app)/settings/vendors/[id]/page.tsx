@@ -117,6 +117,18 @@ export default async function VendorDetailPage({
     return a.projectName.localeCompare(b.projectName);
   });
 
+  // Build related projects list (combining project_vendors + projects from items)
+  const allRelatedProjectIds = new Set<string>();
+  for (const p of vendorProjects) allRelatedProjectIds.add(p.id);
+  for (const item of items) { if (item.project_id) allRelatedProjectIds.add(item.project_id); }
+  const relatedProjectsList = [...allRelatedProjectIds].map((pid) => {
+    const fromVendor = vendorProjects.find((p) => p.id === pid);
+    if (fromVendor) return { id: fromVendor.id, name: fromVendor.name, slug: fromVendor.slug };
+    const fromMap = projectMap.get(pid);
+    if (fromMap) return fromMap as { id: string; name: string; slug: string };
+    return null;
+  }).filter(Boolean).sort((a, b) => a!.name.localeCompare(b!.name)) as { id: string; name: string; slug: string }[];
+
   return (
     <div className="max-w-6xl mx-auto space-y-8">
       <div>
@@ -131,40 +143,25 @@ export default async function VendorDetailPage({
       {/* Contacts */}
       <VendorContacts initialContacts={people} vendorId={v.id} orgId={v.org_id} initialInvitations={(invitationData || []) as { id: string; email: string; accepted_at: string | null }[]} />
 
-      {/* Related Projects — derived from all items linked to this vendor */}
-      {(() => {
-        // Combine project_vendors projects with projects from accountability items
-        const allProjectIds = new Set<string>();
-        for (const p of vendorProjects) allProjectIds.add(p.id);
-        for (const item of items) {
-          if (item.project_id) allProjectIds.add(item.project_id);
-        }
-        const allProjects = [...allProjectIds].map((pid) => {
-          const fromVendor = vendorProjects.find((p) => p.id === pid);
-          if (fromVendor) return fromVendor;
-          const fromMap = projectMap.get(pid);
-          if (fromMap) return fromMap as { id: string; name: string; slug: string };
-          return null;
-        }).filter(Boolean).sort((a, b) => a!.name.localeCompare(b!.name));
-        return allProjects.length > 0 ? (
-          <section>
-            <div className="bg-gray-800 px-4 py-2.5 rounded-t-lg">
-              <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Related Projects</h2>
-            </div>
-            <div className="flex gap-2 flex-wrap mt-3">
-              {allProjects.map((proj) => (
-                <Link
-                  key={proj!.id}
-                  href={`/projects/${proj!.slug}`}
-                  className="inline-flex px-3 py-1 text-sm rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200"
-                >
-                  {proj!.name}
-                </Link>
-              ))}
-            </div>
-          </section>
-        ) : null;
-      })()}
+      {/* Related Projects */}
+      {relatedProjectsList.length > 0 && (
+        <section>
+          <div className="bg-gray-800 px-4 py-2.5 rounded-t-lg">
+            <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Related Projects</h2>
+          </div>
+          <div className="flex gap-2 flex-wrap mt-3">
+            {relatedProjectsList.map((proj) => (
+              <Link
+                key={proj.id}
+                href={`/projects/${proj.slug}`}
+                className="inline-flex px-3 py-1 text-sm rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200"
+              >
+                {proj.name}
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Meeting Agenda */}
       <section>
