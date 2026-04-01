@@ -29,6 +29,7 @@ interface RaidLogProps {
   registerUpdater?: (fn: (id: string, field: string, value: string, person?: Person | null, vendor?: Vendor | null) => void) => () => void;
   registerAdder?: (fn: (item: RaidRow) => void) => () => void;
   searchFilter?: string;
+  deepLinkItemId?: string | null;
 }
 
 const raidTypes: RaidType[] = ["risk", "assumption", "issue", "decision"];
@@ -245,7 +246,7 @@ function ChangelogPanel({ entryId, orgId, people }: { entryId: string; orgId: st
   );
 }
 
-export default function RaidLog({ initialEntries, project, people, vendors, onPersonAdded, onVendorAdded, addUndo, onCountChange, intakeSourceMap = {}, onMeetingToggle, onConvertedToAction, onConvertedToBlocker, registerUpdater, registerAdder, searchFilter = "" }: RaidLogProps) {
+export default function RaidLog({ initialEntries, project, people, vendors, onPersonAdded, onVendorAdded, addUndo, onCountChange, intakeSourceMap = {}, onMeetingToggle, onConvertedToAction, onConvertedToBlocker, registerUpdater, registerAdder, searchFilter = "", deepLinkItemId }: RaidLogProps) {
   const { role, profileId, userPersonId } = useRole();
   const [entries, setEntries] = useState<RaidRow[]>(initialEntries);
 
@@ -275,7 +276,19 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
     });
   }, [registerAdder]);
 
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(deepLinkItemId || null);
+
+  // Auto-select the correct tab and scroll to deep-linked item
+  useEffect(() => {
+    if (!deepLinkItemId) return;
+    const entry = entries.find((e) => e.id === deepLinkItemId);
+    if (entry) {
+      setActiveTab(entry.raid_type);
+      setTimeout(() => {
+        document.getElementById(`raid-${deepLinkItemId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 200);
+    }
+  }, [deepLinkItemId]); // eslint-disable-line react-hooks/exhaustive-deps
   const [activeTab, setActiveTab] = useState<RaidType>("risk");
   const [showArchived, setShowArchived] = useState(false);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
@@ -1145,7 +1158,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
               return (
                 <Fragment key={entry.id}>
                   {/* Collapsed row */}
-                  <div
+                  <div id={`raid-${entry.id}`}
                     className={`border-b last:border-b-0 cursor-pointer relative overflow-hidden ${isResolving ? "bg-green-100 opacity-0 border-transparent" : isDragging ? "opacity-40 bg-white border-gray-400" : isDropNest ? "bg-blue-50 border-blue-300" : selectedIds.has(entry.id) ? "bg-blue-50 border-gray-400" : isClosed ? "bg-gray-50 hover:bg-gray-100 border-gray-400" : "bg-white hover:bg-gray-50 border-gray-400"}`}
                     style={{ transition: isResolving ? "all 350ms ease-out" : undefined, paddingLeft: isChild ? "2rem" : "0.75rem", paddingRight: "0.75rem", ...(isResolving ? { maxHeight: 0, paddingTop: 0, paddingBottom: 0, overflow: "hidden" } : { maxHeight: 200, paddingTop: "0.5rem", paddingBottom: "0.5rem" }) }}
                     onClick={() => toggleExpand(entry.id)}

@@ -325,11 +325,11 @@ export default function ProjectTabs({
         </div>
 
         <div style={{ display: active === "blockers" ? "block" : "none" }}>
-          <BlockersPanel blockers={blockers} people={peopleList} vendors={vendorsList} onPersonAdded={addPerson} onVendorAdded={addVendor} addUndo={addUndo} onCountChange={setBlockerCount} intakeSourceMap={intakeSourceMap} onNewItemsSuggested={onNewItemsSuggested} registerAdder={(fn) => { itemAddersRef.current.addBlocker = fn; return () => { itemAddersRef.current.addBlocker = undefined; }; }} registerResolver={(fn) => { itemAddersRef.current.resolveBlocker = fn; return () => { itemAddersRef.current.resolveBlocker = undefined; }; }} registerUpdater={(fn) => { itemAddersRef.current.updateBlocker = fn; return () => { itemAddersRef.current.updateBlocker = undefined; }; }} onMeetingToggle={bumpAgendaRefresh} orgId={project.org_id} projectSlug={project.slug} searchFilter={searchFilter} />
+          <BlockersPanel blockers={blockers} people={peopleList} vendors={vendorsList} onPersonAdded={addPerson} onVendorAdded={addVendor} addUndo={addUndo} onCountChange={setBlockerCount} intakeSourceMap={intakeSourceMap} onNewItemsSuggested={onNewItemsSuggested} registerAdder={(fn) => { itemAddersRef.current.addBlocker = fn; return () => { itemAddersRef.current.addBlocker = undefined; }; }} registerResolver={(fn) => { itemAddersRef.current.resolveBlocker = fn; return () => { itemAddersRef.current.resolveBlocker = undefined; }; }} registerUpdater={(fn) => { itemAddersRef.current.updateBlocker = fn; return () => { itemAddersRef.current.updateBlocker = undefined; }; }} onMeetingToggle={bumpAgendaRefresh} orgId={project.org_id} projectSlug={project.slug} searchFilter={searchFilter} deepLinkItemId={urlTab === "blockers" ? urlItem : undefined} />
         </div>
 
         <div style={{ display: active === "raid" ? "block" : "none" }}>
-          <RaidLog initialEntries={raidEntries} project={project} people={peopleList} vendors={vendorsList} onPersonAdded={addPerson} onVendorAdded={addVendor} addUndo={addUndo} onCountChange={setRaidCount} intakeSourceMap={intakeSourceMap} onMeetingToggle={bumpAgendaRefresh} searchFilter={searchFilter}
+          <RaidLog initialEntries={raidEntries} project={project} people={peopleList} vendors={vendorsList} onPersonAdded={addPerson} onVendorAdded={addVendor} addUndo={addUndo} onCountChange={setRaidCount} intakeSourceMap={intakeSourceMap} onMeetingToggle={bumpAgendaRefresh} searchFilter={searchFilter} deepLinkItemId={urlTab === "raid" ? urlItem : undefined}
             onConvertedToAction={async (actionId) => {
               const { data } = await supabase.from("action_items").select("*, owner:people!action_items_owner_id_fkey(*), vendor:vendors(*)").eq("id", actionId).single();
               if (data && itemAddersRef.current.addAction) {
@@ -740,6 +740,7 @@ function BlockersPanel({
   orgId,
   projectSlug,
   searchFilter = "",
+  deepLinkItemId,
 }: {
   blockers: BlockerRow[];
   people: Person[];
@@ -757,6 +758,7 @@ function BlockersPanel({
   orgId: string;
   projectSlug: string;
   searchFilter?: string;
+  deepLinkItemId?: string | null;
 }) {
   const { role, profileId, userPersonId } = useRole();
   const [blockers, setBlockers] = useState<BlockerRow[]>(initialBlockers);
@@ -798,7 +800,7 @@ function BlockersPanel({
       })
     : blockers;
 
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(deepLinkItemId || null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const lastSelectedBlockerRef = useRef<string | null>(null);
   const [callNotesId, setCallNotesId] = useState<string | null>(null);
