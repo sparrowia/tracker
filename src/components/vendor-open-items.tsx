@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { priorityColor, priorityLabel, statusBadge, formatAge, formatDateShort } from "@/lib/utils";
 import { useRole } from "@/components/role-context";
 import OwnerPicker from "@/components/owner-picker";
+import CommentThread from "@/components/comment-thread";
 import type { VendorAccountabilityRow, Person, PriorityLevel, ItemStatus } from "@/lib/types";
 
 const TYPE_LABELS: Record<string, string> = { action_item: "Action", blocker: "Blocker", raid_entry: "RAID" };
@@ -24,10 +25,12 @@ export function VendorOpenItems({
   items: initialItems,
   ownerMap: initialOwnerMap,
   projectTabs,
+  orgId,
 }: {
   items: VendorAccountabilityRow[];
   ownerMap: Record<string, string>;
   projectTabs: ProjectTab[];
+  orgId: string;
 }) {
   const [items, setItems] = useState(initialItems);
   const [ownerMap, setOwnerMap] = useState(initialOwnerMap);
@@ -39,33 +42,30 @@ export function VendorOpenItems({
   const { role } = useRole();
   const canEdit = role === "super_admin" || role === "admin" || role === "user";
 
-  // Load people list once for OwnerPicker
   async function ensurePeople() {
     if (people.length > 0) return;
     const { data } = await supabase.from("people").select("*").order("full_name");
     if (data) setPeople(data as Person[]);
   }
 
+  function tableName(entityType: string) {
+    if (entityType === "action_item") return "action_items";
+    if (entityType === "blocker") return "blockers";
+    return "raid_entries";
+  }
+
   async function toggleExpand(item: VendorAccountabilityRow) {
     const key = `${item.entity_type}-${item.entity_id}`;
-    if (expandedId === key) {
-      setExpandedId(null);
-      setDetail(null);
-      return;
-    }
+    if (expandedId === key) { setExpandedId(null); setDetail(null); return; }
     setExpandedId(key);
     await ensurePeople();
-    // Fetch full item
-    const table = item.entity_type === "action_item" ? "action_items" : item.entity_type === "blocker" ? "blockers" : "raid_entries";
-    const { data } = await supabase.from(table).select("*").eq("id", item.entity_id).single();
+    const { data } = await supabase.from(tableName(item.entity_type)).select("*").eq("id", item.entity_id).single();
     if (data) setDetail(data);
   }
 
   async function saveField(item: VendorAccountabilityRow, field: string, value: string) {
-    const table = item.entity_type === "action_item" ? "action_items" : item.entity_type === "blocker" ? "blockers" : "raid_entries";
-    await supabase.from(table).update({ [field]: value || null }).eq("id", item.entity_id);
-    // Update local state
-    if (field === "status" || field === "priority" || field === "due_date" || field === "title") {
+    await supabase.from(tableName(item.entity_type)).update({ [field]: value || null }).eq("id", item.entity_id);
+    if (["status", "priority", "due_date", "title"].includes(field)) {
       setItems((prev) => prev.map((i) => i.entity_id === item.entity_id ? { ...i, [field]: value } as VendorAccountabilityRow : i));
     }
     if (field === "owner_id") {
@@ -180,84 +180,123 @@ export function VendorOpenItems({
                   </span>
                 </div>
 
-                {/* Expanded detail panel */}
+                {/* Expanded detail panel — matches RAID log layout */}
                 {isExpanded && detail && (
-                  <div className="bg-yellow-50/25 border-b border-gray-300 px-6 py-4 space-y-4">
+                  <div className="bg-yellow-50/25 border-b border-gray-300" onClick={(e) => e.stopPropagation()}>
                     {/* Title */}
-                    <h3 className="text-base font-semibold text-gray-900">{item.title}</h3>
+                    <div className="px-5 pt-4 pb-3 text-base font-semibold text-gray-900 bg-yellow-50/25">
+                      {item.title}
+                    </div>
 
-                    {/* Properties grid */}
-                    <div className="grid grid-cols-[120px_1fr_120px_1fr] border border-gray-200 rounded bg-white text-sm">
-                      <span className="px-3 py-2 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-r border-gray-200">Priority</span>
-                      <div className="px-3 py-2 border-b border-r border-gray-200">
+                    {/* Description & Meeting Notes — side by side */}
+                    <div className="grid grid-cols-2 gap-4 px-5 py-3 border-t border-gray-200 bg-yellow-50/25">
+                      <div className="rounded border border-gray-200 bg-white p-3">
+                        <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Description</span>
                         {canEdit ? (
-                          <select value={item.priority} onChange={(e) => saveField(item, "priority", e.target.value)} className="text-sm border border-transparent hover:border-gray-300 rounded bg-transparent -ml-1 cursor-pointer">
-                            {PRIORITY_OPTIONS.map((p) => <option key={p} value={p}>{priorityLabel(p)}</option>)}
-                          </select>
-                        ) : priorityLabel(item.priority)}
+                          <textarea
+                            defaultValue={(detail.description as string) || (detail.impact_description as string) || ""}
+                            onBlur={(e) => saveField(item, item.entity_type === "blocker" ? "impact_description" : "description", e.target.value)}
+                            placeholder="Add description..."
+                            rows={6}
+                            className="w-full rounded border border-gray-300 bg-white px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y mt-1"
+                          />
+                        ) : (
+                          <p className="text-sm text-gray-700 mt-1 whitespace-pre-wrap">{(detail.description as string) || (detail.impact_description as string) || "—"}</p>
+                        )}
                       </div>
-                      <span className="px-3 py-2 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-r border-gray-200">Status</span>
-                      <div className="px-3 py-2 border-b border-gray-200">
+                      <div className="rounded border border-gray-200 bg-white p-3">
+                        <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Meeting Notes</span>
                         {canEdit ? (
-                          <select value={item.status} onChange={(e) => saveField(item, "status", e.target.value)} className="text-sm border border-transparent hover:border-gray-300 rounded bg-transparent -ml-1 cursor-pointer">
-                            {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{statusBadge(s).label}</option>)}
-                          </select>
-                        ) : badge.label}
-                      </div>
-                      <span className="px-3 py-2 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-r border-gray-200">Owner</span>
-                      <div className="px-3 py-2 border-b border-r border-gray-200">
-                        {canEdit ? (
-                          <OwnerPicker value={item.owner_id || ""} onChange={(id) => saveField(item, "owner_id", id)} people={people} onPersonAdded={(p) => setPeople((prev) => [...prev, p])} />
-                        ) : (ownerName || "Unassigned")}
-                      </div>
-                      <span className="px-3 py-2 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-r border-gray-200">Due Date</span>
-                      <div className="px-3 py-2 border-b border-gray-200">
-                        {canEdit ? (
-                          <input type="date" value={(detail.due_date as string) || ""} onChange={(e) => saveField(item, "due_date", e.target.value)} className="text-sm border border-transparent hover:border-gray-300 rounded bg-transparent -ml-1 cursor-pointer" />
-                        ) : formatDateShort(item.due_date)}
+                          <textarea
+                            defaultValue={(detail.notes as string) || ""}
+                            onBlur={(e) => saveField(item, "notes", e.target.value)}
+                            placeholder="Add meeting notes..."
+                            rows={6}
+                            className="w-full rounded border border-gray-300 bg-white px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y mt-1"
+                          />
+                        ) : (
+                          <p className="text-sm text-gray-700 mt-1 whitespace-pre-wrap">{(detail.notes as string) || "—"}</p>
+                        )}
                       </div>
                     </div>
 
-                    {/* Description */}
-                    {canEdit ? (
-                      <div>
-                        <label className="text-xs font-medium text-gray-400 uppercase">Description</label>
-                        <textarea
-                          defaultValue={(detail.description as string) || (detail.impact_description as string) || ""}
-                          onBlur={(e) => {
-                            const field = item.entity_type === "blocker" ? "impact_description" : "description";
-                            saveField(item, field, e.target.value);
-                          }}
-                          rows={3}
-                          className="w-full mt-1 rounded border border-gray-200 bg-white px-3 py-2 text-sm focus:border-blue-400 focus:outline-none resize-y"
-                          placeholder="Add description..."
-                        />
+                    {/* Next Steps */}
+                    {(item.entity_type === "raid_entry" || item.entity_type === "action_item") && (
+                      <div className="px-5 pb-3">
+                        <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Next Steps</span>
+                        {canEdit ? (
+                          <textarea
+                            defaultValue={(detail.next_steps as string) || ""}
+                            onBlur={(e) => saveField(item, "next_steps", e.target.value)}
+                            placeholder="Next steps..."
+                            rows={2}
+                            className="w-full rounded border border-gray-200 bg-white px-2 py-1 text-sm font-bold focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none mt-1"
+                          />
+                        ) : (
+                          <p className="text-sm text-gray-700 mt-1 whitespace-pre-wrap font-bold">{(detail.next_steps as string) || "—"}</p>
+                        )}
                       </div>
-                    ) : (detail.description || detail.impact_description) ? (
-                      <div>
-                        <label className="text-xs font-medium text-gray-400 uppercase">Description</label>
-                        <p className="text-sm text-gray-700 mt-1 whitespace-pre-wrap">{(detail.description as string) || (detail.impact_description as string)}</p>
-                      </div>
-                    ) : null}
+                    )}
 
-                    {/* Notes / Next Steps */}
-                    {canEdit ? (
-                      <div>
-                        <label className="text-xs font-medium text-gray-400 uppercase">Notes</label>
-                        <textarea
-                          defaultValue={(detail.notes as string) || ""}
-                          onBlur={(e) => saveField(item, "notes", e.target.value)}
-                          rows={2}
-                          className="w-full mt-1 rounded border border-gray-200 bg-white px-3 py-2 text-sm focus:border-blue-400 focus:outline-none resize-y"
-                          placeholder="Add notes..."
-                        />
+                    {/* Properties grid */}
+                    <div className="border-t border-gray-200 bg-white">
+                      <div className="grid grid-cols-[120px_1fr_120px_1fr] items-stretch">
+                        {/* Row: Priority / Status */}
+                        <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-200">Priority</span>
+                        <div className="px-3 py-2.5 border-b border-gray-200">
+                          {canEdit ? (
+                            <select value={item.priority} onChange={(e) => saveField(item, "priority", e.target.value)} className="text-sm rounded border border-transparent hover:border-gray-300 bg-transparent py-0 focus:border-blue-500 focus:outline-none cursor-pointer -ml-0.5">
+                              {PRIORITY_OPTIONS.map((p) => <option key={p} value={p}>{priorityLabel(p)}</option>)}
+                            </select>
+                          ) : priorityLabel(item.priority)}
+                        </div>
+                        <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-200">Status</span>
+                        <div className="px-3 py-2.5 border-b border-gray-200">
+                          {canEdit ? (
+                            <select value={item.status} onChange={(e) => saveField(item, "status", e.target.value)} className="text-sm rounded border border-transparent hover:border-gray-300 bg-transparent py-0 focus:border-blue-500 focus:outline-none cursor-pointer -ml-0.5">
+                              {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{statusBadge(s).label}</option>)}
+                            </select>
+                          ) : badge.label}
+                        </div>
+
+                        {/* Row: Owner / Vendor */}
+                        <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-200">Owner</span>
+                        <div className="px-3 py-1.5 border-b border-gray-200">
+                          {canEdit ? (
+                            <OwnerPicker value={item.owner_id || ""} onChange={(id) => saveField(item, "owner_id", id)} people={people} onPersonAdded={(p) => setPeople((prev) => [...prev, p])} />
+                          ) : (ownerName || "Unassigned")}
+                        </div>
+                        <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-200">Due Date</span>
+                        <div className="px-3 py-2.5 border-b border-gray-200">
+                          {canEdit ? (
+                            <input type="date" value={(detail.due_date as string) || ""} onChange={(e) => saveField(item, "due_date", e.target.value)} className="text-sm border border-transparent hover:border-gray-300 rounded bg-transparent -ml-1 cursor-pointer" />
+                          ) : formatDateShort(item.due_date)}
+                        </div>
+
+                        {/* Row: Opened / Age */}
+                        <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-200">Opened</span>
+                        <div className="px-3 py-2.5 border-b border-gray-200">
+                          <span className="text-sm text-gray-700">{new Date(item.first_flagged_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
+                        </div>
+                        <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-200">Age</span>
+                        <div className="px-3 py-2.5 border-b border-gray-200">
+                          <span className="text-sm text-gray-700">{formatAge(item.age_days)}</span>
+                        </div>
                       </div>
-                    ) : (detail.notes) ? (
-                      <div>
-                        <label className="text-xs font-medium text-gray-400 uppercase">Notes</label>
-                        <p className="text-sm text-gray-700 mt-1 whitespace-pre-wrap">{detail.notes as string}</p>
-                      </div>
-                    ) : null}
+                    </div>
+
+                    {/* Comments */}
+                    <div className="bg-yellow-50/25">
+                      <CommentThread
+                        {...(item.entity_type === "raid_entry" ? { raidEntryId: item.entity_id } : item.entity_type === "action_item" ? { actionItemId: item.entity_id } : { blockerId: item.entity_id })}
+                        orgId={orgId}
+                        people={people}
+                        itemTitle={item.title}
+                        itemType={TYPE_LABELS[item.entity_type] || item.entity_type}
+                        projectSlug={activeProject?.projectSlug || undefined}
+                        ownerId={item.owner_id}
+                      />
+                    </div>
                   </div>
                 )}
               </div>

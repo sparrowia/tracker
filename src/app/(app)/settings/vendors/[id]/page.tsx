@@ -96,7 +96,7 @@ export default async function VendorDetailPage({
       <VendorContacts initialContacts={people} vendorId={v.id} orgId={v.org_id} initialInvitations={(invitationData || []) as { id: string; email: string; accepted_at: string | null }[]} />
 
       <section>
-        <VendorOpenItems items={items} ownerMap={ownerMap} projectTabs={projectTabs} />
+        <VendorOpenItems items={items} ownerMap={ownerMap} projectTabs={projectTabs} orgId={v.org_id} />
       </section>
     </div>
   );
