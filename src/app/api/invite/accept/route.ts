@@ -8,34 +8,43 @@ export async function POST(request: Request) {
   }
 
   const admin = createAdminClient();
-  const { data: invitation } = await admin
-    .from("invitations")
-    .select("id")
-    .eq("email", email)
-    .is("accepted_at", null)
-    .maybeSingle();
+  const emailLower = email.toLowerCase();
 
-  if (invitation) {
-    await admin
+  // Mark invitation accepted (case-insensitive)
+  const { data: invitations } = await admin
+    .from("invitations")
+    .select("id, email")
+    .is("accepted_at", null);
+
+  const matchingInvite = (invitations || []).find(
+    (inv: { id: string; email: string }) => inv.email.toLowerCase() === emailLower
+  );
+
+  if (matchingInvite) {
+    const { error: invErr } = await admin
       .from("invitations")
       .update({ accepted_at: new Date().toISOString() })
-      .eq("id", invitation.id);
+      .eq("id", matchingInvite.id);
+    if (invErr) console.error("Failed to mark invitation accepted:", invErr);
   }
 
   // Link people.profile_id for the user who just signed in
-  const { data: profile } = await admin
+  const { data: profiles } = await admin
     .from("profiles")
-    .select("id, org_id")
-    .eq("email", email)
-    .maybeSingle();
+    .select("id, org_id, email");
 
-  if (profile) {
-    await admin
+  const matchingProfile = (profiles || []).find(
+    (p: { id: string; org_id: string; email: string }) => p.email.toLowerCase() === emailLower
+  );
+
+  if (matchingProfile) {
+    const { error: linkErr } = await admin
       .from("people")
-      .update({ profile_id: profile.id })
-      .eq("email", email)
-      .eq("org_id", profile.org_id)
+      .update({ profile_id: matchingProfile.id })
+      .ilike("email", emailLower)
+      .eq("org_id", matchingProfile.org_id)
       .is("profile_id", null);
+    if (linkErr) console.error("Failed to link profile_id:", linkErr);
   }
 
   return NextResponse.json({ success: true });

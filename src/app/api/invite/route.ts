@@ -128,10 +128,12 @@ export async function POST(request: Request) {
   // Fix redirect URL — Supabase may override with its configured Site URL
   let inviteLink = linkData?.properties?.action_link;
   if (inviteLink) {
-    inviteLink = inviteLink.replace(/redirect_to=[^&]+/, `redirect_to=${encodeURIComponent(siteUrl + "/auth/callback")}`);
+    const linkUrl = new URL(inviteLink);
+    linkUrl.searchParams.set("redirect_to", `${siteUrl}/auth/callback`);
+    inviteLink = linkUrl.toString();
   }
   if (inviteLink) {
-    await sendEmail({
+    const emailResult = await sendEmail({
       to: email,
       subject: "You're invited to Edcetera Tracker",
       html: `
@@ -155,6 +157,11 @@ export async function POST(request: Request) {
         </div>
       `,
     });
+    if (!emailResult.success) {
+      return NextResponse.json({ error: `Invitation created but email failed: ${emailResult.error}` }, { status: 500 });
+    }
+  } else {
+    return NextResponse.json({ error: "Failed to generate invite link" }, { status: 500 });
   }
 
   return NextResponse.json({ invitation });

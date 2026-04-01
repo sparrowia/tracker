@@ -62,7 +62,9 @@ export async function POST(request: Request) {
   }
 
   // Fix redirect URL — Supabase may override with its configured Site URL
-  link = link.replace(/redirect_to=[^&]+/, `redirect_to=${encodeURIComponent(siteUrl + "/auth/callback")}`);
+  const linkUrl = new URL(link);
+  linkUrl.searchParams.set("redirect_to", `${siteUrl}/auth/callback`);
+  link = linkUrl.toString();
 
   await sendEmail({
     to: email,

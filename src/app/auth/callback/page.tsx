@@ -31,8 +31,6 @@ function CallbackHandler() {
       }
 
       // Case 2: Implicit flow — #access_token= in hash fragment
-      // The @supabase/ssr client does NOT auto-parse hash fragments,
-      // so we manually extract the tokens and set the session.
       const hash = window.location.hash;
       if (hash) {
         const params = new URLSearchParams(hash.substring(1));
@@ -51,7 +49,6 @@ function CallbackHandler() {
           }
 
           if (data?.session?.user) {
-            // Clear the hash from URL
             window.history.replaceState(null, "", window.location.pathname);
             await markInvitationAccepted(data.session.user.email);
             router.replace(next);
@@ -60,16 +57,16 @@ function CallbackHandler() {
         }
       }
 
-      // Case 3: Check for existing session (user may already be authenticated)
+      // Case 3: Check for existing session
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
         await markInvitationAccepted(session.user.email);
-        router.replace("/set-password");
+        router.replace(next);
         return;
       }
 
-      // Nothing worked — redirect to login
-      setError("Unable to verify your invitation. The link may have expired.");
+      // Nothing worked
+      setError("Unable to verify your invitation. The link may have expired. Try clicking 'Resend' on the People page.");
     }
 
     async function markInvitationAccepted(email: string | undefined) {
@@ -81,7 +78,7 @@ function CallbackHandler() {
           body: JSON.stringify({ email }),
         });
       } catch {
-        // Non-critical
+        // Non-critical — profile_id linking can happen on next login
       }
     }
 
@@ -91,7 +88,7 @@ function CallbackHandler() {
   if (error) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center space-y-4">
+        <div className="text-center space-y-4 max-w-md px-4">
           <p className="text-red-600 text-sm">{error}</p>
           <a href="/login" className="text-blue-600 hover:text-blue-800 text-sm">
             Go to login

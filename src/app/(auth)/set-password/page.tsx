@@ -26,6 +26,11 @@ export default function SetPasswordPage() {
           window.history.replaceState(null, "", window.location.pathname);
         }
       }
+      // Verify we have a session
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        setError("No active session. Your invitation link may have expired. Please ask your admin to resend the invite.");
+      }
       setReady(true);
     }
     init();

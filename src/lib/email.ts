@@ -26,11 +26,12 @@ export async function sendEmail(opts: {
   to: string;
   subject: string;
   html: string;
-}) {
+}): Promise<{ success: boolean; error?: string }> {
   const t = getTransporter();
   if (!t) {
-    console.warn("SMTP not configured, skipping email");
-    return;
+    const msg = "SMTP not configured (missing SMTP_USER or SMTP_PASS)";
+    console.error(msg);
+    return { success: false, error: msg };
   }
 
   try {
@@ -40,7 +41,10 @@ export async function sendEmail(opts: {
       subject: opts.subject,
       html: opts.html,
     });
+    return { success: true };
   } catch (err) {
+    const msg = err instanceof Error ? err.message : "Email send failed";
     console.error("Email send failed:", err);
+    return { success: false, error: msg };
   }
 }

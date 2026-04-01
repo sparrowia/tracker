@@ -83,8 +83,9 @@ export async function POST(request: Request) {
       email: invitation.email,
       options: { redirectTo: `${siteUrl}/auth/callback` },
     });
-    const link = magicData?.properties?.action_link;
+    let link = magicData?.properties?.action_link;
     if (link) {
+      const u = new URL(link); u.searchParams.set("redirect_to", `${siteUrl}/auth/callback`); link = u.toString();
       await sendEmail({
         to: invitation.email,
         subject: "Your Edcetera Tracker invitation (resent)",
@@ -104,7 +105,10 @@ export async function POST(request: Request) {
   }
 
   // Send invite email through Gmail SMTP
-  const inviteLink = linkData?.properties?.action_link;
+  let inviteLink = linkData?.properties?.action_link;
+  if (inviteLink) {
+    const u = new URL(inviteLink); u.searchParams.set("redirect_to", `${siteUrl}/auth/callback`); inviteLink = u.toString();
+  }
   if (inviteLink) {
     await sendEmail({
       to: invitation.email,
