@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { healthColor, healthLabel, formatDateShort } from "@/lib/utils";
 import { useRole } from "@/components/role-context";
@@ -34,7 +34,18 @@ export default function ProjectHeader({ project, vendors, people: initialPeople 
   const [publicIssueForm, setPublicIssueForm] = useState(project.public_issue_form ?? false);
   const [togglingForm, setTogglingForm] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [vendorOwners, setVendorOwners] = useState<Record<string, string>>({}); // vendor_id -> person_id
   const { role } = useRole();
+
+  // Load vendor owners
+  useEffect(() => {
+    if (vendors.length === 0) return;
+    supabase.from("project_vendor_owners").select("vendor_id, person_id").eq("project_id", p.id).then(({ data }) => {
+      const map: Record<string, string> = {};
+      for (const row of (data || []) as { vendor_id: string; person_id: string }[]) map[row.vendor_id] = row.person_id;
+      setVendorOwners(map);
+    });
+  }, [p.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const supabase = createClient();
 
   function startEdit() {
@@ -220,6 +231,24 @@ export default function ProjectHeader({ project, vendors, people: initialPeople 
               onPersonAdded={(person) => setPeople((prev) => [...prev, person])}
             />
           </div>
+          {vendors.map((v) => (
+            <div key={v.id}>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Vendor Owner{vendors.length > 1 ? ` — ${v.name}` : ""}</label>
+              <OwnerPicker
+                value={vendorOwners[v.id] || ""}
+                onChange={(id) => {
+                  if (id) {
+                    supabase.from("project_vendor_owners").upsert({ project_id: p.id, vendor_id: v.id, person_id: id }, { onConflict: "project_id,vendor_id" }).then(() => {});
+                  } else {
+                    supabase.from("project_vendor_owners").delete().eq("project_id", p.id).eq("vendor_id", v.id).then(() => {});
+                  }
+                  setVendorOwners((prev) => ({ ...prev, [v.id]: id || "" }));
+                }}
+                people={people}
+                onPersonAdded={(person) => setPeople((prev) => [...prev, person])}
+              />
+            </div>
+          ))}
         </div>
 
         <div className="flex justify-end gap-2 pt-2 border-t border-gray-200">
@@ -265,11 +294,14 @@ export default function ProjectHeader({ project, vendors, people: initialPeople 
         {p.start_date && <span>Start: {formatDateShort(p.start_date)}</span>}
         {p.target_completion && <span>Target: {formatDateShort(p.target_completion)}</span>}
       </div>
-      {(p.project_owner_id || p.project_manager_id || p.lead_qa_id) && (
-        <div className="flex gap-6 mt-2 text-sm text-gray-500">
+      {(p.project_owner_id || p.project_manager_id || p.lead_qa_id || Object.values(vendorOwners).some(Boolean)) && (
+        <div className="flex gap-6 mt-2 text-sm text-gray-500 flex-wrap">
           {p.project_owner_id && <span>Owner: <span className="text-gray-700 font-medium">{people.find((pp) => pp.id === p.project_owner_id)?.full_name || "—"}</span></span>}
           {p.project_manager_id && <span>PM: <span className="text-gray-700 font-medium">{people.find((pp) => pp.id === p.project_manager_id)?.full_name || "—"}</span></span>}
           {p.lead_qa_id && <span>Lead QA: <span className="text-gray-700 font-medium">{people.find((pp) => pp.id === p.lead_qa_id)?.full_name || "—"}</span></span>}
+          {vendors.map((v) => vendorOwners[v.id] ? (
+            <span key={v.id}>Vendor{vendors.length > 1 ? ` (${v.name})` : ""}: <span className="text-gray-700 font-medium">{people.find((pp) => pp.id === vendorOwners[v.id])?.full_name || "—"}</span></span>
+          ) : null)}
         </div>
       )}
       {p.notes && <p className="text-sm text-gray-500 mt-2">{p.notes}</p>}
