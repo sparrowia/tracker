@@ -40,7 +40,7 @@ const decisionStatusOptions: ItemStatus[] = ["pending", "complete"];
 
 const typePrefix: Record<RaidType, string> = { risk: "R", assumption: "A", issue: "I", decision: "D" };
 
-type RaidColumnKey = "priority" | "status" | "owner" | "reporter" | "vendor" | "due_date" | "age" | "first_flagged";
+type RaidColumnKey = "priority" | "status" | "owner" | "reporter" | "vendor" | "due_date" | "age" | "updated" | "first_flagged";
 
 const RAID_COLUMNS: { key: RaidColumnKey; label: string; width: string }[] = [
   { key: "priority", label: "Priority", width: "w-[68px]" },
@@ -50,10 +50,11 @@ const RAID_COLUMNS: { key: RaidColumnKey; label: string; width: string }[] = [
   { key: "vendor", label: "Vendor", width: "w-[100px]" },
   { key: "due_date", label: "Due Date", width: "w-[80px]" },
   { key: "age", label: "Age", width: "w-12" },
+  { key: "updated", label: "Updated", width: "w-[70px]" },
   { key: "first_flagged", label: "Opened", width: "w-[80px]" },
 ];
 
-const DEFAULT_RAID_COLS: RaidColumnKey[] = ["priority", "status", "owner", "age"];
+const DEFAULT_RAID_COLS: RaidColumnKey[] = ["priority", "status", "owner", "updated"];
 const RAID_COL_STORAGE_KEY = "raid-columns";
 
 function loadRaidColumns(): RaidColumnKey[] {
@@ -491,6 +492,18 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
       }
       case "age":
         return <span className="text-xs text-gray-500 font-medium flex-shrink-0 w-12 text-right">{formatAge(age)}</span>;
+      case "updated": {
+        const diff = Date.now() - new Date(entry.updated_at).getTime();
+        const mins = Math.floor(diff / 60000);
+        let relLabel = formatDateShort(entry.updated_at);
+        if (mins < 1) relLabel = "just now";
+        else if (mins < 60) relLabel = `${mins}m ago`;
+        else if (mins < 1440) relLabel = `${Math.floor(mins / 60)}h ago`;
+        else if (mins < 2880) relLabel = "yesterday";
+        else if (mins < 10080) relLabel = `${Math.floor(mins / 1440)}d ago`;
+        else if (mins < 40320) relLabel = `${Math.floor(mins / 10080)}w ago`;
+        return <span className="text-xs text-gray-500 flex-shrink-0 w-[70px] text-right">{relLabel}</span>;
+      }
       case "first_flagged":
         return <span className="text-xs text-gray-500 flex-shrink-0 w-[80px] text-right">{new Date(entry.first_flagged_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>;
     }
