@@ -92,7 +92,8 @@ export function VendorOpenItems({
 
   const urgentItems = items.filter((i) => i.priority === "critical" || i.priority === "high");
   const isUrgent = activeTab === "__urgent__";
-  let filtered = isUrgent ? urgentItems : items.filter((i) => (i.project_id || "__none__") === activeTab);
+  const isAll = activeTab === "__all__";
+  let filtered = isUrgent ? urgentItems : isAll ? [...items] : items.filter((i) => (i.project_id || "__none__") === activeTab);
   if (filterType) filtered = filtered.filter((i) => i.entity_type === filterType);
   if (filterOwner) filtered = filtered.filter((i) => i.owner_id === filterOwner);
   if (filterPriority) filtered = filtered.filter((i) => i.priority === filterPriority);
@@ -101,10 +102,10 @@ export function VendorOpenItems({
     const q = searchFilter.toLowerCase();
     filtered = filtered.filter((i) => i.title.toLowerCase().includes(q) || (i.owner_id && (ownerMap[i.owner_id] || "").toLowerCase().includes(q)));
   }
-  const activeProject = isUrgent ? null : projectTabs.find((t) => (t.projectId || "__none__") === activeTab);
+  const activeProject = (isUrgent || isAll) ? null : projectTabs.find((t) => (t.projectId || "__none__") === activeTab);
 
   // Get unique values for filter dropdowns from current tab's unfiltered items
-  const tabItems = isUrgent ? urgentItems : items.filter((i) => (i.project_id || "__none__") === activeTab);
+  const tabItems = isUrgent ? urgentItems : isAll ? items : items.filter((i) => (i.project_id || "__none__") === activeTab);
   const uniqueOwners = Array.from(new Set(tabItems.map((i) => i.owner_id).filter(Boolean))) as string[];
   const uniqueStatuses = Array.from(new Set(tabItems.map((i) => i.status)));
   const hasFilters = filterType || filterOwner || filterPriority || filterStatus || searchFilter;
@@ -126,6 +127,14 @@ export function VendorOpenItems({
           }`}
         >
           🔥{urgentItems.length > 0 && <span className={`ml-1.5 text-xs ${isUrgent ? "text-red-500" : "text-gray-400"}`}>{urgentItems.length}</span>}
+        </button>
+        <button
+          onClick={() => { switchTab("__all__"); }}
+          className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+            activeTab === "__all__" ? "border-blue-600 text-blue-700" : "border-transparent text-gray-500 hover:text-gray-700"
+          }`}
+        >
+          All <span className={`ml-1.5 text-xs ${activeTab === "__all__" ? "text-blue-500" : "text-gray-400"}`}>{items.length}</span>
         </button>
         {projectTabs.map((tab) => {
           const key = tab.projectId || "__none__";
