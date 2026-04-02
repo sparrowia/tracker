@@ -270,7 +270,7 @@ export function VendorOpenItems({
 
                 {/* Expanded detail panel — matches RAID log layout */}
                 {isExpanded && detail && (
-                  <div className="bg-yellow-50/25 border-b border-gray-300" onClick={(e) => e.stopPropagation()}>
+                  <div key={`detail-${item.entity_id}`} className="bg-yellow-50/25 border-b border-gray-300" onClick={(e) => e.stopPropagation()}>
                     {/* Title */}
                     <div className="px-5 pt-4 pb-3 text-base font-semibold text-gray-900 bg-yellow-50/25">
                       {item.title}
