@@ -6,8 +6,9 @@ import { createClient } from "@/lib/supabase/client";
 import { priorityColor, priorityLabel, statusBadge, formatAge, formatDateShort } from "@/lib/utils";
 import { useRole } from "@/components/role-context";
 import OwnerPicker from "@/components/owner-picker";
+import VendorPicker from "@/components/vendor-picker";
 import CommentThread from "@/components/comment-thread";
-import type { VendorAccountabilityRow, Person, PriorityLevel, ItemStatus } from "@/lib/types";
+import type { VendorAccountabilityRow, Person, Vendor, PriorityLevel, ItemStatus } from "@/lib/types";
 
 function formatRelative(date: string): string {
   const diff = Date.now() - new Date(date).getTime();
@@ -58,14 +59,19 @@ export function VendorOpenItems({
   const [searchFilter, setSearchFilter] = useState("");
   const [detail, setDetail] = useState<Record<string, unknown> | null>(null);
   const [people, setPeople] = useState<Person[]>([]);
+  const [vendors, setVendors] = useState<Vendor[]>([]);
   const supabase = createClient();
   const { role } = useRole();
   const canEdit = role === "super_admin" || role === "admin" || role === "user";
 
   async function ensurePeople() {
     if (people.length > 0) return;
-    const { data } = await supabase.from("people").select("*").order("full_name");
-    if (data) setPeople(data as Person[]);
+    const [{ data: ppl }, { data: vnd }] = await Promise.all([
+      supabase.from("people").select("*").order("full_name"),
+      supabase.from("vendors").select("*").order("name"),
+    ]);
+    if (ppl) setPeople(ppl as Person[]);
+    if (vnd) setVendors(vnd as Vendor[]);
   }
 
   function tableName(entityType: string) {
@@ -381,14 +387,29 @@ export function VendorOpenItems({
                           ) : formatDateShort(item.due_date)}
                         </div>
 
-                        {/* Row: Opened / Last Updated */}
+                        {/* Row: Opened / Vendor */}
                         <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-200">Opened</span>
                         <div className="px-3 py-2.5 border-b border-gray-200">
                           <span className="text-sm text-gray-700">{new Date(item.first_flagged_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
                         </div>
-                        <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-200">Last Updated</span>
-                        <div className="px-3 py-2.5 border-b border-gray-200">
-                          <span className="text-sm text-gray-700">{formatRelative(item.updated_at)}</span>
+                        <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-200">Vendor</span>
+                        <div className="px-3 py-1.5 border-b border-gray-200">
+                          {canEdit ? (
+                            <VendorPicker
+                              value={item.vendor_id || ""}
+                              onChange={(id) => {
+                                supabase.from(tableName(item.entity_type)).update({ vendor_id: id || null }).eq("id", item.entity_id).then(() => {});
+                                // Remove from list if vendor changed
+                                setItems((prev) => prev.filter((i) => i.entity_id !== item.entity_id));
+                                setExpandedId(null);
+                                setDetail(null);
+                              }}
+                              vendors={vendors}
+                              onVendorAdded={(v) => setVendors((prev) => [...prev, v])}
+                            />
+                          ) : (
+                            <span className="text-sm text-gray-700">{vendors.find((v) => v.id === item.vendor_id)?.name || "—"}</span>
+                          )}
                         </div>
                       </div>
                     </div>
