@@ -51,7 +51,7 @@ function getSettingsItems(role: UserRole) {
 }
 
 export function Sidebar({ role: propRole = "user" as UserRole, profileId, userPersonId }: { role?: UserRole; profileId?: string; userPersonId?: string | null }) {
-  const { role: contextRole, userPersonId: contextPersonId, impersonation } = useRole();
+  const { role: contextRole, userPersonId: contextPersonId, vendorId: contextVendorId, impersonation } = useRole();
   // Use context role (which reflects impersonation) over the server-passed prop
   const role = contextRole || propRole;
   const effectivePersonId = contextPersonId || userPersonId;
@@ -373,6 +373,22 @@ export function Sidebar({ role: propRole = "user" as UserRole, profileId, userPe
           >
             <Inbox className="h-4 w-4 flex-shrink-0" />
             Intake
+          </Link>
+        )}
+
+        {/* My Company — vendor only */}
+        {role === "vendor" && contextVendorId && (
+          <Link
+            href={`/settings/vendors/${contextVendorId}`}
+            className={cn(
+              "flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors",
+              pathname.startsWith("/settings/vendors/")
+                ? "bg-blue-50 text-blue-700"
+                : "text-gray-700 hover:bg-gray-100"
+            )}
+          >
+            <Building2 className="h-4 w-4 flex-shrink-0" />
+            My Company
           </Link>
         )}
 
