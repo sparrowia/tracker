@@ -87,6 +87,14 @@ export default async function ProjectDetailPage({
   const typedVendors = (vendors || []) as Vendor[];
   const projectVendorIds = new Set((projectVendorLinks || []).map((pv: { vendor_id: string }) => pv.vendor_id));
   const projectVendors = typedVendors.filter((v) => projectVendorIds.has(v.id));
+
+  // Build full vendor list including vendors from items (for vendor owner pickers)
+  const itemVendorIds = new Set<string>();
+  for (const a of typedActions) { if (a.vendor_id) itemVendorIds.add(a.vendor_id); }
+  for (const r of typedRaid) { if (r.vendor_id) itemVendorIds.add(r.vendor_id); }
+  for (const b of typedBlockers) { if (b.vendor_id) itemVendorIds.add(b.vendor_id); }
+  const allProjectVendorIds = new Set([...projectVendorIds, ...itemVendorIds]);
+  const allProjectVendors = typedVendors.filter((v) => allProjectVendorIds.has(v.id));
   const typedPeople = (allPeople || []) as Person[];
   const typedIntakes = (intakeData || []) as Intake[];
 
@@ -116,7 +124,7 @@ export default async function ProjectDetailPage({
       )}
 
       {/* Header */}
-      <ProjectHeader project={p} vendors={projectVendors} people={typedPeople} />
+      <ProjectHeader project={p} vendors={allProjectVendors} people={typedPeople} />
 
       {/* Tabbed content: Agenda, Blockers, RAID, Action Items */}
       <ProjectTabs
