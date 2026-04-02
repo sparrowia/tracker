@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import type { Vendor, Person, VendorAccountabilityRow, Project } from "@/lib/types";
 import { VendorContacts } from "@/components/vendor-contacts";
 import { VendorOpenItems } from "@/components/vendor-open-items";
+import { VendorHealthReport } from "@/components/vendor-health-report";
 
 export default async function VendorDetailPage({
   params,
@@ -92,6 +93,8 @@ export default async function VendorDetailPage({
           </a>
         )}
       </div>
+
+      <VendorHealthReport vendorId={v.id} />
 
       <VendorContacts initialContacts={people} vendorId={v.id} orgId={v.org_id} initialInvitations={(invitationData || []) as { id: string; email: string; accepted_at: string | null }[]} />
 
