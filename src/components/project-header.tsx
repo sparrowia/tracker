@@ -296,11 +296,11 @@ export default function ProjectHeader({ project, vendors, people: initialPeople 
       </div>
       {(p.project_owner_id || p.project_manager_id || p.lead_qa_id || Object.values(vendorOwners).some(Boolean)) && (
         <div className="flex gap-6 mt-2 text-sm text-gray-500 flex-wrap">
-          {p.project_owner_id && <span>Owner: <span className="text-gray-700 font-medium">{people.find((pp) => pp.id === p.project_owner_id)?.full_name || "—"}</span></span>}
-          {p.project_manager_id && <span>PM: <span className="text-gray-700 font-medium">{people.find((pp) => pp.id === p.project_manager_id)?.full_name || "—"}</span></span>}
-          {p.lead_qa_id && <span>Lead QA: <span className="text-gray-700 font-medium">{people.find((pp) => pp.id === p.lead_qa_id)?.full_name || "—"}</span></span>}
+          {p.project_owner_id && <span><span className="font-medium text-gray-700">Owner:</span> {people.find((pp) => pp.id === p.project_owner_id)?.full_name || "—"}</span>}
+          {p.project_manager_id && <span><span className="font-medium text-gray-700">PM:</span> {people.find((pp) => pp.id === p.project_manager_id)?.full_name || "—"}</span>}
+          {p.lead_qa_id && <span><span className="font-medium text-gray-700">Lead QA:</span> {people.find((pp) => pp.id === p.lead_qa_id)?.full_name || "—"}</span>}
           {vendors.map((v) => vendorOwners[v.id] ? (
-            <span key={v.id}>Vendor{vendors.length > 1 ? ` (${v.name})` : ""}: <span className="text-gray-700 font-medium">{people.find((pp) => pp.id === vendorOwners[v.id])?.full_name || "—"}</span></span>
+            <span key={v.id}><span className="font-medium text-gray-700">Vendor{vendors.length > 1 ? ` (${v.name})` : ""}:</span> {people.find((pp) => pp.id === vendorOwners[v.id])?.full_name || "—"}</span>
           ) : null)}
         </div>
       )}
