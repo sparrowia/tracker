@@ -112,7 +112,7 @@ export default function OwnerPicker({ value, onChange, people, onPersonAdded }: 
     >
       <option value="">Unassigned</option>
       {people.map((p) => (
-        <option key={p.id} value={p.id}>{p.full_name}</option>
+        <option key={p.id} value={p.id} style={p.profile_id ? undefined : { color: "#9ca3af" }}>{p.full_name}{p.profile_id ? "" : " ○"}</option>
       ))}
       <option value={ADD_SENTINEL}>+ Add Person</option>
     </select>
