@@ -36,6 +36,10 @@ export function VendorOpenItems({
   const [ownerMap, setOwnerMap] = useState(initialOwnerMap);
   const [activeTab, setActiveTab] = useState<string>("__urgent__");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [filterType, setFilterType] = useState("");
+  const [filterOwner, setFilterOwner] = useState("");
+  const [filterPriority, setFilterPriority] = useState("");
+  const [filterStatus, setFilterStatus] = useState("");
   const [detail, setDetail] = useState<Record<string, unknown> | null>(null);
   const [people, setPeople] = useState<Person[]>([]);
   const supabase = createClient();
@@ -87,15 +91,30 @@ export function VendorOpenItems({
 
   const urgentItems = items.filter((i) => i.priority === "critical" || i.priority === "high");
   const isUrgent = activeTab === "__urgent__";
-  const filtered = isUrgent ? urgentItems : items.filter((i) => (i.project_id || "__none__") === activeTab);
+  let filtered = isUrgent ? urgentItems : items.filter((i) => (i.project_id || "__none__") === activeTab);
+  if (filterType) filtered = filtered.filter((i) => i.entity_type === filterType);
+  if (filterOwner) filtered = filtered.filter((i) => i.owner_id === filterOwner);
+  if (filterPriority) filtered = filtered.filter((i) => i.priority === filterPriority);
+  if (filterStatus) filtered = filtered.filter((i) => i.status === filterStatus);
   const activeProject = isUrgent ? null : projectTabs.find((t) => (t.projectId || "__none__") === activeTab);
+
+  // Get unique values for filter dropdowns from current tab's unfiltered items
+  const tabItems = isUrgent ? urgentItems : items.filter((i) => (i.project_id || "__none__") === activeTab);
+  const uniqueOwners = Array.from(new Set(tabItems.map((i) => i.owner_id).filter(Boolean))) as string[];
+  const uniqueStatuses = Array.from(new Set(tabItems.map((i) => i.status)));
+  const hasFilters = filterType || filterOwner || filterPriority || filterStatus;
+
+  function switchTab(tab: string) {
+    setActiveTab(tab); setExpandedId(null); setDetail(null);
+    setFilterType(""); setFilterOwner(""); setFilterPriority(""); setFilterStatus("");
+  }
 
   return (
     <div>
       {/* Project tabs */}
       <div className="flex items-center border-b border-gray-300 overflow-x-auto">
         <button
-          onClick={() => { setActiveTab("__urgent__"); setExpandedId(null); setDetail(null); }}
+          onClick={() => { switchTab("__urgent__"); }}
           className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
             isUrgent ? "border-red-600 text-red-700" : "border-transparent text-gray-500 hover:text-gray-700"
           }`}
@@ -108,7 +127,7 @@ export function VendorOpenItems({
           return (
             <button
               key={key}
-              onClick={() => { setActiveTab(key); setExpandedId(null); setDetail(null); }}
+              onClick={() => { switchTab(key); }}
               className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
                 isActive ? "border-blue-600 text-blue-700" : "border-transparent text-gray-500 hover:text-gray-700"
               }`}
@@ -144,6 +163,40 @@ export function VendorOpenItems({
             <span className="text-xs font-medium text-gray-500 uppercase">Age</span>
             <span className="text-xs font-medium text-gray-500 uppercase">Status</span>
           </div>
+
+          {/* Filters */}
+          <div className="grid grid-cols-[60px_1fr_140px_80px_80px_70px_90px] bg-gray-50 border-b border-gray-200 px-4 py-1.5 gap-1">
+            <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="text-[10px] rounded border border-gray-200 bg-white px-1 py-0.5 focus:outline-none focus:border-blue-400">
+              <option value="">All</option>
+              <option value="action_item">Action</option>
+              <option value="blocker">Blocker</option>
+              <option value="raid_entry">Issue</option>
+            </select>
+            <span />
+            <select value={filterOwner} onChange={(e) => setFilterOwner(e.target.value)} className="text-[10px] rounded border border-gray-200 bg-white px-1 py-0.5 focus:outline-none focus:border-blue-400 truncate">
+              <option value="">All</option>
+              {uniqueOwners.map((id) => <option key={id} value={id}>{ownerMap[id] || "Unknown"}</option>)}
+            </select>
+            <select value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)} className="text-[10px] rounded border border-gray-200 bg-white px-1 py-0.5 focus:outline-none focus:border-blue-400">
+              <option value="">All</option>
+              <option value="critical">Critical</option>
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
+            </select>
+            <span />
+            <span />
+            <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="text-[10px] rounded border border-gray-200 bg-white px-1 py-0.5 focus:outline-none focus:border-blue-400">
+              <option value="">All</option>
+              {uniqueStatuses.sort().map((s) => <option key={s} value={s}>{statusBadge(s).label}</option>)}
+            </select>
+          </div>
+          {hasFilters && (
+            <div className="px-4 py-1 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+              <span className="text-[10px] text-gray-400">{filtered.length} of {tabItems.length} items</span>
+              <button onClick={() => { setFilterType(""); setFilterOwner(""); setFilterPriority(""); setFilterStatus(""); }} className="text-[10px] text-blue-600 hover:text-blue-800">Clear filters</button>
+            </div>
+          )}
 
           {filtered.map((item) => {
             const badge = statusBadge(item.status);
