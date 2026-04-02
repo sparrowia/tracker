@@ -40,6 +40,7 @@ export function VendorOpenItems({
   const [filterOwner, setFilterOwner] = useState("");
   const [filterPriority, setFilterPriority] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
+  const [searchFilter, setSearchFilter] = useState("");
   const [detail, setDetail] = useState<Record<string, unknown> | null>(null);
   const [people, setPeople] = useState<Person[]>([]);
   const supabase = createClient();
@@ -96,17 +97,22 @@ export function VendorOpenItems({
   if (filterOwner) filtered = filtered.filter((i) => i.owner_id === filterOwner);
   if (filterPriority) filtered = filtered.filter((i) => i.priority === filterPriority);
   if (filterStatus) filtered = filtered.filter((i) => i.status === filterStatus);
+  if (searchFilter) {
+    const q = searchFilter.toLowerCase();
+    filtered = filtered.filter((i) => i.title.toLowerCase().includes(q) || (i.owner_id && (ownerMap[i.owner_id] || "").toLowerCase().includes(q)));
+  }
   const activeProject = isUrgent ? null : projectTabs.find((t) => (t.projectId || "__none__") === activeTab);
 
   // Get unique values for filter dropdowns from current tab's unfiltered items
   const tabItems = isUrgent ? urgentItems : items.filter((i) => (i.project_id || "__none__") === activeTab);
   const uniqueOwners = Array.from(new Set(tabItems.map((i) => i.owner_id).filter(Boolean))) as string[];
   const uniqueStatuses = Array.from(new Set(tabItems.map((i) => i.status)));
-  const hasFilters = filterType || filterOwner || filterPriority || filterStatus;
+  const hasFilters = filterType || filterOwner || filterPriority || filterStatus || searchFilter;
+
+  function clearFilters() { setFilterType(""); setFilterOwner(""); setFilterPriority(""); setFilterStatus(""); setSearchFilter(""); }
 
   function switchTab(tab: string) {
-    setActiveTab(tab); setExpandedId(null); setDetail(null);
-    setFilterType(""); setFilterOwner(""); setFilterPriority(""); setFilterStatus("");
+    setActiveTab(tab); setExpandedId(null); setDetail(null); clearFilters();
   }
 
   return (
@@ -139,18 +145,62 @@ export function VendorOpenItems({
         })}
       </div>
 
-      {/* View Project link */}
-      {activeProject?.projectSlug && (
-        <div className="px-4 py-2 bg-gray-50 border-b border-gray-200 flex items-center justify-end">
-          <Link href={`/projects/${activeProject.projectSlug}`} className="text-xs text-blue-600 hover:text-blue-800">
-            View Project →
-          </Link>
+      {/* View Project link + Search */}
+      <div className="px-4 py-2 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          {activeProject?.projectSlug && (
+            <Link href={`/projects/${activeProject.projectSlug}`} className="text-xs text-blue-600 hover:text-blue-800">
+              View Project →
+            </Link>
+          )}
         </div>
-      )}
+        <div className="relative">
+          <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input
+            type="text"
+            value={searchFilter}
+            onChange={(e) => setSearchFilter(e.target.value)}
+            placeholder="Filter..."
+            className="pl-8 pr-3 py-1 text-sm border border-gray-300 rounded-md w-48 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          />
+        </div>
+      </div>
+
+      {/* Filters row — RAID log style */}
+      <div className="flex items-center gap-3 px-4 py-2 bg-white border-b border-gray-200 flex-wrap">
+        <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Filters</span>
+        <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="text-xs rounded border border-gray-300 bg-white px-2 py-1 focus:outline-none focus:border-blue-400">
+          <option value="">Type</option>
+          <option value="action_item">Action</option>
+          <option value="blocker">Blocker</option>
+          <option value="raid_entry">Issue</option>
+        </select>
+        <select value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)} className="text-xs rounded border border-gray-300 bg-white px-2 py-1 focus:outline-none focus:border-blue-400">
+          <option value="">Priority</option>
+          <option value="critical">Critical</option>
+          <option value="high">High</option>
+          <option value="medium">Medium</option>
+          <option value="low">Low</option>
+        </select>
+        <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="text-xs rounded border border-gray-300 bg-white px-2 py-1 focus:outline-none focus:border-blue-400">
+          <option value="">Status</option>
+          {uniqueStatuses.sort().map((s) => <option key={s} value={s}>{statusBadge(s).label}</option>)}
+        </select>
+        <select value={filterOwner} onChange={(e) => setFilterOwner(e.target.value)} className="text-xs rounded border border-gray-300 bg-white px-2 py-1 focus:outline-none focus:border-blue-400">
+          <option value="">Owner</option>
+          {uniqueOwners.map((id) => <option key={id} value={id}>{ownerMap[id] || "Unknown"}</option>)}
+        </select>
+        {hasFilters && (
+          <button onClick={clearFilters} className="text-xs text-blue-600 hover:text-blue-800 ml-1">Clear</button>
+        )}
+        {hasFilters && (
+          <span className="text-[10px] text-gray-400 ml-auto">{filtered.length}/{tabItems.length}</span>
+        )}
+      </div>
 
       {/* Items */}
       {filtered.length === 0 ? (
-        <div className="px-4 py-8 text-center text-sm text-gray-400">No items for this project.</div>
+        <div className="px-4 py-8 text-center text-sm text-gray-400">{hasFilters ? "No items match filters." : "No items for this project."}</div>
       ) : (
         <div>
           {/* Column headers */}
@@ -163,40 +213,6 @@ export function VendorOpenItems({
             <span className="text-xs font-medium text-gray-500 uppercase">Age</span>
             <span className="text-xs font-medium text-gray-500 uppercase">Status</span>
           </div>
-
-          {/* Filters */}
-          <div className="grid grid-cols-[60px_1fr_140px_80px_80px_70px_90px] bg-gray-50 border-b border-gray-200 px-4 py-1.5 gap-1">
-            <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="text-[10px] rounded border border-gray-200 bg-white px-1 py-0.5 focus:outline-none focus:border-blue-400">
-              <option value="">All</option>
-              <option value="action_item">Action</option>
-              <option value="blocker">Blocker</option>
-              <option value="raid_entry">Issue</option>
-            </select>
-            <span />
-            <select value={filterOwner} onChange={(e) => setFilterOwner(e.target.value)} className="text-[10px] rounded border border-gray-200 bg-white px-1 py-0.5 focus:outline-none focus:border-blue-400 truncate">
-              <option value="">All</option>
-              {uniqueOwners.map((id) => <option key={id} value={id}>{ownerMap[id] || "Unknown"}</option>)}
-            </select>
-            <select value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)} className="text-[10px] rounded border border-gray-200 bg-white px-1 py-0.5 focus:outline-none focus:border-blue-400">
-              <option value="">All</option>
-              <option value="critical">Critical</option>
-              <option value="high">High</option>
-              <option value="medium">Medium</option>
-              <option value="low">Low</option>
-            </select>
-            <span />
-            <span />
-            <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="text-[10px] rounded border border-gray-200 bg-white px-1 py-0.5 focus:outline-none focus:border-blue-400">
-              <option value="">All</option>
-              {uniqueStatuses.sort().map((s) => <option key={s} value={s}>{statusBadge(s).label}</option>)}
-            </select>
-          </div>
-          {hasFilters && (
-            <div className="px-4 py-1 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
-              <span className="text-[10px] text-gray-400">{filtered.length} of {tabItems.length} items</span>
-              <button onClick={() => { setFilterType(""); setFilterOwner(""); setFilterPriority(""); setFilterStatus(""); }} className="text-[10px] text-blue-600 hover:text-blue-800">Clear filters</button>
-            </div>
-          )}
 
           {filtered.map((item) => {
             const badge = statusBadge(item.status);
