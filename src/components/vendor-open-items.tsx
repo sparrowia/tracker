@@ -9,6 +9,21 @@ import OwnerPicker from "@/components/owner-picker";
 import CommentThread from "@/components/comment-thread";
 import type { VendorAccountabilityRow, Person, PriorityLevel, ItemStatus } from "@/lib/types";
 
+function formatRelative(date: string): string {
+  const diff = Date.now() - new Date(date).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days === 1) return "yesterday";
+  if (days < 7) return `${days}d ago`;
+  const weeks = Math.floor(days / 7);
+  if (weeks < 4) return `${weeks}w ago`;
+  return formatDateShort(date);
+}
+
 const TYPE_LABELS: Record<string, string> = { action_item: "Action", blocker: "Blocker", raid_entry: "Issue" };
 const TYPE_COLORS: Record<string, string> = { action_item: "bg-blue-100 text-blue-700", blocker: "bg-red-100 text-red-700", raid_entry: "bg-amber-100 text-amber-700" };
 const PRIORITY_OPTIONS: PriorityLevel[] = ["critical", "high", "medium", "low"];
@@ -213,13 +228,13 @@ export function VendorOpenItems({
       ) : (
         <div>
           {/* Column headers */}
-          <div className="grid grid-cols-[60px_1fr_140px_80px_80px_70px_90px] bg-gray-50 border-b border-gray-300 px-4 py-2">
+          <div className="grid grid-cols-[60px_1fr_140px_80px_80px_80px_90px] bg-gray-50 border-b border-gray-300 px-4 py-2">
             <span className="text-xs font-medium text-gray-500 uppercase">Type</span>
             <span className="text-xs font-medium text-gray-500 uppercase">Item</span>
             <span className="text-xs font-medium text-gray-500 uppercase">Responsible</span>
             <span className="text-xs font-medium text-gray-500 uppercase">Priority</span>
             <span className="text-xs font-medium text-gray-500 uppercase">Due</span>
-            <span className="text-xs font-medium text-gray-500 uppercase">Age</span>
+            <span className="text-xs font-medium text-gray-500 uppercase">Updated</span>
             <span className="text-xs font-medium text-gray-500 uppercase">Status</span>
           </div>
 
@@ -234,7 +249,7 @@ export function VendorOpenItems({
                 {/* Row */}
                 <div
                   onClick={() => toggleExpand(item)}
-                  className={`grid grid-cols-[60px_1fr_140px_80px_80px_70px_90px] px-4 py-3 border-b border-gray-200 cursor-pointer transition-colors ${isExpanded ? "bg-blue-50/40" : "hover:bg-gray-50"}`}
+                  className={`grid grid-cols-[60px_1fr_140px_80px_80px_80px_90px] px-4 py-3 border-b border-gray-200 cursor-pointer transition-colors ${isExpanded ? "bg-blue-50/40" : "hover:bg-gray-50"}`}
                 >
                   <span>
                     <span className={`inline-flex px-1.5 py-0.5 text-xs rounded ${TYPE_COLORS[item.entity_type] || "bg-gray-100 text-gray-700"}`}>
@@ -260,7 +275,7 @@ export function VendorOpenItems({
                     </span>
                   </span>
                   <span className="text-sm text-gray-600">{formatDateShort(item.due_date)}</span>
-                  <span className="text-sm text-gray-600">{formatAge(item.age_days)}</span>
+                  <span className="text-sm text-gray-600">{formatRelative(item.updated_at)}</span>
                   <span>
                     <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${badge.className}`}>
                       {badge.label}
@@ -365,14 +380,14 @@ export function VendorOpenItems({
                           ) : formatDateShort(item.due_date)}
                         </div>
 
-                        {/* Row: Opened / Age */}
+                        {/* Row: Opened / Last Updated */}
                         <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-200">Opened</span>
                         <div className="px-3 py-2.5 border-b border-gray-200">
                           <span className="text-sm text-gray-700">{new Date(item.first_flagged_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
                         </div>
-                        <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-200">Age</span>
+                        <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-200">Last Updated</span>
                         <div className="px-3 py-2.5 border-b border-gray-200">
-                          <span className="text-sm text-gray-700">{formatAge(item.age_days)}</span>
+                          <span className="text-sm text-gray-700">{formatRelative(item.updated_at)}</span>
                         </div>
                       </div>
                     </div>

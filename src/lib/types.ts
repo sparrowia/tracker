@@ -333,6 +333,7 @@ export interface VendorAccountabilityRow {
   due_date: string | null;
   first_flagged_at: string;
   age_days: number;
+  updated_at: string;
   owner_id: string | null;
   project_id: string | null;
   owner?: Person;
