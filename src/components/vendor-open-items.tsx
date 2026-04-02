@@ -12,7 +12,7 @@ import type { VendorAccountabilityRow, Person, PriorityLevel, ItemStatus } from 
 const TYPE_LABELS: Record<string, string> = { action_item: "Action", blocker: "Blocker", raid_entry: "Issue" };
 const TYPE_COLORS: Record<string, string> = { action_item: "bg-blue-100 text-blue-700", blocker: "bg-red-100 text-red-700", raid_entry: "bg-amber-100 text-amber-700" };
 const PRIORITY_OPTIONS: PriorityLevel[] = ["critical", "high", "medium", "low"];
-const STATUS_OPTIONS: ItemStatus[] = ["pending", "in_progress", "complete", "needs_verification", "paused", "at_risk", "blocked"];
+const STATUS_OPTIONS: ItemStatus[] = ["pending", "in_progress", "complete", "needs_verification", "paused", "at_risk", "blocked", "rejected"];
 
 interface ProjectTab {
   projectId: string | null;

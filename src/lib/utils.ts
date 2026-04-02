@@ -49,6 +49,7 @@ export function statusBadge(status: ItemStatus): { label: string; className: str
     case "assessing": return { label: "Assessing", className: "text-indigo-700 bg-indigo-100" };
     case "mitigated": return { label: "Mitigated", className: "text-teal-700 bg-teal-100" };
     case "closed": return { label: "Closed", className: "text-green-700 bg-green-100" };
+    case "rejected": return { label: "Rejected", className: "text-red-700 bg-red-100" };
   }
 }
 

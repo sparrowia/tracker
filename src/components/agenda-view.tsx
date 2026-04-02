@@ -37,7 +37,7 @@ const typeColors: Record<string, string> = {
 
 const priorityRankMap: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
 
-const statusOptions: ItemStatus[] = ["pending", "in_progress", "complete", "needs_verification", "paused", "at_risk", "blocked"];
+const statusOptions: ItemStatus[] = ["pending", "in_progress", "complete", "needs_verification", "paused", "at_risk", "blocked", "rejected"];
 const riskStatusOptions: ItemStatus[] = ["identified", "assessing", "mitigated", "closed"];
 
 // Parent info for subtask grouping in agendas

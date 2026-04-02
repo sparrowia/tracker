@@ -9,7 +9,8 @@ export type ItemStatus =
   | "identified"
   | "assessing"
   | "mitigated"
-  | "closed";
+  | "closed"
+  | "rejected";
 
 export type PriorityLevel = "critical" | "high" | "medium" | "low";
 

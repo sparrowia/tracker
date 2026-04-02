@@ -34,7 +34,7 @@ interface RaidLogProps {
 
 const raidTypes: RaidType[] = ["risk", "assumption", "issue", "decision"];
 const priorityOptions: PriorityLevel[] = ["critical", "high", "medium", "low"];
-const statusOptions: ItemStatus[] = ["pending", "in_progress", "complete", "needs_verification", "paused", "at_risk", "blocked"];
+const statusOptions: ItemStatus[] = ["pending", "in_progress", "complete", "needs_verification", "paused", "at_risk", "blocked", "rejected"];
 const riskStatusOptions: ItemStatus[] = ["identified", "assessing", "in_progress", "mitigated", "closed"];
 const decisionStatusOptions: ItemStatus[] = ["pending", "complete"];
 
@@ -628,6 +628,42 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
         entity_id: entry.id,
         project_slug: project.slug,
       }).then(() => {});
+    }
+
+    // Verify → notify Lead QA
+    if (newStatus === "needs_verification" && entry.vendor_id) {
+      supabase.from("projects").select("lead_qa_id").eq("id", project.id).single().then(({ data: proj }) => {
+        if (proj?.lead_qa_id && proj.lead_qa_id !== userPersonId) {
+          const qa = people.find((p) => p.id === proj.lead_qa_id);
+          if (qa?.email) {
+            supabase.from("comment_notifications").insert({
+              org_id: project.org_id, recipient_person_id: qa.id, recipient_email: qa.email,
+              comment_id: null, commenter_name: null, comment_body: null,
+              item_title: entry.title, item_type: entry.raid_type,
+              mention_type: "status_change", changed_by: changedBy, new_status: "Needs Verification",
+              entity_id: entry.id, project_slug: project.slug,
+            }).then(() => {});
+          }
+        }
+      });
+    }
+
+    // Rejected → notify Vendor Owner
+    if (newStatus === "rejected" && entry.vendor_id) {
+      supabase.from("project_vendor_owners").select("person_id").eq("project_id", project.id).eq("vendor_id", entry.vendor_id).maybeSingle().then(({ data: vo }) => {
+        if (vo?.person_id && vo.person_id !== userPersonId) {
+          const owner = people.find((p) => p.id === vo.person_id);
+          if (owner?.email) {
+            supabase.from("comment_notifications").insert({
+              org_id: project.org_id, recipient_person_id: owner.id, recipient_email: owner.email,
+              comment_id: null, commenter_name: null, comment_body: null,
+              item_title: entry.title, item_type: entry.raid_type,
+              mention_type: "status_change", changed_by: changedBy, new_status: "Rejected",
+              entity_id: entry.id, project_slug: project.slug,
+            }).then(() => {});
+          }
+        }
+      });
     }
   }
 

@@ -378,7 +378,7 @@ export default function ProjectTabs({
 }
 
 const blockerPriorityOptions: PriorityLevel[] = ["critical", "high", "medium", "low"];
-const blockerStatusOptions: ItemStatus[] = ["pending", "in_progress", "complete", "needs_verification", "paused", "at_risk", "blocked"];
+const blockerStatusOptions: ItemStatus[] = ["pending", "in_progress", "complete", "needs_verification", "paused", "at_risk", "blocked", "rejected"];
 
 type BlockerRow = Blocker & { owner: Person | null; vendor: Vendor | null };
 
@@ -907,6 +907,22 @@ function BlockersPanel({
         }).then(() => {});
       }
     }
+    if (newStatus === "needs_verification" && blocker.vendor_id && blocker.project_id) {
+      supabase.from("projects").select("lead_qa_id").eq("id", blocker.project_id).single().then(({ data: proj }) => {
+        if (proj?.lead_qa_id && proj.lead_qa_id !== userPersonId) {
+          const qa = people.find((p) => p.id === proj.lead_qa_id);
+          if (qa?.email) supabase.from("comment_notifications").insert({ org_id: orgId, recipient_person_id: qa.id, recipient_email: qa.email, comment_id: null, commenter_name: null, comment_body: null, item_title: blocker.title, item_type: "blocker", mention_type: "status_change", changed_by: changedBy, new_status: "Needs Verification", entity_id: blocker.id, project_slug: projectSlug }).then(() => {});
+        }
+      });
+    }
+    if (newStatus === "rejected" && blocker.vendor_id && blocker.project_id) {
+      supabase.from("project_vendor_owners").select("person_id").eq("project_id", blocker.project_id).eq("vendor_id", blocker.vendor_id).maybeSingle().then(({ data: vo }) => {
+        if (vo?.person_id && vo.person_id !== userPersonId) {
+          const owner = people.find((p) => p.id === vo.person_id);
+          if (owner?.email) supabase.from("comment_notifications").insert({ org_id: orgId, recipient_person_id: owner.id, recipient_email: owner.email, comment_id: null, commenter_name: null, comment_body: null, item_title: blocker.title, item_type: "blocker", mention_type: "status_change", changed_by: changedBy, new_status: "Rejected", entity_id: blocker.id, project_slug: projectSlug }).then(() => {});
+        }
+      });
+    }
   }
 
   function saveField(id: string, field: string, value: string) {
@@ -1338,7 +1354,7 @@ function BlockersPanel({
 }
 
 const actionPriorityOptions: PriorityLevel[] = ["critical", "high", "medium", "low"];
-const actionStatusOptions: ItemStatus[] = ["pending", "in_progress", "complete", "needs_verification", "paused", "at_risk", "blocked"];
+const actionStatusOptions: ItemStatus[] = ["pending", "in_progress", "complete", "needs_verification", "paused", "at_risk", "blocked", "rejected"];
 
 type ActionRow = ActionItem & { owner: Person | null; vendor: Vendor | null };
 
@@ -1619,6 +1635,22 @@ function ActionItemsPanel({
           changed_by: changedBy, new_status: statusLabel, entity_id: action.id, project_slug: projectSlug,
         }).then(() => {});
       }
+    }
+    if (newStatus === "needs_verification" && action.vendor_id && action.project_id) {
+      supabase.from("projects").select("lead_qa_id").eq("id", action.project_id).single().then(({ data: proj }) => {
+        if (proj?.lead_qa_id && proj.lead_qa_id !== userPersonId) {
+          const qa = people.find((p) => p.id === proj.lead_qa_id);
+          if (qa?.email) supabase.from("comment_notifications").insert({ org_id: orgId, recipient_person_id: qa.id, recipient_email: qa.email, comment_id: null, commenter_name: null, comment_body: null, item_title: action.title, item_type: "action item", mention_type: "status_change", changed_by: changedBy, new_status: "Needs Verification", entity_id: action.id, project_slug: projectSlug }).then(() => {});
+        }
+      });
+    }
+    if (newStatus === "rejected" && action.vendor_id && action.project_id) {
+      supabase.from("project_vendor_owners").select("person_id").eq("project_id", action.project_id).eq("vendor_id", action.vendor_id).maybeSingle().then(({ data: vo }) => {
+        if (vo?.person_id && vo.person_id !== userPersonId) {
+          const owner = people.find((p) => p.id === vo.person_id);
+          if (owner?.email) supabase.from("comment_notifications").insert({ org_id: orgId, recipient_person_id: owner.id, recipient_email: owner.email, comment_id: null, commenter_name: null, comment_body: null, item_title: action.title, item_type: "action item", mention_type: "status_change", changed_by: changedBy, new_status: "Rejected", entity_id: action.id, project_slug: projectSlug }).then(() => {});
+        }
+      });
     }
   }
 
