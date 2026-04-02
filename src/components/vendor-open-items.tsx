@@ -77,6 +77,7 @@ export function VendorOpenItems({
   async function toggleExpand(item: VendorAccountabilityRow) {
     const key = `${item.entity_type}-${item.entity_id}`;
     if (expandedId === key) { setExpandedId(null); setDetail(null); return; }
+    setDetail(null); // Clear old data immediately so stale content doesn't show
     setExpandedId(key);
     await ensurePeople();
     const { data } = await supabase.from(tableName(item.entity_type)).select("*").eq("id", item.entity_id).single();
