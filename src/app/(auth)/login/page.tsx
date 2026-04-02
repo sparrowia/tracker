@@ -96,15 +96,20 @@ function LoginForm() {
     setError(null);
     setResetLoading(true);
 
-    const siteUrl = window.location.origin;
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${siteUrl}/set-password`,
-    });
-
-    if (error) {
-      setError(error.message);
-    } else {
-      setResetSent(true);
+    try {
+      const res = await fetch("/api/auth/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Failed to send reset email");
+      } else {
+        setResetSent(true);
+      }
+    } catch {
+      setError("Failed to send reset email");
     }
     setResetLoading(false);
   }
