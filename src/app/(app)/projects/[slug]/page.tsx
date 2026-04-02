@@ -116,7 +116,7 @@ export default async function ProjectDetailPage({
       )}
 
       {/* Header */}
-      <ProjectHeader project={p} vendors={projectVendors} />
+      <ProjectHeader project={p} vendors={projectVendors} people={typedPeople} />
 
       {/* Tabbed content: Agenda, Blockers, RAID, Action Items */}
       <ProjectTabs

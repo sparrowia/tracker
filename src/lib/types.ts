@@ -143,6 +143,9 @@ export interface Project {
   notes: string | null;
   initiative_id: string | null;
   public_issue_form: boolean;
+  lead_qa_id: string | null;
+  project_manager_id: string | null;
+  project_owner_id: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;

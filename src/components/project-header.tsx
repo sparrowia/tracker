@@ -5,7 +5,8 @@ import { createClient } from "@/lib/supabase/client";
 import { healthColor, healthLabel, formatDateShort } from "@/lib/utils";
 import { useRole } from "@/components/role-context";
 import { isAdmin } from "@/lib/permissions";
-import type { Project, ProjectHealth, Vendor } from "@/lib/types";
+import type { Project, ProjectHealth, Vendor, Person } from "@/lib/types";
+import OwnerPicker from "@/components/owner-picker";
 import Link from "next/link";
 
 const healthOptions: ProjectHealth[] = ["on_track", "in_progress", "at_risk", "blocked", "paused", "complete"];
@@ -13,9 +14,11 @@ const healthOptions: ProjectHealth[] = ["on_track", "in_progress", "at_risk", "b
 interface ProjectHeaderProps {
   project: Project;
   vendors: Vendor[];
+  people: Person[];
 }
 
-export default function ProjectHeader({ project, vendors }: ProjectHeaderProps) {
+export default function ProjectHeader({ project, vendors, people: initialPeople }: ProjectHeaderProps) {
+  const [people, setPeople] = useState(initialPeople);
   const [p, setP] = useState(project);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({
@@ -180,6 +183,43 @@ export default function ProjectHeader({ project, vendors }: ProjectHeaderProps) 
               className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
             />
           </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Project Owner</label>
+            <OwnerPicker
+              value={p.project_owner_id || ""}
+              onChange={(id) => {
+                supabase.from("projects").update({ project_owner_id: id || null }).eq("id", p.id).then(() => {});
+                setP((prev) => ({ ...prev, project_owner_id: id || null }));
+              }}
+              people={people}
+              onPersonAdded={(person) => setPeople((prev) => [...prev, person])}
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Project Manager</label>
+            <OwnerPicker
+              value={p.project_manager_id || ""}
+              onChange={(id) => {
+                supabase.from("projects").update({ project_manager_id: id || null }).eq("id", p.id).then(() => {});
+                setP((prev) => ({ ...prev, project_manager_id: id || null }));
+              }}
+              people={people}
+              onPersonAdded={(person) => setPeople((prev) => [...prev, person])}
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Lead QA</label>
+            <OwnerPicker
+              value={p.lead_qa_id || ""}
+              onChange={(id) => {
+                supabase.from("projects").update({ lead_qa_id: id || null }).eq("id", p.id).then(() => {});
+                setP((prev) => ({ ...prev, lead_qa_id: id || null }));
+              }}
+              people={people}
+              onPersonAdded={(person) => setPeople((prev) => [...prev, person])}
+            />
+          </div>
         </div>
 
         <div className="flex justify-end gap-2 pt-2 border-t border-gray-200">
@@ -225,6 +265,13 @@ export default function ProjectHeader({ project, vendors }: ProjectHeaderProps) 
         {p.start_date && <span>Start: {formatDateShort(p.start_date)}</span>}
         {p.target_completion && <span>Target: {formatDateShort(p.target_completion)}</span>}
       </div>
+      {(p.project_owner_id || p.project_manager_id || p.lead_qa_id) && (
+        <div className="flex gap-6 mt-2 text-sm text-gray-500">
+          {p.project_owner_id && <span>Owner: <span className="text-gray-700 font-medium">{people.find((pp) => pp.id === p.project_owner_id)?.full_name || "—"}</span></span>}
+          {p.project_manager_id && <span>PM: <span className="text-gray-700 font-medium">{people.find((pp) => pp.id === p.project_manager_id)?.full_name || "—"}</span></span>}
+          {p.lead_qa_id && <span>Lead QA: <span className="text-gray-700 font-medium">{people.find((pp) => pp.id === p.lead_qa_id)?.full_name || "—"}</span></span>}
+        </div>
+      )}
       {p.notes && <p className="text-sm text-gray-500 mt-2">{p.notes}</p>}
       {isAdmin(role) && (
         <div className="flex items-center gap-3 mt-3">
