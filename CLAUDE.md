@@ -564,3 +564,62 @@ ALTER TABLE action_items ENABLE TRIGGER set_updated_at;
 - For experimental UI changes, use a branch, then merge to main when approved
 - Do NOT use `npx vercel` — CLI is scoped to wrong team
 - Always `npm run build` before pushing to catch errors
+
+## Vendor Detail Page
+
+The vendor detail page (`/settings/vendors/[id]`) is the hub for vendor meeting prep:
+
+- **Vendor Health Report** — super_admin only. Overall A-F grade + 8 metric cards (Avg Ticket Age, Time to First Action, Avg Resolution Time, QA Bounce Rate, Missing ETAs, Time to Set ETA, Overdue Rate, Critical/High Open). Computed from activity_log + item data.
+- **Contacts** — add/edit/delete vendor contacts with invite/resend
+- **Project tabs** — 🔥 (critical+high across all projects), All, then one tab per project. Items show action items, blockers, and RAID issues assigned to the vendor.
+- **Filters** — RAID-log-style filter bar (Type, Priority, Status, Owner) + search input
+- **Expandable detail panels** — full RAID-style layout with description, meeting notes, next steps, properties grid, vendor reassignment, and comments
+- **Vendor reassignment** — VendorPicker in detail panel; item leaves the view immediately when reassigned
+- **"My Company" sidebar link** — vendors see their own vendor page via Building icon in sidebar
+- **Last Updated column** — replaces Age, shows relative time (3h ago, yesterday, 2w ago)
+
+## Two-Flag Meeting Toggle
+
+Items have separate `include_in_project_meeting` and `include_in_vendor_meeting` flags. The project agenda uses the project flag; the vendor agenda uses the vendor flag. Toggling one doesn't affect the other.
+
+## Project Roles
+
+Projects have three person-reference fields: `project_owner_id`, `project_manager_id`, `lead_qa_id` — set via OwnerPicker in the edit form, displayed below project metadata. Plus `project_vendor_owners` junction table for one vendor owner per vendor-project relationship.
+
+## Project Members
+
+`project_members` junction table controls project visibility. People added via the "People" section in the Docs tab can see and interact with the project even without assigned tasks. `user_visible_project_ids` RPC includes project_members.
+
+## Status Change Notifications
+
+When a RAID entry, action item, or blocker status changes:
+- Reporter and owner get a digest notification
+- **Verify (needs_verification)** on vendor-assigned items → Lead QA gets notified
+- **Rejected** on vendor-assigned items → Vendor Owner gets notified
+
+## Invite Flow (Custom SMTP)
+
+Invites bypass Supabase's email system entirely:
+1. `/api/invite` creates auth user via `createUser`, generates magic link via `generateLink`
+2. Link routes through `/api/invite/verify` (server-side token verification, no PKCE)
+3. Email sent via Gmail SMTP (`src/lib/email.ts`)
+4. User clicks → `/api/invite/verify` verifies token → redirects to `/auth/callback#tokens` → `/set-password`
+5. `/api/invite/accept` marks invitation accepted + links `profile_id`
+
+Password reset uses the same flow via `/api/auth/reset-password`.
+
+`sendEmail()` returns `{success, error}` — invite route returns 500 if email fails.
+
+**Redirect URL fix**: Supabase may override `redirect_to` with its configured Site URL. All invite/resend endpoints rewrite the URL using the `URL` API before sending.
+
+## Auto-Mark Read Trigger
+
+`auto_mark_read` AFTER UPDATE trigger on `raid_entries` and `action_items` automatically upserts `item_reads` for the authenticated user (`auth.uid()`), preventing own changes from showing as unread. This covers all 26+ update paths without client-side code.
+
+## Docs Template Sections
+
+Project Docs tab has a hardcoded template index: Key Dates, Key Resources, Project Details, Core Audiences, Value Props, Marketing, Questions. Content stored in `project_documents` table. WYSIWYG editor (TipTap) with table support for editing. People, Files, and Notes sections below the HR separator.
+
+## Rejected Status
+
+`rejected` added to `item_status` enum. Available in all status dropdowns. Red badge styling. Triggers vendor owner notification when set on vendor-assigned items.

@@ -162,7 +162,18 @@ All tables have row-level security policies scoped to `org_id` via the `user_org
 18. **RAID Due Date** — due_date column on raid_entries with InlineDate picker in detail panel, column toggle, and bulk editor. Smart display: past due (red italic), today/tomorrow labels, short date for future.
 19. **RAID Changelog** — "View changelog" link in detail panel opens modal with activity history from `activity_log` table. Human-readable labels for owner, vendor, status, priority fields.
 20. **Digest Deep Links** — each notification block in email digest links to the specific project page instead of just `/dashboard`.
-21. **Unread Indicators** — NEW pill (never viewed) and red indicator (updated since last view). Comments bump `updated_at`. Own changes don't trigger indicators (read_at set to DB-returned updated_at).
+21. **Unread Indicators** — NEW pill (never viewed) and red indicator (updated since last view). Comments bump `updated_at`. Own changes don't trigger indicators (auto_mark_read DB trigger).
+22. **Vendor Detail Page** — project-tabbed item view (🔥 urgent, All, per-project), health report (A-F grade, 8 metrics), filters, expandable detail panels with comments, vendor reassignment.
+23. **Two-Flag Meeting Toggle** — separate `include_in_project_meeting` and `include_in_vendor_meeting` flags. Project and vendor agendas are independent.
+24. **Project Roles** — Project Owner, Project Manager, Lead QA fields on projects. Vendor Owner per project-vendor relationship via junction table.
+25. **Project Members** — `project_members` junction table for project visibility. People section in Docs tab.
+26. **Status Change Notifications** — digest notifications on status changes to reporter/owner. Verify → Lead QA, Rejected → Vendor Owner.
+27. **Custom Invite/Reset Flow** — bypasses Supabase email, uses Gmail SMTP + server-side token verification to avoid PKCE issues.
+28. **Rejected Status** — new status option for items that fail QA review.
+29. **WYSIWYG Docs Editor** — TipTap rich text editor with table support for project documentation sections.
+30. **Vendor Health Report** — super_admin only, A-F letter grades based on ticket age, resolution time, QA bounce rate, ETA coverage, overdue rate.
+31. **Action Item Changelog** — activity history modal matching RAID log changelog pattern.
+32. **Dashboard My Tasks** — personal task list showing action items + RAID entries owned by logged-in user with grid layout.
 
 ## UI Design System
 
@@ -233,6 +244,18 @@ All in `supabase/migrations/`:
 | `20260327000001_notification_deep_links.sql` | Add `entity_id` + `project_slug` to comment_notifications for deep links |
 | `20260327000002_raid_due_date.sql` | Add `due_date` column to raid_entries |
 | `20260327000003_public_attachment_bucket.sql` | Make `comment-attachments` storage bucket public |
+| `20260330000001_auto_mark_read_on_update.sql` | Auto-mark items as read for the user who updates them |
+| `20260330000002_vendor_meeting_overhaul.sql` | Two-flag meeting toggle, RAID in vendor accountability, vendor agenda RPC update |
+| `20260330000003_refresh_ages_views.sql` | Recreate blocker_ages/action_item_ages views for new columns |
+| `20260331000001_project_members.sql` | Project members junction table for project visibility |
+| `20260331000002_status_change_notifications.sql` | Status change notifications with changed_by and new_status |
+| `20260401000001_fix_invite_accepted_timing.sql` | Don't auto-mark invitation accepted in handle_new_user trigger |
+| `20260401000002_vendor_accountability_issues_only.sql` | Filter vendor accountability to issues only |
+| `20260401000003_vendor_see_all_people.sql` | Allow vendors to see all people in org |
+| `20260402000001_project_roles.sql` | Add lead_qa_id, project_manager_id, project_owner_id to projects |
+| `20260402000002_vendor_owners.sql` | Vendor owners per project junction table |
+| `20260402000003_add_rejected_status.sql` | Add 'rejected' to item_status enum |
+| `20260402000004_vendor_accountability_updated_at.sql` | Add updated_at to vendor accountability view |
 
 ## Deployment
 
