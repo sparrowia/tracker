@@ -591,6 +591,14 @@ export function VendorOpenItems({
                       </div>
                     </div>
 
+                    {/* Changelog toggle */}
+                    <VendorChangelogToggle
+                      entityType={item.entity_type}
+                      entityId={item.entity_id}
+                      orgId={orgId}
+                      people={people}
+                    />
+
                     {/* Comments */}
                     <div className="bg-yellow-50/25">
                       <CommentThread
@@ -608,6 +616,96 @@ export function VendorOpenItems({
               </div>
             );
           })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const CHANGELOG_FIELD_LABELS: Record<string, string> = {
+  status: "Status", priority: "Priority", owner_id: "Owner", reporter_id: "Reporter",
+  vendor_id: "Vendor", raid_type: "Type", impact: "Impact", due_date: "Due Date",
+  decision_date: "Decision Date", title: "Title", description: "Description",
+  impact_description: "Impact", notes: "Notes", next_steps: "Next Steps",
+  parent_id: "Parent", comment: "Comment",
+  include_in_project_meeting: "Project Meeting", include_in_vendor_meeting: "Vendor Meeting",
+  resolved_at: "Resolved",
+};
+
+function VendorChangelogToggle({ entityType, entityId, orgId, people }: { entityType: string; entityId: string; orgId: string; people: Person[] }) {
+  const [open, setOpen] = useState(false);
+  const [logs, setLogs] = useState<{ id: string; action: string; field_name: string | null; old_value: string | null; new_value: string | null; performed_by: string | null; created_at: string }[]>([]);
+  const [loading, setLoading] = useState(false);
+  const supabase = createClient();
+
+  function load() {
+    if (logs.length > 0 || loading) { setOpen(!open); return; }
+    setOpen(true);
+    setLoading(true);
+    supabase
+      .from("activity_log")
+      .select("*")
+      .eq("entity_type", entityType)
+      .eq("entity_id", entityId)
+      .eq("org_id", orgId)
+      .order("created_at", { ascending: false })
+      .limit(50)
+      .then(({ data }) => {
+        if (data) setLogs(data);
+        setLoading(false);
+      });
+  }
+
+  function personName(profileId: string | null) {
+    if (!profileId) return "System";
+    const person = people.find((p) => p.profile_id === profileId);
+    return person?.full_name || "Unknown";
+  }
+
+  function formatLogTime(date: string) {
+    const d = new Date(date);
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" }) + " " + d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  }
+
+  return (
+    <div className="border-t border-gray-200 bg-yellow-50/25">
+      <button onClick={load} className="px-5 py-2 text-xs text-blue-600 hover:text-blue-800">
+        👀 {open ? "Hide changelog" : "View changelog"}
+      </button>
+      {open && (
+        <div className="px-5 pb-3">
+          {loading ? (
+            <div className="text-xs text-gray-400">Loading changelog...</div>
+          ) : logs.length === 0 ? (
+            <div className="text-xs text-gray-400">No changes recorded yet.</div>
+          ) : (
+            <div className="space-y-1.5">
+              {logs.map((log) => {
+                const fieldLabel = CHANGELOG_FIELD_LABELS[log.field_name || ""] || log.field_name || log.action;
+                const who = personName(log.performed_by);
+                const when = formatLogTime(log.created_at);
+
+                if (log.action === "comment") {
+                  return (
+                    <div key={log.id} className="flex items-baseline gap-2 text-xs">
+                      <span className="text-gray-400 flex-shrink-0 w-[110px]">{when}</span>
+                      <span className="text-gray-600"><span className="font-medium text-gray-700">{who}</span> — Comment Made</span>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div key={log.id} className="flex items-baseline gap-2 text-xs">
+                    <span className="text-gray-400 flex-shrink-0 w-[110px]">{when}</span>
+                    <span className="text-gray-600">
+                      <span className="font-medium text-gray-700">{who}</span> — {fieldLabel} Updated
+                      {log.old_value && log.new_value ? <span className="text-gray-400"> ({log.old_value} → {log.new_value})</span> : log.new_value ? <span className="text-gray-400"> (→ {log.new_value})</span> : null}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
     </div>
