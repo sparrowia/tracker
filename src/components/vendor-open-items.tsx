@@ -250,39 +250,49 @@ export function VendorOpenItems({
   return (
     <div>
       {/* Project tabs */}
-      <div className="flex items-center border-b border-gray-300 overflow-x-auto">
-        <button
-          onClick={() => { switchTab("__urgent__"); }}
-          className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-            isUrgent ? "border-red-600 text-red-700" : "border-transparent text-gray-500 hover:text-gray-700"
-          }`}
-        >
-          🔥{urgentItems.length > 0 && <span className={`ml-1.5 text-xs ${isUrgent ? "text-red-500" : "text-gray-400"}`}>{urgentItems.length}</span>}
-        </button>
-        <button
-          onClick={() => { switchTab("__all__"); }}
-          className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-            activeTab === "__all__" ? "border-blue-600 text-blue-700" : "border-transparent text-gray-500 hover:text-gray-700"
-          }`}
-        >
-          All <span className={`ml-1.5 text-xs ${activeTab === "__all__" ? "text-blue-500" : "text-gray-400"}`}>{items.length}</span>
-        </button>
-        {projectTabs.map((tab) => {
-          const key = tab.projectId || "__none__";
-          const isActive = activeTab === key;
-          return (
-            <button
-              key={key}
-              onClick={() => { switchTab(key); }}
-              className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-                isActive ? "border-blue-600 text-blue-700" : "border-transparent text-gray-500 hover:text-gray-700"
-              }`}
-            >
-              {tab.projectName}
-              {tab.count > 0 && <span className={`ml-1.5 text-xs ${isActive ? "text-blue-500" : "text-gray-400"}`}>{tab.count}</span>}
-            </button>
-          );
-        })}
+      <div className="flex items-center border-b border-gray-300">
+        <div className="flex items-center overflow-x-auto flex-1">
+          <button
+            onClick={() => { switchTab("__urgent__"); }}
+            className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+              isUrgent ? "border-red-600 text-red-700" : "border-transparent text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            🔥{urgentItems.length > 0 && <span className={`ml-1.5 text-xs ${isUrgent ? "text-red-500" : "text-gray-400"}`}>{urgentItems.length}</span>}
+          </button>
+          <button
+            onClick={() => { switchTab("__all__"); }}
+            className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+              activeTab === "__all__" ? "border-blue-600 text-blue-700" : "border-transparent text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            All <span className={`ml-1.5 text-xs ${activeTab === "__all__" ? "text-blue-500" : "text-gray-400"}`}>{items.length}</span>
+          </button>
+          {projectTabs.map((tab) => {
+            const key = tab.projectId || "__none__";
+            const isActive = activeTab === key;
+            return (
+              <button
+                key={key}
+                onClick={() => { switchTab(key); }}
+                className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+                  isActive ? "border-blue-600 text-blue-700" : "border-transparent text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                {tab.projectName}
+                {tab.count > 0 && <span className={`ml-1.5 text-xs ${isActive ? "text-blue-500" : "text-gray-400"}`}>{tab.count}</span>}
+              </button>
+            );
+          })}
+        </div>
+        {canEdit && !showAddForm && (
+          <button
+            onClick={() => setShowAddForm(true)}
+            className="text-xs font-medium text-white bg-gray-800 px-2.5 py-1 rounded hover:bg-gray-700 mr-3 flex-shrink-0"
+          >
+            + Add Item
+          </button>
+        )}
       </div>
 
       {/* Add Item form */}
@@ -336,14 +346,6 @@ export function VendorOpenItems({
             <Link href={`/projects/${activeProject.projectSlug}`} className="text-xs text-blue-600 hover:text-blue-800">
               View Project →
             </Link>
-          )}
-          {canEdit && !showAddForm && (
-            <button
-              onClick={() => setShowAddForm(true)}
-              className="text-xs font-medium text-white bg-gray-800 px-2.5 py-1 rounded hover:bg-gray-700"
-            >
-              + Add Item
-            </button>
           )}
         </div>
         <div className="relative">
