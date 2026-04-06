@@ -19,6 +19,7 @@ import {
   CalendarDays,
   PanelLeftClose,
   PanelLeftOpen,
+  ClipboardList,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
@@ -189,6 +190,11 @@ export function Sidebar({ role: propRole = "user" as UserRole, profileId, userPe
             </Link>
           )}
           {role !== "vendor" && (
+            <Link href="/reports" className={cn("p-2 rounded-md", pathname === "/reports" ? "bg-blue-50 text-blue-700" : "text-gray-500 hover:bg-gray-100 hover:text-gray-700")} title="Reports">
+              <ClipboardList className="h-4 w-4" />
+            </Link>
+          )}
+          {role !== "vendor" && (
             <Link href="/docs" prefetch={false} className={cn("p-2 rounded-md", pathname === "/docs" || pathname.startsWith("/docs/") ? "bg-blue-50 text-blue-700" : "text-gray-500 hover:bg-gray-100 hover:text-gray-700")} title="Docs">
               <BookOpen className="h-4 w-4" />
             </Link>
@@ -268,6 +274,22 @@ export function Sidebar({ role: propRole = "user" as UserRole, profileId, userPe
           >
             <CalendarDays className="h-4 w-4 flex-shrink-0" />
             Timeline
+          </Link>
+        )}
+
+        {/* Reports — hidden from vendors */}
+        {role !== "vendor" && (
+          <Link
+            href="/reports"
+            className={cn(
+              "flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors",
+              pathname === "/reports"
+                ? "bg-blue-50 text-blue-700"
+                : "text-gray-700 hover:bg-gray-100"
+            )}
+          >
+            <ClipboardList className="h-4 w-4 flex-shrink-0" />
+            Reports
           </Link>
         )}
 

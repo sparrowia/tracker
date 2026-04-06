@@ -7,6 +7,7 @@ import { useRole } from "@/components/role-context";
 import { isAdmin } from "@/lib/permissions";
 import type { Project, ProjectHealth, Vendor, Person } from "@/lib/types";
 import OwnerPicker from "@/components/owner-picker";
+import SteeringCommitteeSection from "@/components/steering-committee-section";
 import Link from "next/link";
 
 const healthOptions: ProjectHealth[] = ["on_track", "in_progress", "at_risk", "blocked", "paused", "complete"];
@@ -35,7 +36,9 @@ export default function ProjectHeader({ project, vendors, people: initialPeople 
   const [togglingForm, setTogglingForm] = useState(false);
   const [copied, setCopied] = useState(false);
   const [vendorOwners, setVendorOwners] = useState<Record<string, string>>({}); // vendor_id -> person_id
+  const [healthOverride, setHealthOverride] = useState<ProjectHealth | null>(null);
   const { role } = useRole();
+  const displayHealth = healthOverride ?? p.health;
 
   // Load vendor owners
   useEffect(() => {
@@ -274,8 +277,8 @@ export default function ProjectHeader({ project, vendors, people: initialPeople 
     <div>
       <div className="flex items-center gap-3 mb-2">
         <h1 className="text-2xl font-bold text-gray-900">{p.name}</h1>
-        <span className={`inline-flex px-2.5 py-0.5 text-xs font-medium rounded-full border ${healthColor(p.health)}`}>
-          {healthLabel(p.health)}
+        <span className={`inline-flex px-2.5 py-0.5 text-xs font-medium rounded-full border ${healthColor(displayHealth)}`}>
+          {healthLabel(displayHealth)}
         </span>
         <button
           onClick={startEdit}
@@ -361,6 +364,16 @@ export default function ProjectHeader({ project, vendors, people: initialPeople 
           ))}
         </div>
       )}
+
+      {/* Steering Committee */}
+      <div className="mt-4">
+        <SteeringCommitteeSection
+          project={p}
+          people={people}
+          onHealthOverride={setHealthOverride}
+          onProjectUpdate={(updates) => setP((prev) => ({ ...prev, ...updates } as Project))}
+        />
+      </div>
     </div>
   );
 }

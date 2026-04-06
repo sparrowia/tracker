@@ -32,6 +32,16 @@ export type SeverityIndicator = "critical" | "high" | "new" | "normal";
 
 export type UserRole = "super_admin" | "admin" | "user" | "vendor";
 
+export type SteeringPhase =
+  | "in_progress"
+  | "post_launch"
+  | "parking_lot"
+  | "upcoming"
+  | "completed"
+  | "on_hold";
+
+export type DepartmentStatusLevel = "green" | "yellow" | "red";
+
 export type IntakeSource =
   | "slack"
   | "email"
@@ -147,6 +157,13 @@ export interface Project {
   lead_qa_id: string | null;
   project_manager_id: string | null;
   project_owner_id: string | null;
+  executive_sponsor_id: string | null;
+  steering_priority: number | null;
+  steering_phase: SteeringPhase | null;
+  original_completion_date: string | null;
+  original_completion_notes: string | null;
+  actual_completion_date: string | null;
+  actual_completion_notes: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -448,3 +465,27 @@ export interface ProjectAgendaRow {
   owner_id: string | null;
   vendor_id: string | null;
 }
+
+export interface ProjectDepartmentStatus {
+  id: string;
+  org_id: string;
+  project_id: string;
+  department: string;
+  rep_person_id: string | null;
+  status: DepartmentStatusLevel | null;
+  roadblocks: string | null;
+  decisions: string | null;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+  rep?: Person;
+}
+
+export const STEERING_DEPARTMENTS = [
+  "Marketing",
+  "Content/Education",
+  "Product/Technology",
+  "Sales",
+  "Finance",
+  "Compliance",
+] as const;

@@ -1,4 +1,4 @@
-import { type PriorityLevel, type ItemStatus, type ProjectHealth, type SeverityIndicator, type MilestoneType, type MilestoneStatus } from "./types";
+import { type PriorityLevel, type ItemStatus, type ProjectHealth, type SeverityIndicator, type MilestoneType, type MilestoneStatus, type SteeringPhase, type DepartmentStatusLevel } from "./types";
 
 export function cn(...classes: (string | boolean | undefined | null)[]) {
   return classes.filter(Boolean).join(" ");
@@ -126,6 +126,46 @@ export function milestoneStatusColor(status: MilestoneStatus): string {
     case "pending": return "text-gray-700 bg-gray-100";
     case "in_progress": return "text-blue-700 bg-blue-100";
     case "complete": return "text-green-700 bg-green-100";
+  }
+}
+
+export function steeringPhaseLabel(phase: SteeringPhase): string {
+  switch (phase) {
+    case "in_progress": return "In Progress";
+    case "post_launch": return "Post Launch";
+    case "parking_lot": return "Parking Lot";
+    case "upcoming": return "Upcoming";
+    case "completed": return "Completed";
+    case "on_hold": return "On Hold";
+  }
+}
+
+export function steeringPhaseColor(phase: SteeringPhase): string {
+  switch (phase) {
+    case "in_progress": return "text-blue-700 bg-blue-50 border-blue-200";
+    case "post_launch": return "text-green-700 bg-green-50 border-green-200";
+    case "parking_lot": return "text-gray-600 bg-gray-50 border-gray-200";
+    case "upcoming": return "text-purple-700 bg-purple-50 border-purple-200";
+    case "completed": return "text-green-700 bg-green-100 border-green-200";
+    case "on_hold": return "text-amber-700 bg-amber-50 border-amber-200";
+  }
+}
+
+export function departmentStatusColor(status: DepartmentStatusLevel | null): string {
+  switch (status) {
+    case "green": return "bg-green-500";
+    case "yellow": return "bg-yellow-400";
+    case "red": return "bg-red-500";
+    default: return "bg-gray-300";
+  }
+}
+
+export function departmentStatusLabel(status: DepartmentStatusLevel | null): string {
+  switch (status) {
+    case "green": return "On Time";
+    case "yellow": return "Delayed";
+    case "red": return "Blocked";
+    default: return "No Status";
   }
 }
 
