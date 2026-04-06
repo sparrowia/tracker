@@ -42,11 +42,13 @@ export function VendorOpenItems({
   ownerMap: initialOwnerMap,
   projectTabs,
   orgId,
+  vendorId,
 }: {
   items: VendorAccountabilityRow[];
   ownerMap: Record<string, string>;
   projectTabs: ProjectTab[];
   orgId: string;
+  vendorId: string;
 }) {
   const [items, setItems] = useState(initialItems);
   const [ownerMap, setOwnerMap] = useState(initialOwnerMap);
@@ -60,9 +62,20 @@ export function VendorOpenItems({
   const [detail, setDetail] = useState<Record<string, unknown> | null>(null);
   const [people, setPeople] = useState<Person[]>([]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [addType, setAddType] = useState<"action_item" | "blocker" | "raid_entry">("action_item");
+  const [addTitle, setAddTitle] = useState("");
+  const [addPriority, setAddPriority] = useState<PriorityLevel>("medium");
+  const [addSaving, setAddSaving] = useState(false);
   const supabase = createClient();
-  const { role } = useRole();
+  const { role, profileId } = useRole();
   const canEdit = role === "super_admin" || role === "admin" || role === "user";
+
+  // Project name map for the Project column
+  const projectNameMap: Record<string, string> = {};
+  for (const tab of projectTabs) {
+    if (tab.projectId) projectNameMap[tab.projectId] = tab.projectName;
+  }
 
   async function ensurePeople() {
     if (people.length > 0) return;
@@ -103,7 +116,103 @@ export function VendorOpenItems({
     if (detail) setDetail({ ...detail, [field]: value || null });
   }
 
-  if (projectTabs.length === 0) {
+  async function addItem() {
+    if (!addTitle.trim() || addSaving) return;
+    setAddSaving(true);
+    const now = new Date().toISOString();
+    let newItem: VendorAccountabilityRow | null = null;
+
+    if (addType === "action_item") {
+      const { data } = await supabase.from("action_items").insert({
+        org_id: orgId,
+        title: addTitle.trim(),
+        priority: addPriority,
+        vendor_id: vendorId,
+        status: "pending",
+        created_by: profileId,
+      }).select("*").single();
+      if (data) {
+        newItem = {
+          entity_type: "action_item",
+          entity_id: data.id,
+          vendor_id: vendorId,
+          org_id: orgId,
+          title: data.title,
+          status: data.status,
+          priority: data.priority,
+          due_date: data.due_date,
+          first_flagged_at: data.first_flagged_at || now,
+          age_days: 0,
+          updated_at: data.updated_at || now,
+          owner_id: data.owner_id,
+          project_id: data.project_id,
+        };
+      }
+    } else if (addType === "blocker") {
+      const { data } = await supabase.from("blockers").insert({
+        org_id: orgId,
+        title: addTitle.trim(),
+        priority: addPriority,
+        vendor_id: vendorId,
+        status: "pending",
+        created_by: profileId,
+      }).select("*").single();
+      if (data) {
+        newItem = {
+          entity_type: "blocker",
+          entity_id: data.id,
+          vendor_id: vendorId,
+          org_id: orgId,
+          title: data.title,
+          status: data.status,
+          priority: data.priority,
+          due_date: data.due_date,
+          first_flagged_at: data.first_flagged_at || now,
+          age_days: 0,
+          updated_at: data.updated_at || now,
+          owner_id: data.owner_id,
+          project_id: data.project_id,
+        };
+      }
+    } else {
+      const { data } = await supabase.from("raid_entries").insert({
+        org_id: orgId,
+        title: addTitle.trim(),
+        priority: addPriority,
+        vendor_id: vendorId,
+        raid_type: "issue",
+        status: "pending",
+        created_by: profileId,
+      }).select("*").single();
+      if (data) {
+        newItem = {
+          entity_type: "raid_entry",
+          entity_id: data.id,
+          vendor_id: vendorId,
+          org_id: orgId,
+          title: data.title,
+          status: data.status,
+          priority: data.priority,
+          due_date: data.due_date,
+          first_flagged_at: data.first_flagged_at || now,
+          age_days: 0,
+          updated_at: data.updated_at || now,
+          owner_id: data.owner_id,
+          project_id: data.project_id,
+        };
+      }
+    }
+
+    if (newItem) {
+      setItems((prev) => [newItem!, ...prev]);
+    }
+    setAddTitle("");
+    setAddPriority("medium");
+    setShowAddForm(false);
+    setAddSaving(false);
+  }
+
+  if (projectTabs.length === 0 && items.length === 0) {
     return (
       <div>
         <h2 className="text-lg font-semibold text-gray-900 mb-3">Projects</h2>
@@ -176,13 +285,65 @@ export function VendorOpenItems({
         })}
       </div>
 
-      {/* View Project link + Search */}
+      {/* Add Item form */}
+      {showAddForm && (
+        <div className="px-4 py-3 bg-blue-50 border-b border-gray-200 flex items-center gap-3">
+          <select
+            value={addType}
+            onChange={(e) => setAddType(e.target.value as "action_item" | "blocker" | "raid_entry")}
+            className="text-xs rounded border border-gray-300 bg-white px-2 py-1.5 focus:outline-none focus:border-blue-400"
+          >
+            <option value="action_item">Action Item</option>
+            <option value="blocker">Blocker</option>
+            <option value="raid_entry">Issue</option>
+          </select>
+          <input
+            type="text"
+            value={addTitle}
+            onChange={(e) => setAddTitle(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") addItem(); if (e.key === "Escape") setShowAddForm(false); }}
+            placeholder="Item title..."
+            autoFocus
+            className="flex-1 rounded border border-gray-300 bg-white px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          />
+          <select
+            value={addPriority}
+            onChange={(e) => setAddPriority(e.target.value as PriorityLevel)}
+            className="text-xs rounded border border-gray-300 bg-white px-2 py-1.5 focus:outline-none focus:border-blue-400"
+          >
+            {PRIORITY_OPTIONS.map((p) => <option key={p} value={p}>{priorityLabel(p)}</option>)}
+          </select>
+          <button
+            onClick={addItem}
+            disabled={!addTitle.trim() || addSaving}
+            className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50"
+          >
+            {addSaving ? "Adding..." : "Add"}
+          </button>
+          <button
+            onClick={() => setShowAddForm(false)}
+            className="px-2 py-1.5 text-xs text-gray-600 hover:text-gray-800"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+
+      {/* View Project link + Search + Add button */}
       <div className="px-4 py-2 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
         <div className="flex items-center gap-2">
           {activeProject?.projectSlug && (
             <Link href={`/projects/${activeProject.projectSlug}`} className="text-xs text-blue-600 hover:text-blue-800">
               View Project →
             </Link>
+          )}
+          {canEdit && !showAddForm && (
+            <button
+              onClick={() => setShowAddForm(true)}
+              className="text-xs font-medium text-white bg-gray-800 px-2.5 py-1 rounded hover:bg-gray-700"
+            >
+              + Add Item
+            </button>
           )}
         </div>
         <div className="relative">
@@ -235,9 +396,10 @@ export function VendorOpenItems({
       ) : (
         <div>
           {/* Column headers */}
-          <div className="grid grid-cols-[60px_1fr_140px_80px_80px_80px_90px] bg-gray-50 border-b border-gray-300 px-4 py-2">
+          <div className="grid grid-cols-[60px_1fr_100px_140px_80px_80px_80px_90px] bg-gray-50 border-b border-gray-300 px-4 py-2">
             <span className="text-xs font-medium text-gray-500 uppercase">Type</span>
             <span className="text-xs font-medium text-gray-500 uppercase">Item</span>
+            <span className="text-xs font-medium text-gray-500 uppercase">Project</span>
             <span className="text-xs font-medium text-gray-500 uppercase">Responsible</span>
             <span className="text-xs font-medium text-gray-500 uppercase">Priority</span>
             <span className="text-xs font-medium text-gray-500 uppercase">Due</span>
@@ -256,7 +418,7 @@ export function VendorOpenItems({
                 {/* Row */}
                 <div
                   onClick={() => toggleExpand(item)}
-                  className={`grid grid-cols-[60px_1fr_140px_80px_80px_80px_90px] px-4 py-3 border-b border-gray-200 cursor-pointer transition-colors ${isExpanded ? "bg-blue-50/40" : "hover:bg-gray-50"}`}
+                  className={`grid grid-cols-[60px_1fr_100px_140px_80px_80px_80px_90px] px-4 py-3 border-b border-gray-200 cursor-pointer transition-colors ${isExpanded ? "bg-blue-50/40" : "hover:bg-gray-50"}`}
                 >
                   <span>
                     <span className={`inline-flex px-1.5 py-0.5 text-xs rounded ${TYPE_COLORS[item.entity_type] || "bg-gray-100 text-gray-700"}`}>
@@ -264,6 +426,19 @@ export function VendorOpenItems({
                     </span>
                   </span>
                   <span className="text-sm text-gray-900 font-semibold truncate pr-4">{item.title}</span>
+                  <span className="text-xs text-gray-500 truncate">
+                    {item.project_id ? (
+                      <Link
+                        href={`/projects/${projectTabs.find((t) => t.projectId === item.project_id)?.projectSlug || ""}`}
+                        className="hover:text-blue-600"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {projectNameMap[item.project_id] || "—"}
+                      </Link>
+                    ) : (
+                      <span className="text-gray-400">—</span>
+                    )}
+                  </span>
                   <span className="text-sm">
                     {ownerName ? (
                       <span className="flex items-center gap-1.5">
