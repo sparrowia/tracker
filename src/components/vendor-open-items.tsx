@@ -481,14 +481,14 @@ export function VendorOpenItems({
                         <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Description</span>
                         {canEdit ? (
                           <textarea
-                            defaultValue={(detail.description as string) || (detail.impact_description as string) || ""}
-                            onBlur={(e) => saveField(item, item.entity_type === "blocker" ? "impact_description" : "description", e.target.value)}
+                            defaultValue={(detail.description as string) || ""}
+                            onBlur={(e) => saveField(item, "description", e.target.value)}
                             placeholder="Add description..."
                             rows={6}
                             className="w-full rounded border border-gray-300 bg-white px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y mt-1"
                           />
                         ) : (
-                          <p className="text-sm text-gray-700 mt-1 whitespace-pre-wrap">{(detail.description as string) || (detail.impact_description as string) || "—"}</p>
+                          <p className="text-sm text-gray-700 mt-1 whitespace-pre-wrap">{(detail.description as string) || "—"}</p>
                         )}
                       </div>
                       <div className="rounded border border-gray-200 bg-white p-3">
