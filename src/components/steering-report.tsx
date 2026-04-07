@@ -274,7 +274,7 @@ export default function SteeringReport({ projects, initiatives, people, deptStat
           No items in this phase.
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-start" style={{ gridAutoRows: "1fr" }}>
           {tabRows.map((row, idx) => (
             <ReportCard
               key={row.id}
@@ -319,7 +319,7 @@ function ReportCard({
 
   return (
     <div className={isChild ? "" : ""}>
-      <div className="border border-gray-300 rounded-lg overflow-hidden bg-white hover:border-gray-400 transition-colors">
+      <div className="border border-gray-300 rounded-lg overflow-hidden bg-white hover:border-gray-400 transition-colors h-full flex flex-col">
         {/* Card header */}
         <button
           onClick={() => onToggle(row.id)}
