@@ -342,16 +342,16 @@ function DepartmentCard({
   return (
     <div className="border border-gray-300 rounded-lg overflow-hidden">
       {/* Card header — department name + traffic light + delete */}
-      <div className="flex items-center justify-between px-3 py-2 bg-gray-50 border-b border-gray-200">
+      <div className="flex items-center justify-between px-3 py-2 bg-gray-800 border-b border-gray-700">
         <div className="flex items-center gap-2">
           <span className={`inline-block h-3 w-3 rounded-full flex-shrink-0 ${departmentStatusColor(ds.status)}`} title={departmentStatusLabel(ds.status)} />
-          <span className="text-sm font-semibold text-gray-800">{ds.department}</span>
+          <span className="text-sm font-semibold text-white">{ds.department}</span>
         </div>
         <div className="flex items-center gap-2">
           <select
             value={ds.status ?? "none"}
             onChange={(e) => onUpdate(ds.id, "status", e.target.value)}
-            className="rounded border border-gray-300 px-1.5 py-0.5 text-xs focus:border-blue-500 focus:outline-none bg-white"
+            className="rounded border border-gray-600 px-1.5 py-0.5 text-xs focus:border-blue-400 focus:outline-none bg-gray-700 text-white"
           >
             {STATUS_OPTIONS.map((s) => (
               <option key={s} value={s}>
@@ -361,7 +361,7 @@ function DepartmentCard({
           </select>
           <button
             onClick={() => onRemove(ds.id)}
-            className="text-gray-400 hover:text-red-500 p-0.5"
+            className="text-gray-400 hover:text-red-400 p-0.5"
             title="Remove department"
           >
             <Trash2 className="h-3.5 w-3.5" />
@@ -369,7 +369,7 @@ function DepartmentCard({
         </div>
       </div>
 
-      <div className="p-3 space-y-3">
+      <div className="p-3 space-y-3 bg-white">
         {/* Rep */}
         <div>
           <label className="block text-[10px] font-medium text-gray-400 uppercase tracking-wide mb-1">Rep / Owner</label>
