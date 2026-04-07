@@ -164,7 +164,7 @@ export default function SteeringCommitteeSection({
       </button>
 
       {expanded && (
-        <div className="p-4 space-y-4">
+        <div className="p-4 space-y-4 bg-white">
           {loading ? (
             <div className="text-sm text-gray-400">Loading...</div>
           ) : (
@@ -192,7 +192,7 @@ export default function SteeringCommitteeSection({
                       setPhase(v);
                       saveProjectField("steering_phase", v || null);
                     }}
-                    className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   >
                     <option value="">— Select Phase —</option>
                     {PHASE_OPTIONS.map((p) => (
@@ -211,7 +211,7 @@ export default function SteeringCommitteeSection({
                       setPriority(v);
                     }}
                     onBlur={() => saveProjectField("steering_priority", priority === "" ? null : priority)}
-                    className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                     placeholder="1, 2, 3..."
                   />
                 </div>
@@ -225,7 +225,7 @@ export default function SteeringCommitteeSection({
                       setOrigDate(e.target.value);
                       saveProjectField("original_completion_date", e.target.value || null);
                     }}
-                    className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
                 </div>
                 <div>
@@ -237,7 +237,7 @@ export default function SteeringCommitteeSection({
                       setActualDate(e.target.value);
                       saveProjectField("actual_completion_date", e.target.value || null);
                     }}
-                    className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
                 </div>
                 <div>
@@ -246,8 +246,8 @@ export default function SteeringCommitteeSection({
                     value={origNotes}
                     onChange={(e) => setOrigNotes(e.target.value)}
                     onBlur={() => saveProjectField("original_completion_notes", origNotes)}
-                    rows={2}
-                    className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
+                    rows={4}
+                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
                     placeholder="Timeline context..."
                   />
                 </div>
@@ -257,8 +257,8 @@ export default function SteeringCommitteeSection({
                     value={actualNotes}
                     onChange={(e) => setActualNotes(e.target.value)}
                     onBlur={() => saveProjectField("actual_completion_notes", actualNotes)}
-                    rows={2}
-                    className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
+                    rows={4}
+                    className="w-full rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
                     placeholder="Actual completion context..."
                   />
                 </div>
