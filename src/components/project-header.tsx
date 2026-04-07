@@ -368,10 +368,12 @@ export default function ProjectHeader({ project, vendors, people: initialPeople 
       {/* Steering Committee */}
       <div className="mt-4">
         <SteeringCommitteeSection
-          project={p}
+          entity={p}
+          entityType="project"
+          tableName="projects"
           people={people}
           onHealthOverride={setHealthOverride}
-          onProjectUpdate={(updates) => setP((prev) => ({ ...prev, ...updates } as Project))}
+          onEntityUpdate={(updates) => setP((prev) => ({ ...prev, ...updates } as Project))}
         />
       </div>
     </div>

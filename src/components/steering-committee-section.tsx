@@ -12,6 +12,7 @@ import {
 } from "@/lib/utils";
 import type {
   Project,
+  Initiative,
   Person,
   SteeringPhase,
   DepartmentStatusLevel,
@@ -32,18 +33,37 @@ const PHASE_OPTIONS: SteeringPhase[] = [
 
 const STATUS_OPTIONS: (DepartmentStatusLevel | "none")[] = ["green", "yellow", "red", "none"];
 
+// Common shape for both project and initiative
+interface SteeringEntity {
+  id: string;
+  org_id: string;
+  executive_sponsor_id: string | null;
+  steering_priority: number | null;
+  steering_phase: SteeringPhase | null;
+  original_completion_date: string | null;
+  original_completion_notes: string | null;
+  actual_completion_date: string | null;
+  actual_completion_notes: string | null;
+  project_owner_id?: string | null; // only on projects
+  owner_id?: string | null; // only on initiatives
+}
+
 interface SteeringCommitteeSectionProps {
-  project: Project;
+  entity: SteeringEntity;
+  entityType: "project" | "initiative";
+  tableName: string; // "projects" or "initiatives"
   people: Person[];
-  onHealthOverride: (health: ProjectHealth | null) => void;
-  onProjectUpdate: (updates: Partial<Project>) => void;
+  onHealthOverride?: (health: ProjectHealth | null) => void;
+  onEntityUpdate: (updates: Record<string, unknown>) => void;
 }
 
 export default function SteeringCommitteeSection({
-  project,
+  entity,
+  entityType,
+  tableName,
   people: initialPeople,
   onHealthOverride,
-  onProjectUpdate,
+  onEntityUpdate,
 }: SteeringCommitteeSectionProps) {
   const supabase = createClient();
   const { role, userPersonId } = useRole();
@@ -52,36 +72,39 @@ export default function SteeringCommitteeSection({
   const [deptStatuses, setDeptStatuses] = useState<ProjectDepartmentStatus[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Local state for project-level steering fields
-  const [sponsorId, setSponsorId] = useState(project.executive_sponsor_id);
-  const [priority, setPriority] = useState<number | "">(project.steering_priority ?? "");
-  const [phase, setPhase] = useState<SteeringPhase | "">(project.steering_phase ?? "");
-  const [origDate, setOrigDate] = useState(project.original_completion_date ?? "");
-  const [origNotes, setOrigNotes] = useState(project.original_completion_notes ?? "");
-  const [actualDate, setActualDate] = useState(project.actual_completion_date ?? "");
-  const [actualNotes, setActualNotes] = useState(project.actual_completion_notes ?? "");
+  // Local state for steering fields
+  const [sponsorId, setSponsorId] = useState(entity.executive_sponsor_id);
+  const [priority, setPriority] = useState<number | "">(entity.steering_priority ?? "");
+  const [phase, setPhase] = useState<SteeringPhase | "">(entity.steering_phase ?? "");
+  const [origDate, setOrigDate] = useState(entity.original_completion_date ?? "");
+  const [origNotes, setOrigNotes] = useState(entity.original_completion_notes ?? "");
+  const [actualDate, setActualDate] = useState(entity.actual_completion_date ?? "");
+  const [actualNotes, setActualNotes] = useState(entity.actual_completion_notes ?? "");
 
-  // Visibility: project owner, executive sponsor, or admin
-  const isOwner = userPersonId && project.project_owner_id === userPersonId;
-  const isSponsor = userPersonId && project.executive_sponsor_id === userPersonId;
+  // Visibility: project owner, initiative owner, executive sponsor, or admin
+  const isOwner = userPersonId && (entity.project_owner_id === userPersonId || entity.owner_id === userPersonId);
+  const isSponsor = userPersonId && entity.executive_sponsor_id === userPersonId;
   const isAdminRole = role === "super_admin" || role === "admin";
   const canView = isOwner || isSponsor || isAdminRole;
+
+  const filterCol = entityType === "project" ? "project_id" : "initiative_id";
 
   useEffect(() => {
     if (!canView) return;
     supabase
       .from("project_department_statuses")
       .select("*, rep:people(*)")
-      .eq("project_id", project.id)
+      .eq(filterCol, entity.id)
       .order("sort_order")
       .then(({ data }) => {
         setDeptStatuses((data || []) as ProjectDepartmentStatus[]);
         setLoading(false);
       });
-  }, [project.id, canView]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [entity.id, canView]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Health override: derive from department statuses
+  // Health override: derive from department statuses (projects only)
   useEffect(() => {
+    if (!onHealthOverride) return;
     if (deptStatuses.length === 0) {
       onHealthOverride(null);
       return;
@@ -102,24 +125,25 @@ export default function SteeringCommitteeSection({
 
   if (!canView) return null;
 
-  function saveProjectField(field: string, value: unknown) {
+  function saveField(field: string, value: unknown) {
     supabase
-      .from("projects")
+      .from(tableName)
       .update({ [field]: value === "" ? null : value })
-      .eq("id", project.id)
+      .eq("id", entity.id)
       .then(() => {});
-    onProjectUpdate({ [field]: value === "" ? null : value } as Partial<Project>);
+    onEntityUpdate({ [field]: value === "" ? null : value });
   }
 
   async function addDepartment(dept: string) {
     const existing = deptStatuses.find((d) => d.department === dept);
     if (existing) return;
     const maxSort = deptStatuses.length > 0 ? Math.max(...deptStatuses.map((d) => d.sort_order)) : -1;
+    const parentCol = entityType === "project" ? "project_id" : "initiative_id";
     const { data, error } = await supabase
       .from("project_department_statuses")
       .insert({
-        org_id: project.org_id,
-        project_id: project.id,
+        org_id: entity.org_id,
+        [parentCol]: entity.id,
         department: dept,
         sort_order: maxSort + 1,
       })
@@ -177,7 +201,7 @@ export default function SteeringCommitteeSection({
                     value={sponsorId || ""}
                     onChange={(id) => {
                       setSponsorId(id || null);
-                      saveProjectField("executive_sponsor_id", id || null);
+                      saveField("executive_sponsor_id", id || null);
                     }}
                     people={people}
                     onPersonAdded={(person) => setPeople((prev) => [...prev, person])}
@@ -190,7 +214,7 @@ export default function SteeringCommitteeSection({
                     onChange={(e) => {
                       const v = e.target.value as SteeringPhase | "";
                       setPhase(v);
-                      saveProjectField("steering_phase", v || null);
+                      saveField("steering_phase", v || null);
                     }}
                     className="w-full rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   >
@@ -210,7 +234,7 @@ export default function SteeringCommitteeSection({
                       const v = e.target.value === "" ? "" : parseInt(e.target.value);
                       setPriority(v);
                     }}
-                    onBlur={() => saveProjectField("steering_priority", priority === "" ? null : priority)}
+                    onBlur={() => saveField("steering_priority", priority === "" ? null : priority)}
                     className="w-full rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                     placeholder="1, 2, 3..."
                   />
@@ -223,7 +247,7 @@ export default function SteeringCommitteeSection({
                     value={origDate}
                     onChange={(e) => {
                       setOrigDate(e.target.value);
-                      saveProjectField("original_completion_date", e.target.value || null);
+                      saveField("original_completion_date", e.target.value || null);
                     }}
                     className="w-full rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
@@ -235,7 +259,7 @@ export default function SteeringCommitteeSection({
                     value={actualDate}
                     onChange={(e) => {
                       setActualDate(e.target.value);
-                      saveProjectField("actual_completion_date", e.target.value || null);
+                      saveField("actual_completion_date", e.target.value || null);
                     }}
                     className="w-full rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
@@ -245,7 +269,7 @@ export default function SteeringCommitteeSection({
                   <textarea
                     value={origNotes}
                     onChange={(e) => setOrigNotes(e.target.value)}
-                    onBlur={() => saveProjectField("original_completion_notes", origNotes)}
+                    onBlur={() => saveField("original_completion_notes", origNotes)}
                     rows={4}
                     className="w-full rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
                     placeholder="Timeline context..."
@@ -256,7 +280,7 @@ export default function SteeringCommitteeSection({
                   <textarea
                     value={actualNotes}
                     onChange={(e) => setActualNotes(e.target.value)}
-                    onBlur={() => saveProjectField("actual_completion_notes", actualNotes)}
+                    onBlur={() => saveField("actual_completion_notes", actualNotes)}
                     rows={4}
                     className="w-full rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
                     placeholder="Actual completion context..."

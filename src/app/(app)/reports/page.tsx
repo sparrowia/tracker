@@ -1,17 +1,23 @@
 import { createClient } from "@/lib/supabase/server";
 import SteeringReport from "@/components/steering-report";
-import type { Project, Person, ProjectDepartmentStatus } from "@/lib/types";
+import type { Project, Person, Initiative, ProjectDepartmentStatus } from "@/lib/types";
 
 export default async function ReportsPage() {
   const supabase = await createClient();
 
   const [
     { data: projects },
+    { data: initiatives },
     { data: people },
     { data: deptStatuses },
   ] = await Promise.all([
     supabase
       .from("projects")
+      .select("*")
+      .order("steering_priority", { ascending: true, nullsFirst: false })
+      .order("name"),
+    supabase
+      .from("initiatives")
       .select("*")
       .order("steering_priority", { ascending: true, nullsFirst: false })
       .order("name"),
@@ -26,6 +32,7 @@ export default async function ReportsPage() {
     <div className="max-w-7xl mx-auto">
       <SteeringReport
         projects={(projects || []) as Project[]}
+        initiatives={(initiatives || []) as Initiative[]}
         people={(people || []) as Person[]}
         deptStatuses={(deptStatuses || []) as ProjectDepartmentStatus[]}
       />

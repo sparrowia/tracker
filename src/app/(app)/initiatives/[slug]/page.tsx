@@ -9,6 +9,7 @@ import { useRole } from "@/components/role-context";
 import OwnerPicker from "@/components/owner-picker";
 import type { Initiative, Project, Person } from "@/lib/types";
 import AddProjectButton from "@/components/add-project-button";
+import SteeringCommitteeSection from "@/components/steering-committee-section";
 
 const HEALTH_OPTIONS: { value: string; label: string }[] = [
   { value: "on_track", label: "On Track" },
@@ -325,6 +326,15 @@ export default function InitiativeDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Steering Committee */}
+      <SteeringCommitteeSection
+        entity={initiative}
+        entityType="initiative"
+        tableName="initiatives"
+        people={people}
+        onEntityUpdate={(updates) => setInitiative((prev) => prev ? { ...prev, ...updates } as Initiative : prev)}
+      />
 
       {/* Projects */}
       <section>

@@ -136,6 +136,13 @@ export interface Initiative {
   owner_id: string | null;
   target_completion: string | null;
   notes: string | null;
+  executive_sponsor_id: string | null;
+  steering_priority: number | null;
+  steering_phase: SteeringPhase | null;
+  original_completion_date: string | null;
+  original_completion_notes: string | null;
+  actual_completion_date: string | null;
+  actual_completion_notes: string | null;
   created_at: string;
   updated_at: string;
   owner?: Person;
@@ -469,7 +476,8 @@ export interface ProjectAgendaRow {
 export interface ProjectDepartmentStatus {
   id: string;
   org_id: string;
-  project_id: string;
+  project_id: string | null;
+  initiative_id: string | null;
   department: string;
   rep_person_id: string | null;
   status: DepartmentStatusLevel | null;
