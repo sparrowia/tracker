@@ -296,7 +296,7 @@ export default function SteeringReport({ projects, initiatives, people, deptStat
 
             {/* Standalone projects — 2-col grid */}
             {projectRows.length > 0 && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-start" style={{ gridAutoRows: "1fr" }}>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-start">
                 {projectRows.map((row, idx) => (
                   <ReportCard
                     key={row.id}
@@ -344,7 +344,7 @@ function ReportCard({
 
   return (
     <div className={isChild ? "" : ""}>
-      <div className="border border-gray-300 rounded-lg overflow-hidden bg-white hover:border-gray-400 transition-colors h-full flex flex-col">
+      <div className="border border-gray-300 rounded-lg overflow-hidden bg-white hover:border-gray-400 transition-colors">
         {/* Card header */}
         <button
           onClick={() => onToggle(row.id)}
@@ -457,7 +457,7 @@ function ReportCard({
             {isInitiative && row.childProjects && row.childProjects.length > 0 && (
               <div className="px-4 py-3">
                 <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">Projects</div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-start" style={{ gridAutoRows: "1fr" }}>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-start">
                   {row.childProjects.map((child, childIdx) => (
                     <ReportCard
                       key={child.id}
