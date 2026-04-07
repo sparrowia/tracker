@@ -322,29 +322,27 @@ function ReportCard({
       <div className={`border border-gray-300 rounded-lg overflow-hidden ${isChild ? "border-gray-200" : ""}`}>
         <button
           onClick={() => onToggle(row.id)}
-          className={`w-full flex items-center gap-3 px-4 py-3 text-white transition-colors text-left ${
+          className={`w-full flex items-center gap-3 px-4 py-3 text-gray-900 transition-colors text-left ${
             isChild
-              ? "bg-gray-500 hover:bg-gray-400"
-              : index < 3
-                ? "bg-blue-700 hover:bg-blue-600"
-                : "bg-gray-600 hover:bg-gray-500"
+              ? "bg-gray-100 hover:bg-gray-200"
+              : "bg-gray-200 hover:bg-gray-300"
           }`}
         >
           {isExpanded ? <ChevronDown className="h-4 w-4 flex-shrink-0" /> : <ChevronRight className="h-4 w-4 flex-shrink-0" />}
           <div className="flex items-center gap-3 flex-1 min-w-0">
             {row.priority && (
-              <span className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-white/20 text-[10px] font-bold flex-shrink-0">
+              <span className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-gray-400 text-white text-[10px] font-bold flex-shrink-0">
                 {row.priority}
               </span>
             )}
             {isInitiative && (
-              <span className="inline-flex px-1.5 py-0.5 text-[9px] font-semibold rounded bg-purple-500/30 text-purple-200 flex-shrink-0">
+              <span className="inline-flex px-1.5 py-0.5 text-[9px] font-semibold rounded bg-purple-100 text-purple-700 border border-purple-200 flex-shrink-0">
                 INITIATIVE
               </span>
             )}
             <Link
               href={href}
-              className="font-semibold truncate underline decoration-white/40 hover:decoration-white"
+              className="font-semibold truncate underline decoration-gray-400 hover:decoration-gray-900"
               onClick={(e) => e.stopPropagation()}
             >
               {row.name}
@@ -353,7 +351,7 @@ function ReportCard({
               {healthLabel(displayHealth)}
             </span>
           </div>
-          <div className="flex items-center gap-4 text-xs text-gray-300 flex-shrink-0">
+          <div className="flex items-center gap-4 text-xs text-gray-500 flex-shrink-0">
             {sponsor && <span>Sponsor: {sponsor.full_name}</span>}
             {deps.length > 0 && (
               <div className="flex gap-1">
