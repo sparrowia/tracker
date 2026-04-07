@@ -337,7 +337,7 @@ function ReportCard({
             )}
             <Link
               href={href}
-              className="font-semibold truncate hover:underline"
+              className="font-semibold truncate underline decoration-white/40 hover:decoration-white"
               onClick={(e) => e.stopPropagation()}
             >
               {row.name}
