@@ -275,10 +275,11 @@ export default function SteeringReport({ projects, initiatives, people, deptStat
         </div>
       ) : (
         <div className="space-y-3">
-          {tabRows.map((row) => (
+          {tabRows.map((row, idx) => (
             <ReportCard
               key={row.id}
               row={row}
+              index={idx}
               people={people}
               deptByEntity={deptByEntity}
               expandedIds={expandedIds}
@@ -293,6 +294,7 @@ export default function SteeringReport({ projects, initiatives, people, deptStat
 
 function ReportCard({
   row,
+  index = 0,
   people,
   deptByEntity,
   expandedIds,
@@ -300,6 +302,7 @@ function ReportCard({
   isChild,
 }: {
   row: ReportRow;
+  index?: number;
   people: Person[];
   deptByEntity: Record<string, ProjectDepartmentStatus[]>;
   expandedIds: Set<string>;
@@ -319,8 +322,12 @@ function ReportCard({
       <div className={`border border-gray-300 rounded-lg overflow-hidden ${isChild ? "border-gray-200" : ""}`}>
         <button
           onClick={() => onToggle(row.id)}
-          className={`w-full flex items-center gap-3 px-4 py-3 text-white hover:bg-gray-700 transition-colors text-left ${
-            isInitiative ? "bg-gray-900" : isChild ? "bg-gray-600" : "bg-gray-800"
+          className={`w-full flex items-center gap-3 px-4 py-3 text-white transition-colors text-left ${
+            isChild
+              ? "bg-gray-500 hover:bg-gray-400"
+              : index < 3
+                ? "bg-blue-700 hover:bg-blue-600"
+                : "bg-gray-600 hover:bg-gray-500"
           }`}
         >
           {isExpanded ? <ChevronDown className="h-4 w-4 flex-shrink-0" /> : <ChevronRight className="h-4 w-4 flex-shrink-0" />}
