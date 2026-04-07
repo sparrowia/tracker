@@ -269,25 +269,50 @@ export default function SteeringReport({ projects, initiatives, people, deptStat
         ))}
       </div>
 
-      {tabRows.length === 0 ? (
-        <div className="text-center py-12 text-sm text-gray-400">
-          No items in this phase.
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-start" style={{ gridAutoRows: "1fr" }}>
-          {tabRows.map((row, idx) => (
-            <ReportCard
-              key={row.id}
-              row={row}
-              index={idx}
-              people={people}
-              deptByEntity={deptByEntity}
-              expandedIds={expandedIds}
-              onToggle={toggleExpand}
-            />
-          ))}
-        </div>
-      )}
+      {(() => {
+        const initiativeRows = tabRows.filter((r) => r.type === "initiative");
+        const projectRows = tabRows.filter((r) => r.type === "project");
+        if (initiativeRows.length === 0 && projectRows.length === 0) {
+          return <div className="text-center py-12 text-sm text-gray-400">No items in this phase.</div>;
+        }
+        return (
+          <div className="space-y-4">
+            {/* Initiatives — full width */}
+            {initiativeRows.length > 0 && (
+              <div className="space-y-3">
+                {initiativeRows.map((row, idx) => (
+                  <ReportCard
+                    key={row.id}
+                    row={row}
+                    index={idx}
+                    people={people}
+                    deptByEntity={deptByEntity}
+                    expandedIds={expandedIds}
+                    onToggle={toggleExpand}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* Standalone projects — 2-col grid */}
+            {projectRows.length > 0 && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-start" style={{ gridAutoRows: "1fr" }}>
+                {projectRows.map((row, idx) => (
+                  <ReportCard
+                    key={row.id}
+                    row={row}
+                    index={idx}
+                    people={people}
+                    deptByEntity={deptByEntity}
+                    expandedIds={expandedIds}
+                    onToggle={toggleExpand}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -428,38 +453,24 @@ function ReportCard({
               </div>
             )}
 
-            {/* Child projects under initiative */}
+            {/* Child projects under initiative — 2-col card grid */}
             {isInitiative && row.childProjects && row.childProjects.length > 0 && (
-              <div className="px-4 py-3 space-y-2">
-                <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Projects</div>
-                {row.childProjects.map((child) => {
-                  const childDeps = deptByEntity[child.id] || [];
-                  const childHealth = deriveHealth(childDeps) ?? child.health;
-                  return (
-                    <div key={child.id} className="flex items-center gap-2">
-                      <span className={`inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded-full border ${healthColor(childHealth)}`}>
-                        {healthLabel(childHealth)}
-                      </span>
-                      <Link
-                        href={`/projects/${child.slug}`}
-                        className="text-xs font-medium text-gray-700 hover:text-blue-600 hover:underline"
-                      >
-                        {child.name}
-                      </Link>
-                      {childDeps.length > 0 && (
-                        <div className="flex gap-0.5 ml-auto">
-                          {childDeps.map((ds) => (
-                            <span
-                              key={ds.id}
-                              className={`inline-block h-2 w-2 rounded-full ${departmentStatusColor(ds.status)}`}
-                              title={`${ds.department}: ${departmentStatusLabel(ds.status)}`}
-                            />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+              <div className="px-4 py-3">
+                <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">Projects</div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-start" style={{ gridAutoRows: "1fr" }}>
+                  {row.childProjects.map((child, childIdx) => (
+                    <ReportCard
+                      key={child.id}
+                      row={child}
+                      index={childIdx}
+                      people={people}
+                      deptByEntity={deptByEntity}
+                      expandedIds={expandedIds}
+                      onToggle={onToggle}
+                      isChild
+                    />
+                  ))}
+                </div>
               </div>
             )}
           </div>
