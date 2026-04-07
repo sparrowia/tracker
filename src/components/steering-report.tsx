@@ -274,7 +274,7 @@ export default function SteeringReport({ projects, initiatives, people, deptStat
           No items in this phase.
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {tabRows.map((row, idx) => (
             <ReportCard
               key={row.id}
@@ -318,43 +318,31 @@ function ReportCard({
   const href = isInitiative ? `/initiatives/${row.slug}` : `/projects/${row.slug}`;
 
   return (
-    <div className={isChild ? "ml-6" : ""}>
-      <div className={`border border-gray-300 rounded-lg overflow-hidden ${isChild ? "border-gray-200" : ""}`}>
+    <div className={isChild ? "" : ""}>
+      <div className="border border-gray-300 rounded-lg overflow-hidden bg-white hover:border-gray-400 transition-colors">
+        {/* Card header */}
         <button
           onClick={() => onToggle(row.id)}
-          className={`w-full flex items-center gap-3 px-4 py-3 text-gray-900 transition-colors text-left ${
-            isChild
-              ? "bg-gray-100 hover:bg-gray-200"
-              : "bg-gray-200 hover:bg-gray-300"
-          }`}
+          className="w-full text-left px-4 py-3 bg-gray-100 hover:bg-gray-150 transition-colors border-b border-gray-200"
         >
-          {isExpanded ? <ChevronDown className="h-4 w-4 flex-shrink-0" /> : <ChevronRight className="h-4 w-4 flex-shrink-0" />}
-          <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1.5">
+            {isExpanded ? <ChevronDown className="h-3.5 w-3.5 text-gray-500 flex-shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 text-gray-500 flex-shrink-0" />}
             {row.priority && (
               <span className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-gray-400 text-white text-[10px] font-bold flex-shrink-0">
                 {row.priority}
               </span>
             )}
             {isInitiative && (
-              <span className="inline-flex px-1.5 py-0.5 text-[9px] font-semibold rounded bg-purple-100 text-purple-700 border border-purple-200 flex-shrink-0">
+              <span className="inline-flex px-1.5 py-0.5 text-[9px] font-semibold rounded bg-amber-100 text-amber-800 border border-amber-300 flex-shrink-0">
                 INITIATIVE
               </span>
             )}
-            <Link
-              href={href}
-              className="font-semibold truncate underline decoration-gray-400 hover:decoration-gray-900"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {row.name}
-            </Link>
             <span className={`inline-flex px-2 py-0.5 text-[10px] font-medium rounded-full border ${healthColor(displayHealth)}`}>
               {healthLabel(displayHealth)}
             </span>
-          </div>
-          <div className="flex items-center gap-4 text-xs text-gray-500 flex-shrink-0">
-            {sponsor && <span>Sponsor: {sponsor.full_name}</span>}
+            {/* Traffic light dots */}
             {deps.length > 0 && (
-              <div className="flex gap-1">
+              <div className="flex gap-1 ml-auto">
                 {deps.map((ds) => (
                   <span
                     key={ds.id}
@@ -365,13 +353,23 @@ function ReportCard({
               </div>
             )}
           </div>
+          <Link
+            href={href}
+            className="text-sm font-semibold text-gray-900 hover:text-blue-600 hover:underline"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {row.name}
+          </Link>
+          {sponsor && (
+            <div className="text-xs text-gray-500 mt-1">Sponsor: {sponsor.full_name}</div>
+          )}
         </button>
 
         {isExpanded && (
           <div className="divide-y divide-gray-200">
             {/* Metadata */}
             {(row.origDate || row.actualDate || row.origNotes || row.actualNotes) && (
-              <div className="px-4 py-3 bg-gray-50 grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+              <div className="px-4 py-3 bg-gray-50 grid grid-cols-2 gap-3 text-xs">
                 {row.origDate && (
                   <div>
                     <span className="font-medium text-gray-500">Orig. Target:</span>{" "}
@@ -399,63 +397,74 @@ function ReportCard({
               </div>
             )}
 
-            {/* Department rows */}
+            {/* Department list */}
             {deps.length > 0 ? (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-gray-50 border-b border-gray-300">
-                    <th className="text-left px-3 py-2 text-xs font-medium text-gray-500 w-[150px]">Department</th>
-                    <th className="text-left px-3 py-2 text-xs font-medium text-gray-500 w-[120px]">Owner</th>
-                    <th className="text-center px-3 py-2 text-xs font-medium text-gray-500 w-[70px]">Status</th>
-                    <th className="text-left px-3 py-2 text-xs font-medium text-gray-500">Roadblocks</th>
-                    <th className="text-left px-3 py-2 text-xs font-medium text-gray-500">Decisions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {deps.map((ds) => {
-                    const rep = ds.rep ?? people.find((p) => p.id === ds.rep_person_id);
-                    return (
-                      <tr key={ds.id} className="border-b border-gray-200 last:border-b-0">
-                        <td className="px-3 py-2 font-medium text-gray-700">{ds.department}</td>
-                        <td className="px-3 py-2 text-gray-600">{rep?.full_name ?? "—"}</td>
-                        <td className="px-3 py-2 text-center">
-                          <span
-                            className={`inline-block h-3.5 w-3.5 rounded-full ${departmentStatusColor(ds.status)}`}
-                            title={departmentStatusLabel(ds.status)}
-                          />
-                        </td>
-                        <td className="px-3 py-2 text-xs text-gray-600 whitespace-pre-wrap">{ds.roadblocks || "—"}</td>
-                        <td className="px-3 py-2 text-xs text-gray-600 whitespace-pre-wrap">{ds.decisions || "—"}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+              <div className="px-4 py-3 space-y-2">
+                {deps.map((ds) => {
+                  const rep = ds.rep ?? people.find((p) => p.id === ds.rep_person_id);
+                  return (
+                    <div key={ds.id} className="flex items-start gap-2 text-xs">
+                      <span
+                        className={`inline-block h-2.5 w-2.5 rounded-full mt-0.5 flex-shrink-0 ${departmentStatusColor(ds.status)}`}
+                        title={departmentStatusLabel(ds.status)}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <span className="font-medium text-gray-700">{ds.department}</span>
+                        {rep && <span className="text-gray-400 ml-1">— {rep.full_name}</span>}
+                        {ds.roadblocks && (
+                          <div className="text-gray-500 mt-0.5 whitespace-pre-wrap">{ds.roadblocks}</div>
+                        )}
+                        {ds.decisions && (
+                          <div className="text-blue-600 mt-0.5 whitespace-pre-wrap">Decision: {ds.decisions}</div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             ) : (
               <div className="px-4 py-3 text-xs text-gray-400 italic">
                 No department statuses entered yet.
               </div>
             )}
+
+            {/* Child projects under initiative */}
+            {isInitiative && row.childProjects && row.childProjects.length > 0 && (
+              <div className="px-4 py-3 space-y-2">
+                <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Projects</div>
+                {row.childProjects.map((child) => {
+                  const childDeps = deptByEntity[child.id] || [];
+                  const childHealth = deriveHealth(childDeps) ?? child.health;
+                  return (
+                    <div key={child.id} className="flex items-center gap-2">
+                      <span className={`inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded-full border ${healthColor(childHealth)}`}>
+                        {healthLabel(childHealth)}
+                      </span>
+                      <Link
+                        href={`/projects/${child.slug}`}
+                        className="text-xs font-medium text-gray-700 hover:text-blue-600 hover:underline"
+                      >
+                        {child.name}
+                      </Link>
+                      {childDeps.length > 0 && (
+                        <div className="flex gap-0.5 ml-auto">
+                          {childDeps.map((ds) => (
+                            <span
+                              key={ds.id}
+                              className={`inline-block h-2 w-2 rounded-full ${departmentStatusColor(ds.status)}`}
+                              title={`${ds.department}: ${departmentStatusLabel(ds.status)}`}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
       </div>
-
-      {/* Child projects under initiative */}
-      {isInitiative && isExpanded && row.childProjects && row.childProjects.length > 0 && (
-        <div className="mt-2 space-y-2">
-          {row.childProjects.map((child) => (
-            <ReportCard
-              key={child.id}
-              row={child}
-              people={people}
-              deptByEntity={deptByEntity}
-              expandedIds={expandedIds}
-              onToggle={onToggle}
-              isChild
-            />
-          ))}
-        </div>
-      )}
     </div>
   );
 }
