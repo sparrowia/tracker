@@ -264,37 +264,23 @@ export default function SteeringCommitteeSection({
                 </div>
               </div>
 
-              {/* Department statuses table */}
+              {/* Department statuses — card layout */}
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Department Status</h3>
                 </div>
                 {deptStatuses.length > 0 && (
-                  <div className="border border-gray-300 rounded-lg overflow-hidden">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="bg-gray-50 border-b border-gray-300">
-                          <th className="text-left px-3 py-2 text-xs font-medium text-gray-500 w-[160px]">Department</th>
-                          <th className="text-left px-3 py-2 text-xs font-medium text-gray-500 w-[140px]">Rep</th>
-                          <th className="text-center px-3 py-2 text-xs font-medium text-gray-500 w-[90px]">Status</th>
-                          <th className="text-left px-3 py-2 text-xs font-medium text-gray-500">Roadblocks</th>
-                          <th className="text-left px-3 py-2 text-xs font-medium text-gray-500">Decisions</th>
-                          <th className="w-8" />
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {deptStatuses.map((ds) => (
-                          <DepartmentRow
-                            key={ds.id}
-                            ds={ds}
-                            people={people}
-                            onUpdate={updateDeptField}
-                            onRemove={removeDepartment}
-                            onPersonAdded={(person) => setPeople((prev) => [...prev, person])}
-                          />
-                        ))}
-                      </tbody>
-                    </table>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {deptStatuses.map((ds) => (
+                      <DepartmentCard
+                        key={ds.id}
+                        ds={ds}
+                        people={people}
+                        onUpdate={updateDeptField}
+                        onRemove={removeDepartment}
+                        onPersonAdded={(person) => setPeople((prev) => [...prev, person])}
+                      />
+                    ))}
                   </div>
                 )}
 
@@ -335,7 +321,7 @@ export default function SteeringCommitteeSection({
   );
 }
 
-function DepartmentRow({
+function DepartmentCard({
   ds,
   people,
   onUpdate,
@@ -354,85 +340,97 @@ function DepartmentRow({
   const [editingDecisions, setEditingDecisions] = useState(false);
 
   return (
-    <tr className="border-b border-gray-200 last:border-b-0">
-      <td className="px-3 py-2 text-sm font-medium text-gray-700">{ds.department}</td>
-      <td className="px-3 py-2">
-        <OwnerPicker
-          value={ds.rep_person_id || ""}
-          onChange={(id) => onUpdate(ds.id, "rep_person_id", id || null)}
-          people={people}
-          onPersonAdded={onPersonAdded}
-        />
-      </td>
-      <td className="px-3 py-2 text-center">
-        <select
-          value={ds.status ?? "none"}
-          onChange={(e) => onUpdate(ds.id, "status", e.target.value)}
-          className="rounded border border-gray-300 px-1.5 py-0.5 text-xs focus:border-blue-500 focus:outline-none"
-        >
-          {STATUS_OPTIONS.map((s) => (
-            <option key={s} value={s}>
-              {s === "none" ? "—" : s === "green" ? "Green" : s === "yellow" ? "Yellow" : "Red"}
-            </option>
-          ))}
-        </select>
-        <div className="mt-1 flex justify-center">
-          <span className={`inline-block h-3 w-3 rounded-full ${departmentStatusColor(ds.status)}`} title={departmentStatusLabel(ds.status)} />
+    <div className="border border-gray-300 rounded-lg overflow-hidden">
+      {/* Card header — department name + traffic light + delete */}
+      <div className="flex items-center justify-between px-3 py-2 bg-gray-50 border-b border-gray-200">
+        <div className="flex items-center gap-2">
+          <span className={`inline-block h-3 w-3 rounded-full flex-shrink-0 ${departmentStatusColor(ds.status)}`} title={departmentStatusLabel(ds.status)} />
+          <span className="text-sm font-semibold text-gray-800">{ds.department}</span>
         </div>
-      </td>
-      <td className="px-3 py-2">
-        {editingRoadblocks ? (
-          <textarea
-            value={roadblocks}
-            onChange={(e) => setRoadblocks(e.target.value)}
-            onBlur={() => {
-              onUpdate(ds.id, "roadblocks", roadblocks);
-              setEditingRoadblocks(false);
-            }}
-            autoFocus
-            rows={2}
-            className="w-full rounded border border-gray-300 px-2 py-1 text-xs focus:border-blue-500 focus:outline-none resize-y"
-          />
-        ) : (
-          <div
-            onClick={() => setEditingRoadblocks(true)}
-            className="text-xs text-gray-600 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5 min-h-[24px] whitespace-pre-wrap"
+        <div className="flex items-center gap-2">
+          <select
+            value={ds.status ?? "none"}
+            onChange={(e) => onUpdate(ds.id, "status", e.target.value)}
+            className="rounded border border-gray-300 px-1.5 py-0.5 text-xs focus:border-blue-500 focus:outline-none bg-white"
           >
-            {ds.roadblocks || <span className="text-gray-400 italic">Click to add...</span>}
-          </div>
-        )}
-      </td>
-      <td className="px-3 py-2">
-        {editingDecisions ? (
-          <textarea
-            value={decisions}
-            onChange={(e) => setDecisions(e.target.value)}
-            onBlur={() => {
-              onUpdate(ds.id, "decisions", decisions);
-              setEditingDecisions(false);
-            }}
-            autoFocus
-            rows={2}
-            className="w-full rounded border border-gray-300 px-2 py-1 text-xs focus:border-blue-500 focus:outline-none resize-y"
-          />
-        ) : (
-          <div
-            onClick={() => setEditingDecisions(true)}
-            className="text-xs text-gray-600 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5 min-h-[24px] whitespace-pre-wrap"
+            {STATUS_OPTIONS.map((s) => (
+              <option key={s} value={s}>
+                {s === "none" ? "No Status" : s === "green" ? "On Time" : s === "yellow" ? "Delayed" : "Blocked"}
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={() => onRemove(ds.id)}
+            className="text-gray-400 hover:text-red-500 p-0.5"
+            title="Remove department"
           >
-            {ds.decisions || <span className="text-gray-400 italic">Click to add...</span>}
-          </div>
-        )}
-      </td>
-      <td className="px-1 py-2">
-        <button
-          onClick={() => onRemove(ds.id)}
-          className="text-gray-400 hover:text-red-500 p-1"
-          title="Remove department"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
-      </td>
-    </tr>
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+
+      <div className="p-3 space-y-3">
+        {/* Rep */}
+        <div>
+          <label className="block text-[10px] font-medium text-gray-400 uppercase tracking-wide mb-1">Rep / Owner</label>
+          <OwnerPicker
+            value={ds.rep_person_id || ""}
+            onChange={(id) => onUpdate(ds.id, "rep_person_id", id || null)}
+            people={people}
+            onPersonAdded={onPersonAdded}
+          />
+        </div>
+
+        {/* Roadblocks */}
+        <div>
+          <label className="block text-[10px] font-medium text-gray-400 uppercase tracking-wide mb-1">Roadblocks</label>
+          {editingRoadblocks ? (
+            <textarea
+              value={roadblocks}
+              onChange={(e) => setRoadblocks(e.target.value)}
+              onBlur={() => {
+                onUpdate(ds.id, "roadblocks", roadblocks);
+                setEditingRoadblocks(false);
+              }}
+              autoFocus
+              rows={3}
+              className="w-full rounded border border-gray-300 px-2 py-1.5 text-xs focus:border-blue-500 focus:outline-none resize-y"
+            />
+          ) : (
+            <div
+              onClick={() => setEditingRoadblocks(true)}
+              className="text-xs text-gray-600 cursor-pointer hover:bg-gray-50 rounded border border-transparent hover:border-gray-200 px-2 py-1.5 min-h-[36px] whitespace-pre-wrap"
+            >
+              {ds.roadblocks || <span className="text-gray-400 italic">Click to add...</span>}
+            </div>
+          )}
+        </div>
+
+        {/* Decisions */}
+        <div>
+          <label className="block text-[10px] font-medium text-gray-400 uppercase tracking-wide mb-1">Decisions</label>
+          {editingDecisions ? (
+            <textarea
+              value={decisions}
+              onChange={(e) => setDecisions(e.target.value)}
+              onBlur={() => {
+                onUpdate(ds.id, "decisions", decisions);
+                setEditingDecisions(false);
+              }}
+              autoFocus
+              rows={3}
+              className="w-full rounded border border-gray-300 px-2 py-1.5 text-xs focus:border-blue-500 focus:outline-none resize-y"
+            />
+          ) : (
+            <div
+              onClick={() => setEditingDecisions(true)}
+              className="text-xs text-gray-600 cursor-pointer hover:bg-gray-50 rounded border border-transparent hover:border-gray-200 px-2 py-1.5 min-h-[36px] whitespace-pre-wrap"
+            >
+              {ds.decisions || <span className="text-gray-400 italic">Click to add...</span>}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
