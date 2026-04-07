@@ -348,7 +348,7 @@ function ReportCard({
         {/* Card header */}
         <button
           onClick={() => onToggle(row.id)}
-          className="w-full text-left px-4 py-3 bg-gray-100 hover:bg-gray-150 transition-colors border-b border-gray-200"
+          className="w-full text-left px-4 py-3 bg-gray-100 hover:bg-gray-150 transition-colors border-b border-gray-200 min-h-[88px]"
         >
           <div className="flex items-center gap-2 mb-1.5">
             {isExpanded ? <ChevronDown className="h-3.5 w-3.5 text-gray-500 flex-shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 text-gray-500 flex-shrink-0" />}
