@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { healthColor, healthLabel, formatDateShort } from "@/lib/utils";
 import { useRole } from "@/components/role-context";
 import { isAdmin } from "@/lib/permissions";
-import type { Project, ProjectHealth, Vendor, Person } from "@/lib/types";
+import type { Project, ProjectHealth, Vendor, Person, Initiative } from "@/lib/types";
 import OwnerPicker from "@/components/owner-picker";
 import SteeringCommitteeSection from "@/components/steering-committee-section";
 import Link from "next/link";
@@ -37,8 +37,16 @@ export default function ProjectHeader({ project, vendors, people: initialPeople 
   const [copied, setCopied] = useState(false);
   const [vendorOwners, setVendorOwners] = useState<Record<string, string>>({}); // vendor_id -> person_id
   const [healthOverride, setHealthOverride] = useState<ProjectHealth | null>(null);
+  const [allInitiatives, setAllInitiatives] = useState<Initiative[]>([]);
   const { role } = useRole();
   const displayHealth = healthOverride ?? p.health;
+
+  // Load initiatives for reassignment dropdown
+  useEffect(() => {
+    supabase.from("initiatives").select("*").order("name").then(({ data }) => {
+      if (data) setAllInitiatives(data as Initiative[]);
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load vendor owners
   useEffect(() => {
@@ -292,10 +300,30 @@ export default function ProjectHeader({ project, vendors, people: initialPeople 
         </button>
       </div>
       {p.description && <p className="text-sm text-gray-600">{p.description}</p>}
-      <div className="flex gap-6 mt-3 text-sm text-gray-500">
+      <div className="flex gap-6 mt-3 text-sm text-gray-500 flex-wrap items-center">
         {p.platform_status && <span>Platform: {p.platform_status}</span>}
         {p.start_date && <span>Start: {formatDateShort(p.start_date)}</span>}
         {p.target_completion && <span>Target: {formatDateShort(p.target_completion)}</span>}
+        {allInitiatives.length > 0 && (
+          <span className="flex items-center gap-1.5">
+            <span className="font-medium text-gray-700">Initiative:</span>
+            <select
+              value={p.initiative_id || ""}
+              onChange={(e) => {
+                const newId = e.target.value || null;
+                supabase.from("projects").update({ initiative_id: newId }).eq("id", p.id).then(() => {});
+                setP((prev) => ({ ...prev, initiative_id: newId } as Project));
+                window.dispatchEvent(new CustomEvent("sidebar:refresh"));
+              }}
+              className="rounded border border-gray-300 bg-white px-2 py-0.5 text-sm text-gray-700 focus:border-blue-500 focus:outline-none cursor-pointer"
+            >
+              <option value="">— None —</option>
+              {allInitiatives.map((i) => (
+                <option key={i.id} value={i.id}>{i.name}</option>
+              ))}
+            </select>
+          </span>
+        )}
       </div>
       {(p.project_owner_id || p.project_manager_id || p.lead_qa_id || Object.values(vendorOwners).some(Boolean)) && (
         <div className="flex gap-6 mt-2 text-sm text-gray-500 flex-wrap">

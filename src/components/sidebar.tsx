@@ -89,12 +89,14 @@ export function Sidebar({ role: propRole = "user" as UserRole, profileId, userPe
     const supabase = createClient();
     async function load() {
       const [{ data: initData }, { data: projData }, { data: blockerData }] = await Promise.all([
-        supabase.from("initiatives").select("id, name, slug").order("name"),
+        supabase.from("initiatives").select("id, name, slug, steering_phase").order("name"),
         supabase.from("projects").select("id, name, slug, initiative_id").order("name"),
         supabase.from("blockers").select("project_id").eq("status", "pending"),
       ]);
 
-      const inits = (initData || []) as { id: string; name: string; slug: string }[];
+      const HIDDEN_PHASES = new Set(["post_launch", "parking_lot", "upcoming", "completed", "on_hold"]);
+      const inits = ((initData || []) as { id: string; name: string; slug: string; steering_phase: string | null }[])
+        .filter((i) => !i.steering_phase || !HIDDEN_PHASES.has(i.steering_phase));
       let projs = (projData || []) as { id: string; name: string; slug: string; initiative_id: string | null }[];
       const blockedProjectIds = new Set((blockerData || []).map((b: { project_id: string }) => b.project_id));
 
