@@ -372,7 +372,7 @@ function DepartmentCard({
       <div className="p-3 space-y-3 bg-white">
         {/* Rep */}
         <div>
-          <label className="block text-[10px] font-medium text-gray-400 uppercase tracking-wide mb-1">Rep / Owner</label>
+          <label className="block text-[10px] font-medium text-gray-900 uppercase tracking-wide mb-1">Owner</label>
           <OwnerPicker
             value={ds.rep_person_id || ""}
             onChange={(id) => onUpdate(ds.id, "rep_person_id", id || null)}
@@ -383,7 +383,7 @@ function DepartmentCard({
 
         {/* Roadblocks */}
         <div>
-          <label className="block text-[10px] font-medium text-gray-400 uppercase tracking-wide mb-1">Roadblocks</label>
+          <label className="block text-[10px] font-medium text-gray-900 uppercase tracking-wide mb-1">Roadblocks</label>
           {editingRoadblocks ? (
             <textarea
               value={roadblocks}
@@ -408,7 +408,7 @@ function DepartmentCard({
 
         {/* Decisions */}
         <div>
-          <label className="block text-[10px] font-medium text-gray-400 uppercase tracking-wide mb-1">Decisions</label>
+          <label className="block text-[10px] font-medium text-gray-900 uppercase tracking-wide mb-1">Decisions</label>
           {editingDecisions ? (
             <textarea
               value={decisions}
