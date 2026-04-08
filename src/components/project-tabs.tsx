@@ -369,7 +369,7 @@ export default function ProjectTabs({
         </div>
 
         <div style={{ display: active === "docs" ? "block" : "none" }}>
-          <DocsPanel projectId={project.id} projectCreatedBy={project.created_by} orgId={project.org_id} />
+          <DocsPanel projectId={project.id} projectCreatedBy={project.created_by} orgId={project.org_id} projectSlug={project.slug} people={peopleList} />
         </div>
       </div>
       <UndoToast stack={undoStack} onUndo={performUndo} onDismiss={dismissUndo} />
@@ -3145,9 +3145,9 @@ const DOC_TEMPLATE_SECTIONS = [
   { key: "questions", title: "Questions" },
 ];
 
-function DocsPanel({ projectId, projectCreatedBy, orgId }: { projectId: string; projectCreatedBy: string | null; orgId: string }) {
+function DocsPanel({ projectId, projectCreatedBy, orgId, projectSlug, people }: { projectId: string; projectCreatedBy: string | null; orgId: string; projectSlug: string; people: Person[] }) {
   const supabase = createClient();
-  const { role, profileId } = useRole();
+  const { role, profileId, userPersonId } = useRole();
   const [sections, setSections] = useState<ProjectDocument[]>([]);
   const [activeSection, setActiveSection] = useState<string | null>(DOC_TEMPLATE_SECTIONS[0].key);
   const [projectNotes, setProjectNotes] = useState("");
@@ -3161,6 +3161,10 @@ function DocsPanel({ projectId, projectCreatedBy, orgId }: { projectId: string; 
   const [showLinkForm, setShowLinkForm] = useState(false);
   const [linkTitle, setLinkTitle] = useState("");
   const [linkUrl, setLinkUrl] = useState("");
+  const [shareTarget, setShareTarget] = useState<{ name: string; url: string } | null>(null);
+  const [shareNote, setShareNote] = useState("");
+  const [sharePersonIds, setSharePersonIds] = useState<string[]>([]);
+  const [shareSending, setShareSending] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -3634,6 +3638,91 @@ function DocsPanel({ projectId, projectCreatedBy, orgId }: { projectId: string; 
                     </div>
                   )}
 
+                  {/* Share popover */}
+                  {shareTarget && (
+                    <div className="mb-3 p-4 bg-white rounded-lg border border-gray-300 shadow-sm space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-sm font-semibold text-gray-800">Share &ldquo;{shareTarget.name}&rdquo;</h4>
+                        <button onClick={() => { setShareTarget(null); setShareNote(""); setSharePersonIds([]); }} className="text-gray-400 hover:text-gray-600">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        </button>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">People</label>
+                        <div className="flex flex-wrap gap-1.5 mb-1.5">
+                          {sharePersonIds.map((pid) => {
+                            const person = people.find((p) => p.id === pid);
+                            return person ? (
+                              <span key={pid} className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700">
+                                {person.full_name}
+                                <button onClick={() => setSharePersonIds((prev) => prev.filter((id) => id !== pid))} className="hover:text-blue-900">&times;</button>
+                              </span>
+                            ) : null;
+                          })}
+                        </div>
+                        <select
+                          value=""
+                          onChange={(e) => {
+                            if (e.target.value && !sharePersonIds.includes(e.target.value)) {
+                              setSharePersonIds((prev) => [...prev, e.target.value]);
+                            }
+                            e.target.value = "";
+                          }}
+                          className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+                        >
+                          <option value="">Select person...</option>
+                          {people.filter((p) => p.email && !sharePersonIds.includes(p.id)).map((p) => (
+                            <option key={p.id} value={p.id}>{p.full_name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Note (optional)</label>
+                        <textarea
+                          value={shareNote}
+                          onChange={(e) => setShareNote(e.target.value)}
+                          rows={2}
+                          placeholder="Add a note..."
+                          className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none resize-none"
+                        />
+                      </div>
+                      <button
+                        disabled={sharePersonIds.length === 0 || shareSending}
+                        onClick={async () => {
+                          setShareSending(true);
+                          const currentPerson = people.find((p) => p.id === userPersonId);
+                          const senderName = currentPerson?.full_name || "Someone";
+                          for (const pid of sharePersonIds) {
+                            const person = people.find((p) => p.id === pid);
+                            if (!person?.email) continue;
+                            await supabase.from("comment_notifications").insert({
+                              org_id: orgId,
+                              recipient_person_id: pid,
+                              recipient_email: person.email,
+                              comment_id: null,
+                              commenter_name: senderName,
+                              comment_body: shareNote || null,
+                              item_title: shareTarget.name,
+                              item_type: "file",
+                              mention_type: "file_share",
+                              assigned_by: senderName,
+                              shared_url: shareTarget.url,
+                              entity_id: null,
+                              project_slug: projectSlug,
+                            });
+                          }
+                          setShareSending(false);
+                          setShareTarget(null);
+                          setShareNote("");
+                          setSharePersonIds([]);
+                        }}
+                        className="text-xs bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-4 py-1.5 rounded font-medium"
+                      >
+                        {shareSending ? "Sending..." : `Share with ${sharePersonIds.length} ${sharePersonIds.length === 1 ? "person" : "people"}`}
+                      </button>
+                    </div>
+                  )}
+
                   {/* Linked documents */}
                   {links.length > 0 && (
                     <div className="mb-3">
@@ -3643,22 +3732,31 @@ function DocsPanel({ projectId, projectCreatedBy, orgId }: { projectId: string; 
                           const icon = link.link_type === "google_doc" ? "📄" : link.link_type === "google_sheet" ? "📊" : link.link_type === "google_slides" ? "📽️" : "🔗";
                           return (
                             <div key={link.id} className="flex items-center justify-between py-1.5 px-2 rounded hover:bg-gray-50 border-b border-gray-100 last:border-b-0 group">
+                              <div className="flex items-center gap-1.5 flex-shrink-0">
+                                <button
+                                  onClick={() => setShareTarget({ name: link.title, url: link.url })}
+                                  className="text-gray-400 hover:text-blue-500 transition-colors"
+                                  title="Share"
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+                                </button>
+                                {canEditDocs && (
+                                  <button
+                                    onClick={async () => {
+                                      await supabase.from("project_links").delete().eq("id", link.id);
+                                      setLinks((prev) => prev.filter((l) => l.id !== link.id));
+                                    }}
+                                    className="text-gray-400 hover:text-red-500 transition-colors"
+                                    title="Remove link"
+                                  >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                  </button>
+                                )}
+                              </div>
                               <a href={link.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-blue-600 hover:underline truncate">
                                 <span>{icon}</span>
                                 {link.title}
                               </a>
-                              {canEditDocs && (
-                                <button
-                                  onClick={async () => {
-                                    await supabase.from("project_links").delete().eq("id", link.id);
-                                    setLinks((prev) => prev.filter((l) => l.id !== link.id));
-                                  }}
-                                  className="text-gray-400 hover:text-red-500 transition-colors flex-shrink-0 ml-2 opacity-0 group-hover:opacity-100"
-                                  title="Remove link"
-                                >
-                                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                                </button>
-                              )}
                             </div>
                           );
                         })}
@@ -3702,29 +3800,38 @@ function DocsPanel({ projectId, projectCreatedBy, orgId }: { projectId: string; 
                             />
                           ) : (
                             <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                              <a href={f.url} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline truncate">{f.name}</a>
-                              {canEditDocs && (
+                              <div className="flex items-center gap-1.5 flex-shrink-0">
                                 <button
-                                  onClick={(e) => { e.preventDefault(); setRenamingFileIdx(i); setRenameDraft(f.name); }}
-                                  className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-blue-600 transition-all flex-shrink-0"
-                                  title="Rename"
+                                  onClick={() => setShareTarget({ name: f.name, url: f.url })}
+                                  className="text-gray-400 hover:text-blue-500 transition-colors"
+                                  title="Share"
                                 >
-                                  <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
                                 </button>
-                              )}
+                                {canEditDocs && (
+                                  <button
+                                    onClick={(e) => { e.preventDefault(); setRenamingFileIdx(i); setRenameDraft(f.name); }}
+                                    className="text-gray-400 hover:text-blue-600 transition-colors"
+                                    title="Rename"
+                                  >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                  </button>
+                                )}
+                                {canEditDocs && (
+                                  <button
+                                    onClick={async () => {
+                                      await supabase.storage.from("project-files").remove([`${projectId}/${f.name}`]);
+                                      setFileList((prev) => prev.filter((_, j) => j !== i));
+                                    }}
+                                    className="text-gray-400 hover:text-red-500 transition-colors"
+                                    title="Delete file"
+                                  >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                  </button>
+                                )}
+                              </div>
+                              <a href={f.url} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline truncate">{f.name}</a>
                             </div>
-                          )}
-                          {canEditDocs && renamingFileIdx !== i && (
-                            <button
-                              onClick={async () => {
-                                await supabase.storage.from("project-files").remove([`${projectId}/${f.name}`]);
-                                setFileList((prev) => prev.filter((_, j) => j !== i));
-                              }}
-                              className="text-gray-400 hover:text-red-500 transition-colors flex-shrink-0 ml-2"
-                              title="Delete file"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                            </button>
                           )}
                         </div>
                       ))}
