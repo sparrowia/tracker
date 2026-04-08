@@ -19,8 +19,9 @@ import type {
   DepartmentStatusLevel,
   ProjectHealth,
 } from "@/lib/types";
-import { Download, ChevronDown, ChevronRight } from "lucide-react";
+import { Download, ChevronDown, ChevronRight, Presentation } from "lucide-react";
 import Link from "next/link";
+import SteeringPresentation from "@/components/steering-presentation";
 
 const PHASE_TABS: SteeringPhase[] = [
   "in_progress",
@@ -86,6 +87,7 @@ export default function SteeringReport({ projects, initiatives, people, deptStat
   const { role, userPersonId } = useRole();
   const [activeTab, setActiveTab] = useState<SteeringPhase>("in_progress");
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [presenting, setPresenting] = useState(false);
 
   const isAdmin = role === "super_admin" || role === "admin";
   const currentPerson = people.find((p) => p.id === userPersonId) ?? null;
@@ -239,13 +241,22 @@ export default function SteeringReport({ projects, initiatives, people, deptStat
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Steering Committee Report</h1>
-        <button
-          onClick={exportToExcel}
-          className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-white bg-gray-800 rounded hover:bg-gray-700"
-        >
-          <Download className="h-3.5 w-3.5" />
-          Export to Excel
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setPresenting(true)}
+            className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50"
+          >
+            <Presentation className="h-3.5 w-3.5" />
+            Present
+          </button>
+          <button
+            onClick={exportToExcel}
+            className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-white bg-gray-800 rounded hover:bg-gray-700"
+          >
+            <Download className="h-3.5 w-3.5" />
+            Export to Excel
+          </button>
+        </div>
       </div>
 
       <div className="flex gap-1 border-b border-gray-200">
@@ -311,6 +322,41 @@ export default function SteeringReport({ projects, initiatives, people, deptStat
               </div>
             )}
           </div>
+        );
+      })()}
+
+      {/* Presentation mode */}
+      {presenting && (() => {
+        // Build flat project list for current tab from all visible projects with this phase
+        const presProjects = projects
+          .filter((p) => p.steering_phase === activeTab && canSee(p))
+          .sort((a, b) => {
+            if (a.steering_priority && b.steering_priority) return a.steering_priority - b.steering_priority;
+            if (a.steering_priority) return -1;
+            if (b.steering_priority) return 1;
+            return a.name.localeCompare(b.name);
+          })
+          .map((p) => ({
+            id: p.id,
+            name: p.name,
+            slug: p.slug,
+            health: p.health,
+            product_type: p.product_type ?? null,
+            sponsorId: p.executive_sponsor_id,
+            priority: p.steering_priority,
+            projectedDate: p.original_completion_date,
+            projectedNotes: p.original_completion_notes,
+            actualDate: p.actual_completion_date,
+            actualNotes: p.actual_completion_notes,
+            asana_link: p.asana_link ?? null,
+          }));
+        return (
+          <SteeringPresentation
+            projects={presProjects}
+            people={people}
+            deptByEntity={deptByEntity}
+            onClose={() => setPresenting(false)}
+          />
         );
       })()}
     </div>
@@ -397,7 +443,7 @@ function ReportCard({
               <div className="px-4 py-3 bg-gray-50 grid grid-cols-2 gap-3 text-xs">
                 {row.origDate && (
                   <div>
-                    <span className="font-medium text-gray-500">Orig. Target:</span>{" "}
+                    <span className="font-medium text-gray-500">Projected:</span>{" "}
                     <span className="text-gray-700">{formatDate(row.origDate)}</span>
                   </div>
                 )}
@@ -409,7 +455,7 @@ function ReportCard({
                 )}
                 {row.origNotes && (
                   <div className="col-span-2">
-                    <span className="font-medium text-gray-500">Orig. Notes:</span>{" "}
+                    <span className="font-medium text-gray-500">Projected Notes:</span>{" "}
                     <span className="text-gray-600 whitespace-pre-wrap">{row.origNotes}</span>
                   </div>
                 )}

@@ -171,6 +171,8 @@ export interface Project {
   original_completion_notes: string | null;
   actual_completion_date: string | null;
   actual_completion_notes: string | null;
+  product_type: string | null;
+  asana_link: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;

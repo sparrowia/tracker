@@ -44,6 +44,8 @@ interface SteeringEntity {
   original_completion_notes: string | null;
   actual_completion_date: string | null;
   actual_completion_notes: string | null;
+  product_type?: string | null; // only on projects
+  asana_link?: string | null; // only on projects
   project_owner_id?: string | null; // only on projects
   owner_id?: string | null; // only on initiatives
 }
@@ -80,6 +82,8 @@ export default function SteeringCommitteeSection({
   const [origNotes, setOrigNotes] = useState(entity.original_completion_notes ?? "");
   const [actualDate, setActualDate] = useState(entity.actual_completion_date ?? "");
   const [actualNotes, setActualNotes] = useState(entity.actual_completion_notes ?? "");
+  const [productType, setProductType] = useState(entity.product_type ?? "");
+  const [asanaLink, setAsanaLink] = useState(entity.asana_link ?? "");
 
   // Visibility: project owner, initiative owner, executive sponsor, or admin
   const isOwner = userPersonId && (entity.project_owner_id === userPersonId || entity.owner_id === userPersonId);
@@ -239,9 +243,22 @@ export default function SteeringCommitteeSection({
                     placeholder="1, 2, 3..."
                   />
                 </div>
-                <div />
+                {entityType === "project" && (
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Product Type</label>
+                    <input
+                      type="text"
+                      value={productType}
+                      onChange={(e) => setProductType(e.target.value)}
+                      onBlur={() => saveField("product_type", productType)}
+                      className="w-full rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      placeholder="e.g. Thought Industries, BenchPrep..."
+                    />
+                  </div>
+                )}
+                {entityType !== "project" && <div />}
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Original Completion Date</label>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Projected Completion Date</label>
                   <input
                     type="date"
                     value={origDate}
@@ -265,7 +282,7 @@ export default function SteeringCommitteeSection({
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Original Completion Notes</label>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Projected Completion Notes</label>
                   <textarea
                     value={origNotes}
                     onChange={(e) => setOrigNotes(e.target.value)}
@@ -286,6 +303,19 @@ export default function SteeringCommitteeSection({
                     placeholder="Actual completion context..."
                   />
                 </div>
+                {entityType === "project" && (
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Asana Link</label>
+                    <input
+                      type="url"
+                      value={asanaLink}
+                      onChange={(e) => setAsanaLink(e.target.value)}
+                      onBlur={() => saveField("asana_link", asanaLink)}
+                      className="w-full rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      placeholder="https://app.asana.com/..."
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Department statuses — card layout */}
