@@ -51,6 +51,7 @@ src/
 │   │   ├── people/               # Internal team + vendor contacts
 │   │   ├── intake/               # Raw text/image intake with OCR
 │   │   │   └── [id]/review/      # Review extracted items
+│   │   ├── reports/              # Steering committee reports with presentation mode
 │   │   ├── docs/                 # Documentation wiki (TipTap editor)
 │   │   └── settings/
 │   │       ├── page.tsx          # Term corrections for AI extraction
@@ -88,6 +89,9 @@ src/
 │   ├── owner-picker.tsx          # Person selection dropdown with inline creation
 │   ├── vendor-picker.tsx         # Vendor selection dropdown with inline creation
 │   ├── comment-editor.tsx         # TipTap-based comment input with @mention autocomplete
+│   ├── steering-committee-section.tsx  # Shared steering committee UI for projects and initiatives
+│   ├── steering-report.tsx       # Reports page with card grid layout and phase tabs
+│   ├── steering-presentation.tsx # Full-screen presentation mode for steering reports
 │   ├── vendor-contacts.tsx       # Vendor detail page contacts with invite/edit/delete
 │   ├── role-context.tsx          # React context providing role, profileId, vendorId, userPersonId + impersonation
 │   ├── sidebar.tsx               # App navigation sidebar (role-aware)
@@ -149,6 +153,7 @@ Defined in `src/lib/types.ts`:
 - **Blocker** — blocking issues with impact description
 - **AgendaItem** — vendor meeting topics with severity/context/ask
 - **RaidEntry** — risks, assumptions, issues, decisions (with owner, reporter, parent_id for subtasks, sort_order for drag-and-drop, due_date, sf_case_id/sf_case_number/sf_case_url for Salesforce integration)
+- **ProjectDepartmentStatus** — department status cards for steering committee (department, rep_person_id, status green/yellow/red, roadblocks, decisions)
 - **Comment** — threaded comments on RAID entries, action items, blockers (polymorphic parent)
 - **CommentAttachment** — file attachments on comments (Supabase Storage, public bucket). Filenames sanitized (spaces/special chars → underscores) for storage path, original name kept for display.
 - **SupportTicket** — external support requests
@@ -268,9 +273,11 @@ Client component (`/initiatives/[slug]`) with inline editing:
 - **Properties grid** — Health (dropdown), Owners (multiple, blue pills with OwnerPicker), Target date (date picker), Slug (read-only)
 - **Multiple owners** — `initiative_owners` junction table; owners shown as blue pills with X to remove, OwnerPicker to add
 - **Editable Description and Notes** — click to open textarea
+- **Steering Committee Section** — collapsible section with Executive Sponsor, Steering Phase, Priority, Completion Dates, Product Type, Asana Link, and Department Status cards (shared component with projects)
 - Editing gated to admins (`super_admin`/`admin`) and any initiative owner (checked via junction table)
 - **Project visibility** — non-admin users only see projects they have access to (via `user_visible_project_ids` RPC)
 - `+ Add Project` button also hidden for non-editors
+- **Initiative dropdown** on project header allows reassigning projects between initiatives (triggers sidebar refresh)
 
 ## Company Timeline
 
@@ -573,8 +580,11 @@ The vendor detail page (`/settings/vendors/[id]`) is the hub for vendor meeting 
 - **Contacts** — add/edit/delete vendor contacts with invite/resend
 - **Project tabs** — 🔥 (critical+high across all projects), All, then one tab per project. Items show action items, blockers, and RAID issues assigned to the vendor.
 - **Filters** — RAID-log-style filter bar (Type, Priority, Status, Owner) + search input
-- **Expandable detail panels** — full RAID-style layout with description, meeting notes, next steps, properties grid, vendor reassignment, and comments
+- **Expandable detail panels** — full RAID-style layout with description, meeting notes, next steps, properties grid, vendor reassignment, changelog, and comments
 - **Vendor reassignment** — VendorPicker in detail panel; item leaves the view immediately when reassigned
+- **"+ Add Item" button** — inline with project tabs, creates action items/blockers/issues directly on vendor without project association
+- **Project column** — shows source project (clickable link) or dash for unassociated items
+- **Changelog** — "View changelog" in detail panels for all entity types
 - **"My Company" sidebar link** — vendors see their own vendor page via Building icon in sidebar
 - **Last Updated column** — replaces Age, shows relative time (3h ago, yesterday, 2w ago)
 
@@ -619,6 +629,108 @@ Password reset uses the same flow via `/api/auth/reset-password`.
 ## Docs Template Sections
 
 Project Docs tab has a hardcoded template index: Key Dates, Key Resources, Project Details, Core Audiences, Value Props, Marketing, Questions. Content stored in `project_documents` table. WYSIWYG editor (TipTap) with table support for editing. People, Files, and Notes sections below the HR separator.
+
+## Steering Committee
+
+Collapsible section on project headers and initiative detail pages (`steering-committee-section.tsx`):
+
+### Steering Properties
+- **Executive Sponsor** — OwnerPicker for selecting sponsor person
+- **Steering Phase** — dropdown: in_progress, post_launch, parking_lot, upcoming, completed, on_hold
+- **Steering Priority** — integer input for ordering within phase
+- **Projected Completion Date** + notes textarea
+- **Actual Completion Date** + notes textarea
+- **Product Type** — free text field
+- **Asana Link** — URL field with external link icon
+
+### Department Status Cards
+- 2-column grid of department cards with dark gray (`bg-gray-700`) headers
+- Hardcoded departments: Marketing, Content/Education, Product/Technology, Sales, Finance, Compliance
+- Each card has: traffic light status (green/yellow/red buttons), Owner (OwnerPicker for department rep), Roadblocks textarea, Decisions textarea
+- Cards only shown when at least one department has a status set, or when editing
+- Visibility: project owner, executive sponsor, or admin/super_admin can edit
+
+### Health Override
+When department statuses exist for a project, the project health badge derives from the worst traffic light:
+- Any red → `blocked`
+- Any yellow → `at_risk`
+- All green → `on_track`
+- This overrides the manually-set health field on the project
+
+### Database
+- `steering_phase` enum: `in_progress`, `post_launch`, `parking_lot`, `upcoming`, `completed`, `on_hold`
+- `department_status` enum: `green`, `yellow`, `red`
+- New columns on `projects`: `executive_sponsor_id`, `steering_priority`, `steering_phase`, `original_completion_date`, `original_completion_notes`, `actual_completion_date`, `actual_completion_notes`, `product_type`, `asana_link`
+- Same steering columns on `initiatives`: `executive_sponsor_id`, `steering_priority`, `steering_phase`, `original_completion_date`/`notes`, `actual_completion_date`/`notes`
+- `project_department_statuses` table: id, org_id, project_id (nullable), initiative_id (nullable), department, rep_person_id, status, roadblocks, decisions, sort_order
+- Migrations: `20260406000001_steering_committee.sql`, `20260407000001_initiative_steering.sql`, `20260408000001_product_type_asana_link.sql`
+
+## Reports Page
+
+Client component (`/reports`) for steering committee reporting:
+
+### Layout
+- Sidebar link with `ClipboardList` icon between Timeline and Docs (hidden from vendors)
+- Phase tabs across top with count badges (In Progress, Post Launch, Parking Lot, Upcoming, Completed, On Hold)
+- Initiatives shown as full-width rows at top of each phase tab
+- Standalone projects (no initiative) shown in 2-column card grid below initiatives
+- Expanding an initiative row shows its child projects as a nested 2-column card grid
+
+### Cards
+- Priority number displayed prominently
+- Health badge (colored pill)
+- Traffic light dots (department status summary — green/yellow/red circles)
+- Executive Sponsor name
+- Product Type label
+- Export to Excel button — multi-sheet workbook with one sheet per phase
+
+### Access Control
+- Project owners and executive sponsors see their own projects
+- Nader and Veronica (matched by person name) see all projects
+- Admins/super_admins see all projects
+- Vendors cannot access reports page
+
+### Component
+`src/components/steering-report.tsx`
+
+## Presentation Mode
+
+Full-screen overlay for presenting steering reports:
+
+### Activation
+- "Present" button on reports page opens the overlay
+- Escape key or close button to exit
+
+### Layout
+- Left sidebar: scrollable project list with priority numbers and traffic light status dots
+- Main area: one large card per project showing priority, health badge, name, product type, executive sponsor, projected completion date
+- "Show Details" toggle reveals: notes, department status cards with roadblocks/decisions, Asana link
+
+### Navigation
+- Click project in sidebar to jump to it
+- Arrow keys (up/down) to page through projects
+- Space bar toggles "Show Details"
+
+### Component
+`src/components/steering-presentation.tsx`
+
+## Vendor Detail Page — Add Item & Changelog
+
+### Add Item Button
+- "+ Add Item" button inline with project tabs on vendor detail page
+- Creates action items, blockers, or RAID issues directly on the vendor without requiring a project association
+- New Project column in item table shows source project (clickable link) or dash for unassociated items
+
+### Changelog in Detail Panels
+- "View changelog" link in expanded detail panels for all entity types (action items, blockers, RAID entries)
+- Same activity history modal as RAID log changelog
+
+### Blocker Description Fix
+- Description and Impact/Notes fields no longer share the same underlying field for blockers
+
+## Tab-Based Initiatives
+
+Initiatives with a `steering_phase` set are hidden from the sidebar Initiatives section. They appear only in the Reports page under their respective phase tabs. This prevents cluttering the sidebar with post-launch, parking lot, upcoming, completed, or on-hold initiatives that don't need daily visibility.
 
 ## Rejected Status
 

@@ -46,6 +46,7 @@ src/
 │   │   ├── initiatives/      # Initiative list + detail
 │   │   │   └── [slug]/
 │   │   ├── blockers/         # Active blockers list
+│   │   ├── reports/          # Steering committee reports + presentation mode
 │   │   ├── intake/           # Raw text/image intake + OCR
 │   │   │   └── [id]/review/  # Review AI-extracted items
 │   │   ├── ask/              # AI Q&A page
@@ -66,7 +67,10 @@ src/
 │   ├── raid-log.tsx          # RAID quadrants with subtasks, drag-and-drop, archived view
 │   ├── comment-thread.tsx    # Reusable comment thread with file attachments
 │   ├── vendor-picker.tsx     # Vendor selection dropdown with inline creation
-│   ├── project-header.tsx    # Project name + health badge
+│   ├── steering-committee-section.tsx # Shared steering committee UI (projects + initiatives)
+│   ├── steering-report.tsx   # Reports page with card grid + phase tabs
+│   ├── steering-presentation.tsx # Full-screen presentation mode
+│   ├── project-header.tsx    # Project name + health badge + steering section
 │   ├── editable-project-name.tsx
 │   ├── add-project-button.tsx
 │   ├── add-initiative-button.tsx
@@ -100,8 +104,8 @@ src/
 | `profiles` | User accounts linked to auth |
 | `vendors` | External companies (Silk, BenchPrep, etc.) |
 | `people` | Internal team + vendor contacts (includes `slack_member_id` for DM links) |
-| `initiatives` | High-level strategic initiatives |
-| `projects` | Tracked projects with health status |
+| `initiatives` | High-level strategic initiatives with steering committee fields |
+| `projects` | Tracked projects with health status, steering committee fields (sponsor, phase, priority, completion dates, product type, asana link) |
 | `action_items` | Tasks with owner, priority, due date, meeting toggle |
 | `blockers` | Blocking issues with impact description |
 | `raid_entries` | Risks, assumptions, issues, decisions (owner, reporter, parent_id subtasks, sort_order, due_date) |
@@ -115,6 +119,7 @@ src/
 | `term_corrections` | AI extraction glossary (wrong_term → correct_term) |
 | `milestones` | Company timeline milestones with parent/child grouping |
 | `wiki_pages` | Block-based wiki pages with parent/child hierarchy |
+| `project_department_statuses` | Department status cards for steering committee (green/yellow/red per department) |
 
 ### Junction Tables
 `project_vendors`, `meeting_projects`, `meeting_attendees`, `intake_entities`, `correction_log`
@@ -134,6 +139,8 @@ src/
 - **priority_level:** critical, high, medium, low
 - **project_health:** on_track, in_progress, at_risk, blocked, paused, complete
 - **raid_type:** risk, assumption, issue, decision
+- **steering_phase:** in_progress, post_launch, parking_lot, upcoming, completed, on_hold
+- **department_status:** green, yellow, red
 - **severity_indicator:** critical, high, new, normal
 - **intake_source:** slack, email, meeting_notes, manual, fathom_transcript, spreadsheet, asana
 
@@ -174,6 +181,12 @@ All tables have row-level security policies scoped to `org_id` via the `user_org
 30. **Vendor Health Report** — super_admin only, A-F letter grades based on ticket age, resolution time, QA bounce rate, ETA coverage, overdue rate.
 31. **Action Item Changelog** — activity history modal matching RAID log changelog pattern.
 32. **Dashboard My Tasks** — personal task list showing action items + RAID entries owned by logged-in user with grid layout.
+33. **Steering Committee Section** — collapsible section on project headers and initiative detail with Executive Sponsor, Steering Phase, Priority, Completion Dates, Product Type, Asana Link, and Department Status cards (6 departments with traffic light statuses, owner, roadblocks, decisions). Health overrides from worst department status.
+34. **Reports Page** — steering committee reporting with phase tabs (In Progress, Post Launch, Parking Lot, etc.), initiative rows with expandable child project grids, standalone project cards, Export to Excel (multi-sheet by phase). Access scoped to project owners, sponsors, named users (Nader, Veronica), and admins.
+35. **Presentation Mode** — full-screen overlay for presenting steering reports. Left sidebar project list, large detail cards, Show Details toggle for department statuses. Arrow keys, Space, Esc navigation.
+36. **Vendor Add Item** — create action items, blockers, or issues directly on vendor detail page without project association. Project column shows source project or dash.
+37. **Initiative Dropdown** — project header allows reassigning projects between initiatives with sidebar refresh.
+38. **Tab-Based Initiative Phases** — initiatives with steering_phase set are hidden from sidebar and shown only in Reports page under their phase tab.
 
 ## UI Design System
 
@@ -256,6 +269,9 @@ All in `supabase/migrations/`:
 | `20260402000002_vendor_owners.sql` | Vendor owners per project junction table |
 | `20260402000003_add_rejected_status.sql` | Add 'rejected' to item_status enum |
 | `20260402000004_vendor_accountability_updated_at.sql` | Add updated_at to vendor accountability view |
+| `20260406000001_steering_committee.sql` | Steering phase/priority/sponsor on projects, department_status enum, project_department_statuses table |
+| `20260407000001_initiative_steering.sql` | Steering columns on initiatives (sponsor, phase, priority, completion dates) |
+| `20260408000001_product_type_asana_link.sql` | Add product_type and asana_link to projects and initiatives |
 
 ## Deployment
 
@@ -275,6 +291,6 @@ All docs live in this repo: [github.com/sparrowia/tracker](https://github.com/sp
 | [`CLAUDE.md`](https://github.com/sparrowia/tracker/blob/main/CLAUDE.md) | AI assistant instructions, conventions, and guardrails |
 | [`src/lib/types.ts`](https://github.com/sparrowia/tracker/blob/main/src/lib/types.ts) | All TypeScript interfaces and enums |
 | [`src/lib/utils.ts`](https://github.com/sparrowia/tracker/blob/main/src/lib/utils.ts) | Formatting helpers (priority colors, status badges, dates) |
-| [`supabase/migrations/`](https://github.com/sparrowia/tracker/tree/main/supabase/migrations) | Full database schema history (34 migrations) |
+| [`supabase/migrations/`](https://github.com/sparrowia/tracker/tree/main/supabase/migrations) | Full database schema history (63 migrations) |
 | [`.env.local.example`](https://github.com/sparrowia/tracker/blob/main/.env.local.example) | Required environment variables |
 | [`PROMPT.md`](https://github.com/sparrowia/tracker/blob/main/PROMPT.md) | Bootstrap prompt for AI assistants |
