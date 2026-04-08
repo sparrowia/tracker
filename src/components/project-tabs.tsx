@@ -3731,7 +3731,7 @@ function DocsPanel({ projectId, projectCreatedBy, orgId, projectSlug, people }: 
                         {links.map((link) => {
                           const icon = link.link_type === "google_doc" ? "📄" : link.link_type === "google_sheet" ? "📊" : link.link_type === "google_slides" ? "📽️" : "🔗";
                           return (
-                            <div key={link.id} className="flex items-center justify-between py-1.5 px-2 rounded hover:bg-gray-50 border-b border-gray-100 last:border-b-0 group">
+                            <div key={link.id} className="flex items-center gap-1.5 py-1.5 px-2 rounded hover:bg-gray-50 border-b border-gray-100 last:border-b-0 group">
                               <div className="flex items-center gap-1.5 flex-shrink-0">
                                 <button
                                   onClick={() => setShareTarget({ name: link.title, url: link.url })}
@@ -3743,6 +3743,7 @@ function DocsPanel({ projectId, projectCreatedBy, orgId, projectSlug, people }: 
                                 {canEditDocs && (
                                   <button
                                     onClick={async () => {
+                                      if (!confirm(`Delete "${link.title}"?`)) return;
                                       await supabase.from("project_links").delete().eq("id", link.id);
                                       setLinks((prev) => prev.filter((l) => l.id !== link.id));
                                     }}
@@ -3773,7 +3774,7 @@ function DocsPanel({ projectId, projectCreatedBy, orgId, projectSlug, people }: 
                   ) : fileList.length === 0 ? null : (
                     <div className="space-y-1">
                       {fileList.map((f, i) => (
-                        <div key={i} className="flex items-center justify-between py-1.5 px-2 rounded hover:bg-gray-50 border-b border-gray-100 last:border-b-0 group">
+                        <div key={i} className="flex items-center gap-1.5 py-1.5 px-2 rounded hover:bg-gray-50 border-b border-gray-100 last:border-b-0 group">
                           {renamingFileIdx === i ? (
                             <input
                               type="text"
@@ -3820,6 +3821,7 @@ function DocsPanel({ projectId, projectCreatedBy, orgId, projectSlug, people }: 
                                 {canEditDocs && (
                                   <button
                                     onClick={async () => {
+                                      if (!confirm(`Delete "${f.name}"?`)) return;
                                       await supabase.storage.from("project-files").remove([`${projectId}/${f.name}`]);
                                       setFileList((prev) => prev.filter((_, j) => j !== i));
                                     }}
