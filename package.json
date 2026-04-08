@@ -43,6 +43,7 @@
     "@types/nodemailer": "^7.0.11",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "docx": "^9.6.1",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "pg": "^8.18.0",

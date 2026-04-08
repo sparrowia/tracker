@@ -3157,6 +3157,10 @@ function DocsPanel({ projectId, projectCreatedBy, orgId }: { projectId: string; 
   const [renamingFileIdx, setRenamingFileIdx] = useState<number | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
   const [generating, setGenerating] = useState(false);
+  const [links, setLinks] = useState<{ id: string; title: string; url: string; link_type: string }[]>([]);
+  const [showLinkForm, setShowLinkForm] = useState(false);
+  const [linkTitle, setLinkTitle] = useState("");
+  const [linkUrl, setLinkUrl] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -3201,6 +3205,10 @@ function DocsPanel({ projectId, projectCreatedBy, orgId }: { projectId: string; 
           created_at: f.created_at || "",
         })));
       }
+    });
+    // Load linked documents
+    supabase.from("project_links").select("id, title, url, link_type").eq("project_id", projectId).order("created_at").then(({ data }) => {
+      if (data) setLinks(data);
     });
     // Load project members
     supabase.from("project_members").select("person_id, person:people(id, full_name, vendor_id, vendor:vendors(name))").eq("project_id", projectId).then(({ data }) => {
@@ -3542,13 +3550,21 @@ function DocsPanel({ projectId, projectCreatedBy, orgId }: { projectId: string; 
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="text-sm font-semibold text-gray-700">Files</h3>
                     {canEditDocs && (
-                      <button
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={uploading}
-                        className="text-xs bg-blue-600 hover:bg-blue-500 disabled:bg-gray-400 text-white px-3 py-1 rounded transition-colors font-medium"
-                      >
-                        {uploading ? "Uploading..." : "+ Upload File"}
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setShowLinkForm(true)}
+                          className="text-xs bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 px-3 py-1 rounded transition-colors font-medium"
+                        >
+                          + Link
+                        </button>
+                        <button
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={uploading}
+                          className="text-xs bg-blue-600 hover:bg-blue-500 disabled:bg-gray-400 text-white px-3 py-1 rounded transition-colors font-medium"
+                        >
+                          {uploading ? "Uploading..." : "+ Upload File"}
+                        </button>
+                      </div>
                     )}
                     <input
                       ref={fileInputRef}
@@ -3572,9 +3588,91 @@ function DocsPanel({ projectId, projectCreatedBy, orgId }: { projectId: string; 
                       }}
                     />
                   </div>
-                  {fileList.length === 0 ? (
-                    <p className="text-sm text-gray-400">No files uploaded yet.</p>
-                  ) : (
+                  {/* Link form */}
+                  {showLinkForm && (
+                    <div className="mb-3 p-3 bg-blue-50 rounded-lg border border-blue-200 space-y-2">
+                      <input
+                        type="url"
+                        value={linkUrl}
+                        onChange={(e) => setLinkUrl(e.target.value)}
+                        placeholder="Paste Google Doc, Sheet, or Slides URL..."
+                        autoFocus
+                        className="w-full rounded border border-gray-300 bg-white px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      />
+                      <input
+                        type="text"
+                        value={linkTitle}
+                        onChange={(e) => setLinkTitle(e.target.value)}
+                        placeholder="Display name"
+                        onKeyDown={(e) => { if (e.key === "Enter") {
+                          const url = linkUrl.trim(); const title = linkTitle.trim();
+                          if (!url || !title) return;
+                          const lt = url.includes("docs.google.com/document") ? "google_doc" : url.includes("docs.google.com/spreadsheets") ? "google_sheet" : url.includes("docs.google.com/presentation") ? "google_slides" : "other";
+                          supabase.from("project_links").insert({ org_id: orgId, project_id: projectId, title, url, link_type: lt, created_by: profileId }).select("id, title, url, link_type").single().then(({ data }) => {
+                            if (data) { setLinks((prev) => [...prev, data]); setLinkTitle(""); setLinkUrl(""); setShowLinkForm(false); }
+                          });
+                        } if (e.key === "Escape") setShowLinkForm(false); }}
+                        className="w-full rounded border border-gray-300 bg-white px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      />
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => {
+                            const url = linkUrl.trim(); const title = linkTitle.trim();
+                            if (!url || !title) return;
+                            const lt = url.includes("docs.google.com/document") ? "google_doc" : url.includes("docs.google.com/spreadsheets") ? "google_sheet" : url.includes("docs.google.com/presentation") ? "google_slides" : "other";
+                            supabase.from("project_links").insert({ org_id: orgId, project_id: projectId, title, url, link_type: lt, created_by: profileId }).select("id, title, url, link_type").single().then(({ data }) => {
+                              if (data) { setLinks((prev) => [...prev, data]); setLinkTitle(""); setLinkUrl(""); setShowLinkForm(false); }
+                            });
+                          }}
+                          disabled={!linkUrl.trim() || !linkTitle.trim()}
+                          className="text-xs bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-3 py-1 rounded font-medium"
+                        >
+                          Add Link
+                        </button>
+                        <button onClick={() => { setShowLinkForm(false); setLinkUrl(""); setLinkTitle(""); }} className="text-xs text-gray-500 hover:text-gray-700">Cancel</button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Linked documents */}
+                  {links.length > 0 && (
+                    <div className="mb-3">
+                      <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Linked Documents</div>
+                      <div className="space-y-1">
+                        {links.map((link) => {
+                          const icon = link.link_type === "google_doc" ? "📄" : link.link_type === "google_sheet" ? "📊" : link.link_type === "google_slides" ? "📽️" : "🔗";
+                          return (
+                            <div key={link.id} className="flex items-center justify-between py-1.5 px-2 rounded hover:bg-gray-50 border-b border-gray-100 last:border-b-0 group">
+                              <a href={link.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-blue-600 hover:underline truncate">
+                                <span>{icon}</span>
+                                {link.title}
+                              </a>
+                              {canEditDocs && (
+                                <button
+                                  onClick={async () => {
+                                    await supabase.from("project_links").delete().eq("id", link.id);
+                                    setLinks((prev) => prev.filter((l) => l.id !== link.id));
+                                  }}
+                                  className="text-gray-400 hover:text-red-500 transition-colors flex-shrink-0 ml-2 opacity-0 group-hover:opacity-100"
+                                  title="Remove link"
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Uploaded files */}
+                  {fileList.length > 0 && links.length > 0 && (
+                    <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Uploaded Files</div>
+                  )}
+                  {fileList.length === 0 && links.length === 0 ? (
+                    <p className="text-sm text-gray-400">No files or links yet.</p>
+                  ) : fileList.length === 0 ? null : (
                     <div className="space-y-1">
                       {fileList.map((f, i) => (
                         <div key={i} className="flex items-center justify-between py-1.5 px-2 rounded hover:bg-gray-50 border-b border-gray-100 last:border-b-0 group">
