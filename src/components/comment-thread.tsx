@@ -408,7 +408,7 @@ export default function CommentThread({ raidEntryId, actionItemId, blockerId, or
                                   className="max-w-full max-h-[400px] rounded border border-gray-200"
                                 >
                                   <source src={a.file_url} type={ext === "mov" ? "video/quicktime" : `video/${ext}`} />
-                                  Your browser does not support this video.
+                                  <a href={a.file_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline px-2 py-1 block">Download {a.file_name}</a>
                                 </video>
                                 <a href={a.file_url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-gray-400 hover:text-blue-600 mt-0.5 inline-block">
                                   {a.file_name}{a.file_size ? ` (${formatFileSize(a.file_size)})` : ""}
