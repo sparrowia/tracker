@@ -393,22 +393,53 @@ export default function CommentThread({ raidEntryId, actionItemId, blockerId, or
                   <p className="text-sm text-gray-700 mt-0.5 whitespace-pre-wrap">{renderBody(c.body)}</p>
 
                   {c.attachments && c.attachments.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 mt-1.5">
-                      {c.attachments.map((a) => (
-                        <a
-                          key={a.id}
-                          href={a.file_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 bg-blue-50 rounded px-2 py-1 transition-colors"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
-                          </svg>
-                          {a.file_name}
-                          {a.file_size ? ` (${formatFileSize(a.file_size)})` : ""}
-                        </a>
-                      ))}
+                    <div className="space-y-2 mt-1.5">
+                      {c.attachments.map((a) => {
+                        const ext = a.file_name.split(".").pop()?.toLowerCase() || "";
+                        const isVideo = ["mov", "mp4", "webm", "ogg"].includes(ext);
+                        const isImage = ["png", "jpg", "jpeg", "gif", "webp"].includes(ext);
+                        return (
+                          <div key={a.id}>
+                            {isVideo ? (
+                              <div>
+                                <video
+                                  controls
+                                  preload="metadata"
+                                  className="max-w-full max-h-[400px] rounded border border-gray-200"
+                                >
+                                  <source src={a.file_url} type={ext === "mov" ? "video/quicktime" : `video/${ext}`} />
+                                  Your browser does not support this video.
+                                </video>
+                                <a href={a.file_url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-gray-400 hover:text-blue-600 mt-0.5 inline-block">
+                                  {a.file_name}{a.file_size ? ` (${formatFileSize(a.file_size)})` : ""}
+                                </a>
+                              </div>
+                            ) : isImage ? (
+                              <div>
+                                <a href={a.file_url} target="_blank" rel="noopener noreferrer">
+                                  <img src={a.file_url} alt={a.file_name} className="max-w-full max-h-[400px] rounded border border-gray-200" />
+                                </a>
+                                <span className="text-[10px] text-gray-400 mt-0.5 inline-block">
+                                  {a.file_name}{a.file_size ? ` (${formatFileSize(a.file_size)})` : ""}
+                                </span>
+                              </div>
+                            ) : (
+                              <a
+                                href={a.file_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 bg-blue-50 rounded px-2 py-1 transition-colors"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                                </svg>
+                                {a.file_name}
+                                {a.file_size ? ` (${formatFileSize(a.file_size)})` : ""}
+                              </a>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
