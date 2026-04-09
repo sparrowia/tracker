@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
     } = body;
 
     // Validate required fields
-    if (!project_slug || !reporter_name?.trim() || !title?.trim() || !description?.trim() || !issue_type || !os || !browser) {
+    if (!project_slug || !reporter_name?.trim() || !title?.trim() || !description?.trim() || !issue_type || !url?.trim() || !os || !browser) {
       return NextResponse.json(
         { error: "Missing required fields" },
         { status: 400 }
@@ -70,9 +70,6 @@ export async function POST(req: NextRequest) {
     descParts.push(""); // blank line
     descParts.push("---");
     descParts.push(`**Issue Type:** ${issue_type}`);
-    if (url?.trim()) {
-      descParts.push(`**URL:** ${url.trim()}`);
-    }
     descParts.push(`**OS:** ${os}`);
     descParts.push(`**Browser:** ${browser}`);
     descParts.push(`**Reporter:** ${reporter_name.trim()}`);
@@ -94,6 +91,7 @@ export async function POST(req: NextRequest) {
         raid_type: "issue",
         title: title.trim(),
         description: formattedDescription,
+        notes: url?.trim() ? url.trim() : null,
         priority: "medium",
         status: "pending",
         project_id: project.id,

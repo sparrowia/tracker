@@ -130,7 +130,7 @@ export default function PublicIssueForm({
   async function handleSubmit(andNew: boolean) {
     setError(null);
 
-    if (!reporterName.trim() || !title.trim() || !description.trim() || !issueType || !os || !browser) {
+    if (!reporterName.trim() || !title.trim() || !description.trim() || !issueType || !url.trim() || !os || !browser) {
       setError("Please fill in all required fields.");
       return;
     }
@@ -320,9 +320,10 @@ export default function PublicIssueForm({
 
           {/* URL */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">URL</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">URL <span className="text-red-500">*</span></label>
             <input
-              type="text"
+              type="url"
+              required
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
