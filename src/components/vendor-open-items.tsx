@@ -564,12 +564,8 @@ export function VendorOpenItems({
                           ) : formatDateShort(item.due_date)}
                         </div>
 
-                        {/* Row: Opened / Vendor */}
-                        <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-200">Opened</span>
-                        <div className="px-3 py-2.5 border-b border-gray-200">
-                          <span className="text-sm text-gray-700">{new Date(item.first_flagged_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
-                        </div>
-                        <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-200">Vendor</span>
+                        {/* Row: Vendor */}
+                        <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-200">Vendor</span>
                         <div className="px-3 py-1.5 border-b border-gray-200">
                           {canEdit ? (
                             <VendorPicker
@@ -588,6 +584,8 @@ export function VendorOpenItems({
                             <span className="text-sm text-gray-700">{vendors.find((v) => v.id === item.vendor_id)?.name || "—"}</span>
                           )}
                         </div>
+                        <span className="px-5 py-2.5 bg-gray-50/50 border-b border-l border-gray-200" />
+                        <div className="px-3 py-2.5 border-b border-gray-200" />
                       </div>
                     </div>
 

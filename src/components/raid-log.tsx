@@ -1506,13 +1506,8 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                             />
                           </div>
 
-                          {/* Row: Opened / Impact */}
-                          {/* Row: Opened / Impact */}
-                          <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-200">Opened</span>
-                          <div className="px-3 py-2.5 border-b border-gray-200">
-                            <span className="text-sm text-gray-700">{new Date(entry.first_flagged_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
-                          </div>
-                          <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-200">Impact</span>
+                          {/* Row: Impact / (empty) */}
+                          <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-200">Impact</span>
                           <div className="px-3 py-2.5 border-b border-gray-200">
                             <select
                               value={entry.impact || ""}
@@ -1525,6 +1520,8 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                               <option value="high">High</option>
                             </select>
                           </div>
+                          <span className="px-5 py-2.5 bg-gray-50/50 border-b border-l border-gray-200" />
+                          <div className="px-3 py-2.5 border-b border-gray-200" />
 
                           {/* Row: Due Date / Changelog */}
                           <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-200">Due Date</span>
