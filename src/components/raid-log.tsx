@@ -1351,8 +1351,18 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                   {isExpanded && (
                     <div className="bg-yellow-50/25 border-b border-gray-200" onClick={(e) => e.stopPropagation()}>
                       {/* Editable title */}
-                      <div className="px-5 pt-4 pb-3 text-base font-semibold text-gray-900 bg-yellow-50/25">
-                        <InlineText value={entry.title} onSave={(v) => { if (v.trim()) saveField(entry.id, "title", v.trim()); }} placeholder="Title..." />
+                      <div className="px-5 pt-4 pb-3 text-base font-semibold text-gray-900 bg-yellow-50/25 flex items-start justify-between gap-2">
+                        <div className="flex-1"><InlineText value={entry.title} onSave={(v) => { if (v.trim()) saveField(entry.id, "title", v.trim()); }} placeholder="Title..." /></div>
+                        <button
+                          onClick={() => {
+                            const url = `${window.location.origin}/projects/${project.slug}?item=${entry.id}`;
+                            navigator.clipboard.writeText(url);
+                          }}
+                          className="text-gray-400 hover:text-blue-600 transition-colors flex-shrink-0 mt-1"
+                          title="Copy link to item"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                        </button>
                       </div>
 
                       {/* Description & Notes — side by side */}
