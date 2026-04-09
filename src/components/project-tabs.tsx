@@ -369,7 +369,7 @@ export default function ProjectTabs({
         </div>
 
         <div style={{ display: active === "docs" ? "block" : "none" }}>
-          <DocsPanel projectId={project.id} projectCreatedBy={project.created_by} orgId={project.org_id} projectSlug={project.slug} people={peopleList} />
+          <DocsPanel projectId={project.id} projectCreatedBy={project.created_by} projectOwnerId={project.project_owner_id} orgId={project.org_id} projectSlug={project.slug} people={peopleList} />
         </div>
       </div>
       <UndoToast stack={undoStack} onUndo={performUndo} onDismiss={dismissUndo} />
@@ -3147,7 +3147,7 @@ const DOC_TEMPLATE_SECTIONS = [
   { key: "questions", title: "Questions" },
 ];
 
-function DocsPanel({ projectId, projectCreatedBy, orgId, projectSlug, people }: { projectId: string; projectCreatedBy: string | null; orgId: string; projectSlug: string; people: Person[] }) {
+function DocsPanel({ projectId, projectCreatedBy, projectOwnerId, orgId, projectSlug, people }: { projectId: string; projectCreatedBy: string | null; projectOwnerId: string | null; orgId: string; projectSlug: string; people: Person[] }) {
   const supabase = createClient();
   const { role, profileId, userPersonId } = useRole();
   const [sections, setSections] = useState<ProjectDocument[]>([]);
@@ -3159,7 +3159,7 @@ function DocsPanel({ projectId, projectCreatedBy, orgId, projectSlug, people }: 
   const [renamingFileIdx, setRenamingFileIdx] = useState<number | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
   const [generating, setGenerating] = useState(false);
-  const [links, setLinks] = useState<{ id: string; title: string; url: string; link_type: string }[]>([]);
+  const [links, setLinks] = useState<{ id: string; title: string; url: string; link_type: string; created_by: string | null }[]>([]);
   const [showLinkForm, setShowLinkForm] = useState(false);
   const [linkTitle, setLinkTitle] = useState("");
   const [linkUrl, setLinkUrl] = useState("");
@@ -3172,6 +3172,7 @@ function DocsPanel({ projectId, projectCreatedBy, orgId, projectSlug, people }: 
 
   // Edit state
   const canEditDocs = role === "super_admin" || role === "admin" || profileId === projectCreatedBy;
+  const canDeleteFiles = role === "super_admin" || (userPersonId && projectOwnerId === userPersonId);
   const [editing, setEditing] = useState(false);
   const [editContent, setEditContent] = useState("");
   const [saving, setSaving] = useState(false);
@@ -3213,7 +3214,7 @@ function DocsPanel({ projectId, projectCreatedBy, orgId, projectSlug, people }: 
       }
     });
     // Load linked documents
-    supabase.from("project_links").select("id, title, url, link_type").eq("project_id", projectId).order("created_at").then(({ data }) => {
+    supabase.from("project_links").select("id, title, url, link_type, created_by").eq("project_id", projectId).order("created_at").then(({ data }) => {
       if (data) setLinks(data);
     });
     // Load project members
@@ -3614,7 +3615,7 @@ function DocsPanel({ projectId, projectCreatedBy, orgId, projectSlug, people }: 
                           const url = linkUrl.trim(); const title = linkTitle.trim();
                           if (!url || !title) return;
                           const lt = url.includes("docs.google.com/document") ? "google_doc" : url.includes("docs.google.com/spreadsheets") ? "google_sheet" : url.includes("docs.google.com/presentation") ? "google_slides" : "other";
-                          supabase.from("project_links").insert({ org_id: orgId, project_id: projectId, title, url, link_type: lt, created_by: profileId }).select("id, title, url, link_type").single().then(({ data }) => {
+                          supabase.from("project_links").insert({ org_id: orgId, project_id: projectId, title, url, link_type: lt, created_by: profileId }).select("id, title, url, link_type, created_by").single().then(({ data }) => {
                             if (data) { setLinks((prev) => [...prev, data]); setLinkTitle(""); setLinkUrl(""); setShowLinkForm(false); }
                           });
                         } if (e.key === "Escape") setShowLinkForm(false); }}
@@ -3626,7 +3627,7 @@ function DocsPanel({ projectId, projectCreatedBy, orgId, projectSlug, people }: 
                             const url = linkUrl.trim(); const title = linkTitle.trim();
                             if (!url || !title) return;
                             const lt = url.includes("docs.google.com/document") ? "google_doc" : url.includes("docs.google.com/spreadsheets") ? "google_sheet" : url.includes("docs.google.com/presentation") ? "google_slides" : "other";
-                            supabase.from("project_links").insert({ org_id: orgId, project_id: projectId, title, url, link_type: lt, created_by: profileId }).select("id, title, url, link_type").single().then(({ data }) => {
+                            supabase.from("project_links").insert({ org_id: orgId, project_id: projectId, title, url, link_type: lt, created_by: profileId }).select("id, title, url, link_type, created_by").single().then(({ data }) => {
                               if (data) { setLinks((prev) => [...prev, data]); setLinkTitle(""); setLinkUrl(""); setShowLinkForm(false); }
                             });
                           }}
@@ -3742,7 +3743,7 @@ function DocsPanel({ projectId, projectCreatedBy, orgId, projectSlug, people }: 
                                 >
                                   <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
                                 </button>
-                                {canEditDocs && (
+                                {(canDeleteFiles || (profileId && link.created_by === profileId)) && (
                                   <button
                                     onClick={async () => {
                                       if (!confirm(`Delete "${link.title}"?`)) return;
@@ -3820,10 +3821,10 @@ function DocsPanel({ projectId, projectCreatedBy, orgId, projectSlug, people }: 
                                     <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                                   </button>
                                 )}
-                                {canEditDocs && (
+                                {canDeleteFiles && (
                                   <button
                                     onClick={async () => {
-                                      if (!confirm(`Delete "${f.name}"?`)) return;
+                                      if (!confirm(`Delete "${f.name}"? This cannot be undone.`)) return;
                                       await supabase.storage.from("project-files").remove([`${projectId}/${f.name}`]);
                                       setFileList((prev) => prev.filter((_, j) => j !== i));
                                     }}
