@@ -3,6 +3,7 @@ import { healthColor, healthLabel, formatDateShort } from "@/lib/utils";
 import type { Project } from "@/lib/types";
 import AddProjectButton from "@/components/add-project-button";
 import EditableProjectName from "@/components/editable-project-name";
+import ProjectRowActions from "@/components/project-row-actions";
 
 export default async function ProjectsPage() {
   const supabase = await createClient();
@@ -34,6 +35,7 @@ export default async function ProjectsPage() {
                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Health</th>
                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Platform Status</th>
                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Target</th>
+                <th className="w-10" />
               </tr>
             </thead>
             <tbody>
@@ -49,6 +51,9 @@ export default async function ProjectsPage() {
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-600">{p.platform_status || "—"}</td>
                   <td className="px-4 py-3 text-sm text-gray-600">{formatDateShort(p.target_completion)}</td>
+                  <td className="px-2 py-3">
+                    <ProjectRowActions projectId={p.id} projectName={p.name} projectOwnerId={p.project_owner_id} />
+                  </td>
                 </tr>
               ))}
             </tbody>
