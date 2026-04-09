@@ -39,11 +39,14 @@ export async function GET(req: NextRequest) {
   for (const [email, items] of byRecipient) {
     const assignments = items.filter((n) => n.mention_type === "assignment");
     const statusChanges = items.filter((n) => n.mention_type === "status_change");
-    const comments = items.filter((n) => n.mention_type !== "assignment" && n.mention_type !== "status_change");
+    const fileShares = items.filter((n) => n.mention_type === "file_share");
+    const comments = items.filter((n) => !["assignment", "status_change", "file_share"].includes(n.mention_type));
     const totalCount = items.length;
 
     const subject = totalCount === 1
-      ? items[0].mention_type === "assignment"
+      ? items[0].mention_type === "file_share"
+        ? `${items[0].assigned_by || "Someone"} shared "${items[0].item_title}" with you`
+        : items[0].mention_type === "assignment"
         ? `You've been assigned: ${items[0].item_title}`
         : items[0].mention_type === "status_change"
         ? `Status updated: ${items[0].item_title}`
@@ -80,6 +83,16 @@ export async function GET(req: NextRequest) {
       </div>
     `).join("");
 
+    const fileShareBlocks = fileShares.map((n) => `
+      <div style="margin-bottom: 16px; padding: 12px; background: #eff6ff; border-radius: 8px; border-left: 3px solid #3b82f6;">
+        <p style="margin: 0 0 4px; font-size: 12px; color: #6b7280;">
+          <strong>${n.assigned_by || "Someone"}</strong> shared a file with you: <strong>${n.item_title}</strong>
+        </p>
+        ${n.comment_body ? `<p style="margin: 0 0 8px; font-size: 13px; color: #374151;">${n.comment_body.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</p>` : ""}
+        ${n.shared_url ? `<a href="${n.shared_url}" style="color: #3b82f6; text-decoration: none; font-size: 12px;">Open File →</a>` : ""}
+      </div>
+    `).join("");
+
     const commentBlocks = comments.map((n) => `
       <div style="margin-bottom: 16px; padding: 12px; background: #f9fafb; border-radius: 8px; border-left: 3px solid ${n.mention_type === "mention" ? "#3b82f6" : "#8b5cf6"};">
         <p style="margin: 0 0 4px; font-size: 12px; color: #6b7280;">
@@ -90,7 +103,7 @@ export async function GET(req: NextRequest) {
       </div>
     `).join("");
 
-    const categoryCount = [assignments.length > 0, statusChanges.length > 0, comments.length > 0].filter(Boolean).length;
+    const categoryCount = [assignments.length > 0, statusChanges.length > 0, fileShares.length > 0, comments.length > 0].filter(Boolean).length;
     const heading = categoryCount > 1 || totalCount > 1
       ? `${totalCount} New Notifications`
       : assignments.length === 1 ? "New Assignment"
@@ -102,9 +115,9 @@ export async function GET(req: NextRequest) {
         <h2 style="color: #1f2937; font-size: 16px; margin-bottom: 16px;">
           ${heading}
         </h2>
-        ${assignmentBlocks}${statusChangeBlocks}${commentBlocks}
+        ${assignmentBlocks}${statusChangeBlocks}${fileShareBlocks}${commentBlocks}
         <p style="margin-top: 16px; font-size: 11px; color: #9ca3af;">
-          Edcetera Tracker · You received this because you were mentioned or are the item owner.
+          Edcetera Tracker · <a href="${siteUrl}" style="color: #3b82f6; text-decoration: none;">Sign in</a> to view and manage your items.
         </p>
       </div>
     `;
