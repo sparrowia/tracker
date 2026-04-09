@@ -10,6 +10,7 @@ import OwnerPicker from "@/components/owner-picker";
 import type { Initiative, Project, Person } from "@/lib/types";
 import AddProjectButton from "@/components/add-project-button";
 import SteeringCommitteeSection from "@/components/steering-committee-section";
+import ProjectRowActions from "@/components/project-row-actions";
 
 const HEALTH_OPTIONS: { value: string; label: string }[] = [
   { value: "on_track", label: "On Track" },
@@ -359,6 +360,7 @@ export default function InitiativeDetailPage() {
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Health</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Platform</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Target</th>
+                  <th className="w-10" />
                 </tr>
               </thead>
               <tbody>
@@ -376,6 +378,14 @@ export default function InitiativeDetailPage() {
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-600">{p.platform_status || "—"}</td>
                     <td className="px-4 py-3 text-sm text-gray-600">{formatDateShort(p.target_completion)}</td>
+                    <td className="px-2 py-3">
+                      <ProjectRowActions
+                        projectId={p.id}
+                        projectName={p.name}
+                        projectOwnerId={p.project_owner_id}
+                        onDeleted={() => setProjects((prev) => prev.filter((proj) => proj.id !== p.id))}
+                      />
+                    </td>
                   </tr>
                 ))}
               </tbody>

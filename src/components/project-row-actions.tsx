@@ -10,10 +10,12 @@ export default function ProjectRowActions({
   projectId,
   projectName,
   projectOwnerId,
+  onDeleted,
 }: {
   projectId: string;
   projectName: string;
   projectOwnerId: string | null;
+  onDeleted?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -57,6 +59,7 @@ export default function ProjectRowActions({
                 setDeleting(true);
                 await supabase.from("projects").delete().eq("id", projectId);
                 setOpen(false);
+                onDeleted?.();
                 router.refresh();
                 window.dispatchEvent(new CustomEvent("sidebar:refresh"));
               }}
