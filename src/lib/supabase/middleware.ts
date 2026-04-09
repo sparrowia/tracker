@@ -63,6 +63,7 @@ export async function updateSession(request: NextRequest) {
     !request.nextUrl.pathname.startsWith("/api/issues") &&
     !request.nextUrl.pathname.startsWith("/api/slack") &&
     !request.nextUrl.pathname.startsWith("/api/notify") &&
+    !request.nextUrl.pathname.startsWith("/api/agent") &&
     !request.nextUrl.pathname.startsWith("/api/invite/verify") &&
     !request.nextUrl.pathname.startsWith("/api/auth/reset-password")
   ) {
