@@ -25,7 +25,7 @@ export default async function ProjectsPage() {
       ) : (
         <div className="bg-white rounded-lg border border-gray-300 overflow-hidden">
           <div className="bg-gray-800 px-4 py-2.5 flex items-center justify-between">
-            <h1 className="text-xs font-semibold text-white uppercase tracking-wide">Projects</h1>
+            <h1 className="text-xs font-semibold text-white uppercase tracking-wide">Projects ({(projects as Project[]).length})</h1>
             <AddProjectButton />
           </div>
           <table className="min-w-full">
