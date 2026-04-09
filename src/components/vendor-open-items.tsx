@@ -63,6 +63,7 @@ export function VendorOpenItems({
   const [people, setPeople] = useState<Person[]>([]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [resolvingId, setResolvingId] = useState<string | null>(null);
   const [addType, setAddType] = useState<"action_item" | "blocker" | "raid_entry">("action_item");
   const [addTitle, setAddTitle] = useState("");
   const [addPriority, setAddPriority] = useState<PriorityLevel>("medium");
@@ -398,7 +399,8 @@ export function VendorOpenItems({
       ) : (
         <div>
           {/* Column headers */}
-          <div className="grid grid-cols-[60px_1fr_100px_140px_80px_80px_80px_90px] bg-gray-50 border-b border-gray-300 px-4 py-2">
+          <div className="grid grid-cols-[28px_60px_1fr_100px_140px_80px_80px_80px_90px] bg-gray-50 border-b border-gray-300 px-4 py-2">
+            <span />
             <span className="text-xs font-medium text-gray-500 uppercase">Type</span>
             <span className="text-xs font-medium text-gray-500 uppercase">Item</span>
             <span className="text-xs font-medium text-gray-500 uppercase">Project</span>
@@ -415,13 +417,36 @@ export function VendorOpenItems({
             const key = `${item.entity_type}-${item.entity_id}`;
             const isExpanded = expandedId === key;
 
+            const isResolving = resolvingId === key;
+
             return (
-              <div key={key}>
+              <div
+                key={key}
+                style={isResolving ? { transition: "all 350ms ease-out", backgroundColor: "#dcfce7", opacity: 0, maxHeight: 0, overflow: "hidden" } : undefined}
+              >
                 {/* Row */}
                 <div
                   onClick={() => toggleExpand(item)}
-                  className={`grid grid-cols-[60px_1fr_100px_140px_80px_80px_80px_90px] px-4 py-3 border-b border-gray-200 cursor-pointer transition-colors ${isExpanded ? "bg-blue-50/40" : "hover:bg-gray-50"}`}
+                  className={`grid grid-cols-[28px_60px_1fr_100px_140px_80px_80px_80px_90px] px-4 py-3 border-b border-gray-200 cursor-pointer transition-colors ${isExpanded ? "bg-blue-50/40" : "hover:bg-gray-50"}`}
                 >
+                  {/* Complete circle */}
+                  <span className="flex items-center">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const now = new Date().toISOString();
+                        supabase.from(tableName(item.entity_type)).update({ status: "complete", resolved_at: now }).eq("id", item.entity_id).then(() => {});
+                        setResolvingId(key);
+                        setTimeout(() => {
+                          setItems((prev) => prev.filter((i) => i.entity_id !== item.entity_id));
+                          setResolvingId(null);
+                          if (expandedId === key) { setExpandedId(null); setDetail(null); }
+                        }, 350);
+                      }}
+                      className="w-4 h-4 rounded-full border-2 border-gray-300 hover:border-green-500 hover:bg-green-50 transition-colors flex-shrink-0"
+                      title="Mark complete"
+                    />
+                  </span>
                   <span>
                     <span className={`inline-flex px-1.5 py-0.5 text-xs rounded ${TYPE_COLORS[item.entity_type] || "bg-gray-100 text-gray-700"}`}>
                       {TYPE_LABELS[item.entity_type] || item.entity_type}
