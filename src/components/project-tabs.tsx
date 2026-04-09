@@ -3556,23 +3556,21 @@ function DocsPanel({ projectId, projectCreatedBy, projectOwnerId, orgId, project
                 <div className="flex-1 px-6 py-4">
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="text-sm font-semibold text-gray-700">Files</h3>
-                    {canEditDocs && (
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => setShowLinkForm(true)}
-                          className="text-xs bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 px-3 py-1 rounded transition-colors font-medium"
-                        >
-                          + Link
-                        </button>
-                        <button
-                          onClick={() => fileInputRef.current?.click()}
-                          disabled={uploading}
-                          className="text-xs bg-blue-600 hover:bg-blue-500 disabled:bg-gray-400 text-white px-3 py-1 rounded transition-colors font-medium"
-                        >
-                          {uploading ? "Uploading..." : "+ Upload File"}
-                        </button>
-                      </div>
-                    )}
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setShowLinkForm(true)}
+                        className="text-xs bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 px-3 py-1 rounded transition-colors font-medium"
+                      >
+                        + Link
+                      </button>
+                      <button
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={uploading}
+                        className="text-xs bg-blue-600 hover:bg-blue-500 disabled:bg-gray-400 text-white px-3 py-1 rounded transition-colors font-medium"
+                      >
+                        {uploading ? "Uploading..." : "+ Upload File"}
+                      </button>
+                    </div>
                     <input
                       ref={fileInputRef}
                       type="file"
