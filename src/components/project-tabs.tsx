@@ -3691,27 +3691,20 @@ function DocsPanel({ projectId, projectCreatedBy, projectOwnerId, orgId, project
                         disabled={sharePersonIds.length === 0 || shareSending}
                         onClick={async () => {
                           setShareSending(true);
-                          const currentPerson = people.find((p) => p.id === userPersonId);
-                          const senderName = currentPerson?.full_name || "Someone";
-                          for (const pid of sharePersonIds) {
-                            const person = people.find((p) => p.id === pid);
-                            if (!person?.email) continue;
-                            await supabase.from("comment_notifications").insert({
-                              org_id: orgId,
-                              recipient_person_id: pid,
-                              recipient_email: person.email,
-                              comment_id: null,
-                              commenter_name: senderName,
-                              comment_body: shareNote || null,
-                              item_title: shareTarget.name,
-                              item_type: "file",
-                              mention_type: "file_share",
-                              assigned_by: senderName,
-                              shared_url: shareTarget.url,
-                              entity_id: null,
-                              project_slug: projectSlug,
-                            });
-                          }
+                          const recipients = sharePersonIds
+                            .map((pid) => { const p = people.find((p) => p.id === pid); return p?.email ? { email: p.email, name: p.full_name } : null; })
+                            .filter(Boolean);
+                          await fetch("/api/share", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              recipients,
+                              fileName: shareTarget.name,
+                              fileUrl: shareTarget.url,
+                              note: shareNote || null,
+                              projectSlug,
+                            }),
+                          });
                           setShareSending(false);
                           setShareTarget(null);
                           setShareNote("");
