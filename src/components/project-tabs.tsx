@@ -3719,7 +3719,7 @@ function DocsPanel({ projectId, projectCreatedBy, projectOwnerId, orgId, project
                         }}
                         className="text-xs bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-4 py-1.5 rounded font-medium"
                       >
-                        {shareSending ? "Sending..." : `Share with ${sharePersonIds.length} ${sharePersonIds.length === 1 ? "person" : "people"}`}
+                        {shareSending ? "Sending..." : sharePersonIds.length === 0 ? "Select people to share" : `Share with ${sharePersonIds.map((pid) => people.find((p) => p.id === pid)?.full_name?.split(" ")[0]).filter(Boolean).join(", ")}`}
                       </button>
                     </div>
                   )}
