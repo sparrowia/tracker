@@ -3664,10 +3664,10 @@ function DocsPanel({ projectId, projectCreatedBy, projectOwnerId, orgId, project
                         <select
                           value=""
                           onChange={(e) => {
-                            if (e.target.value && !sharePersonIds.includes(e.target.value)) {
-                              setSharePersonIds((prev) => [...prev, e.target.value]);
+                            const val = e.target.value;
+                            if (val && !sharePersonIds.includes(val)) {
+                              setSharePersonIds((prev) => [...prev, val]);
                             }
-                            e.target.value = "";
                           }}
                           className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
                         >
