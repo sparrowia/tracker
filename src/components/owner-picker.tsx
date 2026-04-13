@@ -111,10 +111,7 @@ export default function OwnerPicker({ value, onChange, people, onPersonAdded }: 
       className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
     >
       <option value="">Unassigned</option>
-      {people.filter((p) => p.is_agent).map((p) => (
-        <option key={p.id} value={p.id} style={{ color: "#7c3aed" }}>🤖 {p.full_name}</option>
-      ))}
-      {people.filter((p) => !p.is_agent).map((p) => (
+      {people.map((p) => (
         <option key={p.id} value={p.id} style={p.profile_id ? undefined : { color: "#9ca3af" }}>{p.full_name}{p.profile_id ? "" : " ○"}</option>
       ))}
       <option value={ADD_SENTINEL}>+ Add Person</option>

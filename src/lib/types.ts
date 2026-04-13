@@ -118,7 +118,6 @@ export interface Person {
   title: string | null;
   vendor_id: string | null;
   is_internal: boolean;
-  is_agent: boolean;
   profile_id: string | null;
   notes: string | null;
   created_by: string | null;
