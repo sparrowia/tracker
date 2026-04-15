@@ -645,7 +645,7 @@ export function VendorOpenItems({
                         people={people}
                         itemTitle={item.title}
                         itemType={TYPE_LABELS[item.entity_type] || item.entity_type}
-                        projectSlug={activeProject?.projectSlug || undefined}
+                        projectSlug={projectTabs.find((t) => t.projectId === item.project_id)?.projectSlug || undefined}
                         ownerId={item.owner_id}
                       />
                     </div>

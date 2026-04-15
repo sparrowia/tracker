@@ -285,6 +285,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
     const entry = entries.find((e) => e.id === deepLinkItemId);
     if (entry) {
       setActiveTab(entry.raid_type);
+      if (entry.resolved_at) setShowArchived(true);
       setTimeout(() => {
         document.getElementById(`raid-${deepLinkItemId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
       }, 200);
