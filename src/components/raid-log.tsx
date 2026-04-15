@@ -1640,7 +1640,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
               </div>
             </div>
             {archivedEntries.map((entry) => (
-              <div key={entry.id} className="bg-white px-3 py-2 border-b border-gray-200 last:border-b-0">
+              <div key={entry.id} id={`raid-${entry.id}`} className="bg-white px-3 py-2 border-b border-gray-200 last:border-b-0">
                 <div className="flex items-center gap-4 min-w-0">
                   <span className="text-xs text-gray-500 font-medium w-[80px] flex-shrink-0">{typeLabel[entry.raid_type]}</span>
                   <span className="text-sm font-semibold text-gray-900 truncate min-w-0">{entry.title}</span>
