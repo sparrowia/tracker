@@ -3163,7 +3163,7 @@ function DocsPanel({ projectId, projectCreatedBy, projectOwnerId, orgId, project
   const [showLinkForm, setShowLinkForm] = useState(false);
   const [linkTitle, setLinkTitle] = useState("");
   const [linkUrl, setLinkUrl] = useState("");
-  const [shareTarget, setShareTarget] = useState<{ name: string; url: string } | null>(null);
+  const [shareTarget, setShareTarget] = useState<{ name: string; url: string; storagePath?: string } | null>(null);
   const [shareNote, setShareNote] = useState("");
   const [sharePersonIds, setSharePersonIds] = useState<string[]>([]);
   const [shareSending, setShareSending] = useState(false);
@@ -3703,6 +3703,7 @@ function DocsPanel({ projectId, projectCreatedBy, projectOwnerId, orgId, project
                               recipients,
                               fileName: shareTarget.name,
                               fileUrl: shareTarget.url,
+                              storagePath: shareTarget.storagePath || null,
                               note: shareNote || null,
                               projectSlug,
                             }),
@@ -3799,7 +3800,7 @@ function DocsPanel({ projectId, projectCreatedBy, projectOwnerId, orgId, project
                             <div className="flex items-center gap-1.5 min-w-0 flex-1">
                               <div className="flex items-center gap-1.5 flex-shrink-0">
                                 <button
-                                  onClick={() => setShareTarget({ name: f.name, url: f.url })}
+                                  onClick={() => setShareTarget({ name: f.name, url: f.url, storagePath: `${projectId}/${f.name}` })}
                                   className="text-gray-400 hover:text-blue-500 transition-colors"
                                   title="Share"
                                 >

@@ -7,10 +7,17 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { recipients, fileName, fileUrl, note, projectSlug } = await req.json();
+  const { recipients, fileName, fileUrl, storagePath, note, projectSlug } = await req.json();
 
   if (!recipients || recipients.length === 0 || !fileName || !fileUrl) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+  }
+
+  // For project-files (private bucket), generate a 7-day signed URL instead of using the short-lived one from the client
+  let resolvedUrl = fileUrl;
+  if (storagePath) {
+    const { data: signed } = await supabase.storage.from("project-files").createSignedUrl(storagePath, 60 * 60 * 24 * 7);
+    if (signed?.signedUrl) resolvedUrl = signed.signedUrl;
   }
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://edcet-tracker.vercel.app";
@@ -33,7 +40,7 @@ export async function POST(req: NextRequest) {
             📎 ${fileName}
           </p>
           ${note ? `<p style="margin: 0 0 12px; font-size: 13px; color: #374151;">${note.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</p>` : ""}
-          <a href="${fileUrl}" style="display: inline-block; padding: 8px 16px; background: #3b82f6; color: white; text-decoration: none; border-radius: 6px; font-size: 13px; font-weight: 500;">
+          <a href="${resolvedUrl}" style="display: inline-block; padding: 8px 16px; background: #3b82f6; color: white; text-decoration: none; border-radius: 6px; font-size: 13px; font-weight: 500;">
             Open File →
           </a>
         </div>
