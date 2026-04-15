@@ -3204,11 +3204,13 @@ function DocsPanel({ projectId, projectCreatedBy, projectOwnerId, orgId, project
       if (data?.notes) setProjectNotes(data.notes);
     });
     // Load files from storage
-    supabase.storage.from("project-files").list(`${projectId}`, { limit: 100 }).then(({ data }) => {
-      if (data) {
-        setFileList(data.map((f) => ({
+    supabase.storage.from("project-files").list(`${projectId}`, { limit: 100 }).then(async ({ data }) => {
+      if (data && data.length > 0) {
+        const paths = data.map((f) => `${projectId}/${f.name}`);
+        const { data: signed } = await supabase.storage.from("project-files").createSignedUrls(paths, 3600);
+        setFileList(data.map((f, i) => ({
           name: f.name,
-          url: supabase.storage.from("project-files").getPublicUrl(`${projectId}/${f.name}`).data.publicUrl,
+          url: signed?.[i]?.signedUrl || "",
           created_at: f.created_at || "",
         })));
       }
@@ -3584,8 +3586,8 @@ function DocsPanel({ projectId, projectCreatedBy, projectOwnerId, orgId, project
                           const path = `${projectId}/${Date.now()}-${file.name}`;
                           const { error } = await supabase.storage.from("project-files").upload(path, file);
                           if (!error) {
-                            const url = supabase.storage.from("project-files").getPublicUrl(path).data.publicUrl;
-                            setFileList((prev) => [...prev, { name: file.name, url, created_at: new Date().toISOString() }]);
+                            const { data: signed } = await supabase.storage.from("project-files").createSignedUrl(path, 3600);
+                            setFileList((prev) => [...prev, { name: file.name, url: signed?.signedUrl || "", created_at: new Date().toISOString() }]);
                           }
                         }
                         setUploading(false);
@@ -3783,8 +3785,8 @@ function DocsPanel({ projectId, projectCreatedBy, projectOwnerId, orgId, project
                                   const { error } = await supabase.storage.from("project-files").copy(oldPath, newPath);
                                   if (!error) {
                                     await supabase.storage.from("project-files").remove([oldPath]);
-                                    const newUrl = supabase.storage.from("project-files").getPublicUrl(newPath).data.publicUrl;
-                                    setFileList((prev) => prev.map((file, j) => j === i ? { ...file, name: newName, url: newUrl } : file));
+                                    const { data: signed } = await supabase.storage.from("project-files").createSignedUrl(newPath, 3600);
+                                    setFileList((prev) => prev.map((file, j) => j === i ? { ...file, name: newName, url: signed?.signedUrl || "" } : file));
                                   }
                                 }
                                 setRenamingFileIdx(null);
