@@ -62,6 +62,7 @@ export function VendorOpenItems({
   const [detail, setDetail] = useState<Record<string, unknown> | null>(null);
   const [people, setPeople] = useState<Person[]>([]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [allProjects, setAllProjects] = useState<{ id: string; name: string; slug: string }[]>([]);
   const [showAddForm, setShowAddForm] = useState(false);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
   const [addType, setAddType] = useState<"action_item" | "blocker" | "raid_entry">("action_item");
@@ -80,12 +81,14 @@ export function VendorOpenItems({
 
   async function ensurePeople() {
     if (people.length > 0) return;
-    const [{ data: ppl }, { data: vnd }] = await Promise.all([
+    const [{ data: ppl }, { data: vnd }, { data: prj }] = await Promise.all([
       supabase.from("people").select("*").order("full_name"),
       supabase.from("vendors").select("*").order("name"),
+      supabase.from("projects").select("id, name, slug").order("name"),
     ]);
     if (ppl) setPeople(ppl as Person[]);
     if (vnd) setVendors(vnd as Vendor[]);
+    if (prj) setAllProjects(prj as { id: string; name: string; slug: string }[]);
   }
 
   function tableName(entityType: string) {
@@ -463,11 +466,11 @@ export function VendorOpenItems({
                   <span className="text-xs text-gray-500 truncate">
                     {item.project_id ? (
                       <Link
-                        href={`/projects/${projectTabs.find((t) => t.projectId === item.project_id)?.projectSlug || ""}`}
+                        href={`/projects/${projectTabs.find((t) => t.projectId === item.project_id)?.projectSlug || allProjects.find((p) => p.id === item.project_id)?.slug || ""}`}
                         className="hover:text-blue-600"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        {projectNameMap[item.project_id] || "—"}
+                        {projectNameMap[item.project_id] || allProjects.find((p) => p.id === item.project_id)?.name || "—"}
                       </Link>
                     ) : (
                       <span className="text-gray-400">—</span>
@@ -616,8 +619,28 @@ export function VendorOpenItems({
                             <span className="text-sm text-gray-700">{vendors.find((v) => v.id === item.vendor_id)?.name || "—"}</span>
                           )}
                         </div>
-                        <span className="px-5 py-2.5 bg-gray-50/50 border-b border-l border-gray-200" />
-                        <div className="px-3 py-2.5 border-b border-gray-200" />
+                        <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-200">Project</span>
+                        <div className="px-3 py-1.5 border-b border-gray-200">
+                          {canEdit ? (
+                            <select
+                              value={item.project_id || ""}
+                              onChange={(e) => {
+                                const newProjectId = e.target.value || null;
+                                supabase.from(tableName(item.entity_type)).update({ project_id: newProjectId }).eq("id", item.entity_id).then(() => {});
+                                setItems((prev) => prev.map((i) => i.entity_id === item.entity_id ? { ...i, project_id: newProjectId } as VendorAccountabilityRow : i));
+                                if (detail) setDetail({ ...detail, project_id: newProjectId });
+                              }}
+                              className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            >
+                              <option value="">No Project</option>
+                              {allProjects.map((p) => (
+                                <option key={p.id} value={p.id}>{p.name}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <span className="text-sm text-gray-700">{item.project_id ? (projectNameMap[item.project_id] || allProjects.find((p) => p.id === item.project_id)?.name || "—") : "—"}</span>
+                          )}
+                        </div>
                       </div>
                     </div>
 
@@ -625,7 +648,7 @@ export function VendorOpenItems({
                     {item.project_id && (
                       <div className="flex justify-end px-5 py-2 bg-yellow-50/25 border-t border-gray-200">
                         <a
-                          href={`/projects/${projectTabs.find((t) => t.projectId === item.project_id)?.projectSlug || ""}?item=${item.entity_id}`}
+                          href={`/projects/${projectTabs.find((t) => t.projectId === item.project_id)?.projectSlug || allProjects.find((p) => p.id === item.project_id)?.slug || ""}?item=${item.entity_id}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="inline-flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800"
