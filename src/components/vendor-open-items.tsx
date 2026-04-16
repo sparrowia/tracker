@@ -176,12 +176,19 @@ export function VendorOpenItems({
         };
       }
     } else {
+      // Generate display_id by finding the max existing issue number
+      const { data: existing } = await supabase.from("raid_entries").select("display_id").eq("org_id", orgId).eq("raid_type", "issue");
+      const maxNum = (existing || []).reduce((max, e) => {
+        const num = parseInt((e.display_id as string).slice(1));
+        return isNaN(num) ? max : Math.max(max, num);
+      }, 0);
       const { data } = await supabase.from("raid_entries").insert({
         org_id: orgId,
         title: addTitle.trim(),
         priority: addPriority,
         vendor_id: vendorId,
         raid_type: "issue",
+        display_id: `I${maxNum + 1}`,
         status: "pending",
         created_by: profileId,
       }).select("*").single();
