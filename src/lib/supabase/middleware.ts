@@ -95,5 +95,9 @@ export async function updateSession(request: NextRequest) {
     }
   }
 
+  // Prevent CDN/edge caching of authenticated pages so navigating back
+  // always fetches fresh data (e.g. externally submitted issues).
+  supabaseResponse.headers.set("Cache-Control", "no-store, max-age=0");
+
   return supabaseResponse;
 }
