@@ -57,12 +57,7 @@ export async function GET(req: NextRequest) {
       if (!n.project_slug) return `${siteUrl}/dashboard`;
       const base = `${siteUrl}/projects/${n.project_slug}`;
       if (!n.entity_id) return base;
-      // Map item_type to tab name
-      const type = (n.item_type || "").toLowerCase();
-      let tab = "raid";
-      if (type.includes("action")) tab = "actions";
-      else if (type.includes("blocker")) tab = "blockers";
-      return `${base}?tab=${tab}&item=${n.entity_id}`;
+      return `${base}?item=${n.entity_id}`;
     }
 
     const assignmentBlocks = assignments.map((n) => `

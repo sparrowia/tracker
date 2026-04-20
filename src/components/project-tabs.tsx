@@ -96,7 +96,15 @@ export default function ProjectTabs({
   const [tabOrder, setTabOrder] = useState<Tab[]>(loadTabOrder);
   const urlTab = searchParams.get("tab") as Tab | null;
   const urlItem = searchParams.get("item");
-  const [active, setActive] = useState<Tab>(urlTab && DEFAULT_ORDER.includes(urlTab) ? urlTab : tabOrder[0]);
+  // Auto-detect which tab owns the deep-linked item
+  const resolvedTab: Tab | null = urlTab && DEFAULT_ORDER.includes(urlTab) ? urlTab
+    : urlItem ? (
+      actions.some((a) => a.id === urlItem) ? "actions"
+      : blockers.some((b) => b.id === urlItem) ? "blockers"
+      : raidEntries.some((r) => r.id === urlItem) ? "raid"
+      : null
+    ) : null;
+  const [active, setActive] = useState<Tab>(resolvedTab || tabOrder[0]);
   const [searchFilter, setSearchFilter] = useState("");
   const [dragTab, setDragTab] = useState<Tab | null>(null);
   const [dragOverTab, setDragOverTab] = useState<Tab | null>(null);
@@ -325,11 +333,11 @@ export default function ProjectTabs({
         </div>
 
         <div style={{ display: active === "blockers" ? "block" : "none" }}>
-          <BlockersPanel blockers={blockers} people={peopleList} vendors={vendorsList} onPersonAdded={addPerson} onVendorAdded={addVendor} addUndo={addUndo} onCountChange={setBlockerCount} intakeSourceMap={intakeSourceMap} onNewItemsSuggested={onNewItemsSuggested} registerAdder={(fn) => { itemAddersRef.current.addBlocker = fn; return () => { itemAddersRef.current.addBlocker = undefined; }; }} registerResolver={(fn) => { itemAddersRef.current.resolveBlocker = fn; return () => { itemAddersRef.current.resolveBlocker = undefined; }; }} registerUpdater={(fn) => { itemAddersRef.current.updateBlocker = fn; return () => { itemAddersRef.current.updateBlocker = undefined; }; }} onMeetingToggle={bumpAgendaRefresh} orgId={project.org_id} projectSlug={project.slug} searchFilter={searchFilter} deepLinkItemId={urlTab === "blockers" ? urlItem : undefined} />
+          <BlockersPanel blockers={blockers} people={peopleList} vendors={vendorsList} onPersonAdded={addPerson} onVendorAdded={addVendor} addUndo={addUndo} onCountChange={setBlockerCount} intakeSourceMap={intakeSourceMap} onNewItemsSuggested={onNewItemsSuggested} registerAdder={(fn) => { itemAddersRef.current.addBlocker = fn; return () => { itemAddersRef.current.addBlocker = undefined; }; }} registerResolver={(fn) => { itemAddersRef.current.resolveBlocker = fn; return () => { itemAddersRef.current.resolveBlocker = undefined; }; }} registerUpdater={(fn) => { itemAddersRef.current.updateBlocker = fn; return () => { itemAddersRef.current.updateBlocker = undefined; }; }} onMeetingToggle={bumpAgendaRefresh} orgId={project.org_id} projectSlug={project.slug} searchFilter={searchFilter} deepLinkItemId={resolvedTab === "blockers" ? urlItem : undefined} />
         </div>
 
         <div style={{ display: active === "raid" ? "block" : "none" }}>
-          <RaidLog initialEntries={raidEntries} project={project} people={peopleList} vendors={vendorsList} onPersonAdded={addPerson} onVendorAdded={addVendor} addUndo={addUndo} onCountChange={setRaidCount} intakeSourceMap={intakeSourceMap} onMeetingToggle={bumpAgendaRefresh} searchFilter={searchFilter} deepLinkItemId={urlTab === "raid" ? urlItem : undefined}
+          <RaidLog initialEntries={raidEntries} project={project} people={peopleList} vendors={vendorsList} onPersonAdded={addPerson} onVendorAdded={addVendor} addUndo={addUndo} onCountChange={setRaidCount} intakeSourceMap={intakeSourceMap} onMeetingToggle={bumpAgendaRefresh} searchFilter={searchFilter} deepLinkItemId={resolvedTab === "raid" ? urlItem : undefined}
             onConvertedToAction={async (actionId) => {
               const { data } = await supabase.from("action_items").select("*, owner:people!action_items_owner_id_fkey(*), vendor:vendors(*)").eq("id", actionId).single();
               if (data && itemAddersRef.current.addAction) {
@@ -348,7 +356,7 @@ export default function ProjectTabs({
         </div>
 
         <div style={{ display: active === "actions" ? "block" : "none" }}>
-          <ActionItemsPanel actions={actions} people={peopleList} vendors={vendorsList} onPersonAdded={addPerson} onVendorAdded={addVendor} addUndo={addUndo} onCountChange={setActionCount} intakeSourceMap={intakeSourceMap} onNewItemsSuggested={onNewItemsSuggested} registerAdder={(fn) => { itemAddersRef.current.addAction = fn; return () => { itemAddersRef.current.addAction = undefined; }; }} registerResolver={(fn) => { itemAddersRef.current.resolveAction = fn; return () => { itemAddersRef.current.resolveAction = undefined; }; }} registerUpdater={(fn) => { itemAddersRef.current.updateAction = fn; return () => { itemAddersRef.current.updateAction = undefined; }; }} onMeetingToggle={bumpAgendaRefresh} orgId={project.org_id} projectId={project.id} projectSlug={project.slug} searchFilter={searchFilter} deepLinkItemId={urlItem}
+          <ActionItemsPanel actions={actions} people={peopleList} vendors={vendorsList} onPersonAdded={addPerson} onVendorAdded={addVendor} addUndo={addUndo} onCountChange={setActionCount} intakeSourceMap={intakeSourceMap} onNewItemsSuggested={onNewItemsSuggested} registerAdder={(fn) => { itemAddersRef.current.addAction = fn; return () => { itemAddersRef.current.addAction = undefined; }; }} registerResolver={(fn) => { itemAddersRef.current.resolveAction = fn; return () => { itemAddersRef.current.resolveAction = undefined; }; }} registerUpdater={(fn) => { itemAddersRef.current.updateAction = fn; return () => { itemAddersRef.current.updateAction = undefined; }; }} onMeetingToggle={bumpAgendaRefresh} orgId={project.org_id} projectId={project.id} projectSlug={project.slug} searchFilter={searchFilter} deepLinkItemId={resolvedTab === "actions" ? urlItem : undefined}
             onConvertedToRaid={async (raidId) => {
               const { data } = await supabase.from("raid_entries").select("*, owner:people!raid_entries_owner_id_fkey(*), reporter:people!raid_entries_reporter_id_fkey(*), vendor:vendors(*)").eq("id", raidId).single();
               if (data && itemAddersRef.current.addRaid) {
