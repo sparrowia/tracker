@@ -1618,15 +1618,16 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
   const typeLabel: Record<RaidType, string> = { risk: "Risk", assumption: "Assumption", issue: "Issue", decision: "Decision" };
 
   function renderArchived() {
+    const filteredArchived = applyFilters(archivedEntries);
     return (
       <div className="rounded-lg border border-gray-300 overflow-hidden">
         <div className="bg-gray-700 px-4 h-9 flex items-center">
           <h3 className="text-xs font-semibold text-white uppercase tracking-wide">
-            Archived ({archivedEntries.length})
+            Archived ({filteredArchived.length !== archivedEntries.length ? `${filteredArchived.length} of ${archivedEntries.length}` : archivedEntries.length})
           </h3>
         </div>
-        {archivedEntries.length === 0 ? (
-          <p className="text-sm text-gray-400 p-4">No resolved items.</p>
+        {filteredArchived.length === 0 ? (
+          <p className="text-sm text-gray-400 p-4">{archivedEntries.length === 0 ? "No resolved items." : "No matches."}</p>
         ) : (
           <div>
             <div className="bg-gray-50 px-3 py-1 border-b border-gray-300">
@@ -1639,7 +1640,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                 <span className="w-[68px]" />
               </div>
             </div>
-            {archivedEntries.map((entry) => (
+            {filteredArchived.map((entry) => (
               <div key={entry.id} id={`raid-${entry.id}`} className="bg-white px-3 py-2 border-b border-gray-200 last:border-b-0">
                 <div className="flex items-center gap-4 min-w-0">
                   <span className="text-xs text-gray-500 font-medium w-[80px] flex-shrink-0">{typeLabel[entry.raid_type]}</span>
