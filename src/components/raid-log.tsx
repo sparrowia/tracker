@@ -1640,41 +1640,113 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                 <span className="w-[68px]" />
               </div>
             </div>
-            {filteredArchived.map((entry) => (
-              <div key={entry.id} id={`raid-${entry.id}`} className="bg-white px-3 py-2 border-b border-gray-200 last:border-b-0">
-                <div className="flex items-center gap-4 min-w-0">
-                  <span className="text-xs text-gray-500 font-medium w-[80px] flex-shrink-0">{typeLabel[entry.raid_type]}</span>
-                  <span className="text-sm font-semibold text-gray-900 truncate min-w-0">{entry.title}</span>
-                  <div className="flex-1" />
-                  <div className="w-[68px] flex-shrink-0 flex justify-end">
-                    <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border ${priorityColor(entry.priority)}`}>{priorityLabel(entry.priority)}</span>
-                  </div>
-                  <div className="w-[150px] flex-shrink-0 flex justify-end">
-                    {entry.owner ? (
-                      <div className="flex items-center gap-1">
-                        <span className="w-5 h-5 rounded-full bg-blue-100 text-[9px] font-medium text-blue-700 flex items-center justify-center flex-shrink-0">
-                          {entry.owner.full_name.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
-                        </span>
-                        <span className="text-xs text-gray-600 truncate">{entry.owner.full_name}</span>
+            {filteredArchived.map((entry) => {
+              const isExpanded = expandedId === entry.id;
+              const badge = statusBadge(entry.status);
+              return (
+                <Fragment key={entry.id}>
+                  <div id={`raid-${entry.id}`} className="bg-white px-3 py-2 border-b border-gray-200 last:border-b-0 cursor-pointer hover:bg-gray-50" onClick={() => toggleExpand(entry.id)}>
+                    <div className="flex items-center gap-4 min-w-0">
+                      <span className="text-xs text-gray-500 font-medium w-[80px] flex-shrink-0">{typeLabel[entry.raid_type]}</span>
+                      <span className="text-sm font-semibold text-gray-900 truncate min-w-0">{entry.title}</span>
+                      <div className="flex-1" />
+                      <div className="w-[68px] flex-shrink-0 flex justify-end">
+                        <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border ${priorityColor(entry.priority)}`}>{priorityLabel(entry.priority)}</span>
                       </div>
-                    ) : (
-                      <span className="text-xs text-gray-400 italic">Unassigned</span>
-                    )}
+                      <div className="w-[150px] flex-shrink-0 flex justify-end">
+                        {entry.owner ? (
+                          <div className="flex items-center gap-1">
+                            <span className="w-5 h-5 rounded-full bg-blue-100 text-[9px] font-medium text-blue-700 flex items-center justify-center flex-shrink-0">
+                              {entry.owner.full_name.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
+                            </span>
+                            <span className="text-xs text-gray-600 truncate">{entry.owner.full_name}</span>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-gray-400 italic">Unassigned</span>
+                        )}
+                      </div>
+                      <span className="text-xs text-gray-500 w-[80px] text-right flex-shrink-0">
+                        {entry.resolved_at ? new Date(entry.resolved_at).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—"}
+                      </span>
+                      <div className="w-[68px] flex-shrink-0 flex justify-end">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleReopen(entry.id); }}
+                          className="text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors"
+                        >
+                          Reopen
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                  <span className="text-xs text-gray-500 w-[80px] text-right flex-shrink-0">
-                    {entry.resolved_at ? new Date(entry.resolved_at).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—"}
-                  </span>
-                  <div className="w-[68px] flex-shrink-0 flex justify-end">
-                    <button
-                      onClick={() => handleReopen(entry.id)}
-                      className="text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors"
-                    >
-                      Reopen
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
+                  {isExpanded && (
+                    <div className="bg-yellow-50/25 border-b border-gray-200" onClick={(e) => e.stopPropagation()}>
+                      <div className="px-5 pt-4 pb-3 text-base font-semibold text-gray-900">{entry.title}</div>
+                      <div className="grid grid-cols-2 gap-4 px-5 py-3 border-t border-gray-200">
+                        <div className="rounded border border-gray-200 bg-white p-3">
+                          <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Description</span>
+                          <div className="text-sm text-gray-800 whitespace-pre-wrap mt-1">{entry.description || <span className="text-gray-400 italic">No description</span>}</div>
+                        </div>
+                        <div className="rounded border border-gray-200 bg-white p-3">
+                          <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Meeting Notes</span>
+                          <div className="text-sm text-gray-800 whitespace-pre-wrap mt-1">{entry.notes || <span className="text-gray-400 italic">No notes</span>}</div>
+                        </div>
+                      </div>
+                      {entry.raid_type === "issue" && entry.next_steps && (
+                        <div className="px-5 pb-3">
+                          <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Next Steps</span>
+                          <div className="text-sm text-gray-800 whitespace-pre-wrap mt-1 rounded border border-gray-200 bg-white p-2 font-bold">{entry.next_steps}</div>
+                        </div>
+                      )}
+                      {entry.impact && (
+                        <div className="px-5 pb-3">
+                          <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Impact</span>
+                          <div className="text-sm text-gray-800 whitespace-pre-wrap mt-1 rounded border border-gray-200 bg-white p-2">{entry.impact}</div>
+                        </div>
+                      )}
+                      <div className="border-t border-gray-200 bg-white grid grid-cols-[120px_1fr_120px_1fr] items-stretch text-sm">
+                        <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-200">Status</span>
+                        <div className="px-3 py-2.5 border-b border-gray-200">
+                          <span className={`inline-flex px-1.5 py-0.5 text-xs rounded ${badge.className}`}>{badge.label}</span>
+                        </div>
+                        <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-200">Owner</span>
+                        <div className="px-3 py-2.5 border-b border-gray-200 text-gray-700">{entry.owner?.full_name || <span className="text-gray-400 italic">Unassigned</span>}</div>
+
+                        <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-200">Reporter</span>
+                        <div className="px-3 py-2.5 border-b border-gray-200 text-gray-700">{entry.reporter?.full_name || <span className="text-gray-400 italic">—</span>}</div>
+                        <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-200">Vendor</span>
+                        <div className="px-3 py-2.5 border-b border-gray-200 text-gray-700">{entry.vendor?.name || <span className="text-gray-400 italic">—</span>}</div>
+
+                        {entry.raid_type === "decision" ? (
+                          <>
+                            <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-200">Decision Date</span>
+                            <div className="px-3 py-2.5 border-b border-gray-200 text-gray-700 col-span-3">{entry.decision_date ? formatDateShort(entry.decision_date) : <span className="text-gray-400 italic">—</span>}</div>
+                          </>
+                        ) : (
+                          <>
+                            <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-200">Due Date</span>
+                            <div className="px-3 py-2.5 border-b border-gray-200 text-gray-700">{entry.due_date ? formatDateShort(entry.due_date) : <span className="text-gray-400 italic">—</span>}</div>
+                            <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-200">Resolved</span>
+                            <div className="px-3 py-2.5 border-b border-gray-200 text-gray-700">{entry.resolved_at ? new Date(entry.resolved_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : <span className="text-gray-400 italic">—</span>}</div>
+                          </>
+                        )}
+                      </div>
+                      <div className="bg-yellow-50/25">
+                        <CommentThread
+                          raidEntryId={entry.id}
+                          orgId={project.org_id}
+                          people={people}
+                          itemTitle={entry.title}
+                          itemType={entry.raid_type}
+                          projectName={project.name}
+                          projectSlug={project.slug}
+                          ownerId={entry.owner_id}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </Fragment>
+              );
+            })}
           </div>
         )}
       </div>
