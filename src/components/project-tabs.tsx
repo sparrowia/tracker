@@ -1472,7 +1472,7 @@ function ActionItemsPanel({
     });
   }, [registerUpdater]);
 
-  useEffect(() => { onCountChange?.(actions.filter((a) => a.status !== "complete").length); }, [actions, onCountChange]);
+  useEffect(() => { onCountChange?.(actions.filter((a) => !a.resolved_at).length); }, [actions, onCountChange]);
 
   const actionSearchLower = searchFilter.toLowerCase();
   const allFilteredActions = searchFilter
@@ -1481,8 +1481,8 @@ function ActionItemsPanel({
         return text.includes(actionSearchLower);
       })
     : actions;
-  const filteredActions = allFilteredActions.filter((a) => a.status !== "complete");
-  const archivedActions = allFilteredActions.filter((a) => a.status === "complete").sort((a, b) => (b.resolved_at || b.updated_at).localeCompare(a.resolved_at || a.updated_at));
+  const filteredActions = allFilteredActions.filter((a) => !a.resolved_at);
+  const archivedActions = allFilteredActions.filter((a) => a.resolved_at).sort((a, b) => (b.resolved_at || b.updated_at).localeCompare(a.resolved_at || a.updated_at));
 
   const [showArchived, setShowArchived] = useState(false);
   const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set());
@@ -1853,7 +1853,7 @@ function ActionItemsPanel({
       newParentId = targetAction.parent_id;
       // Get siblings sorted
       const siblings = actions
-        .filter((a) => a.parent_id === newParentId && a.id !== draggedId && a.status !== "complete")
+        .filter((a) => a.parent_id === newParentId && a.id !== draggedId && !a.resolved_at)
         .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
       const targetIdx = siblings.findIndex((a) => a.id === targetId);
       if (zone === "above") {
