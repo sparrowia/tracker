@@ -262,10 +262,18 @@ export default function TimelinePage() {
                       const complete = m.status === "complete";
                       const expanded = expandedId === m.id;
                       const linkedHealth = m.project?.health || m.initiative?.health;
-                      const dateStr = formatDateShort(m.target_date);
                       const children = getChildren(m.id);
                       const hasChildren = children.length > 0;
                       const childrenOpen = expandedChildren.has(m.id);
+                      let dateStr = formatDateShort(m.target_date);
+                      if (hasChildren) {
+                        const times = [parseDate(m.target_date).getTime(), ...children.map((c) => parseDate(c.target_date).getTime())];
+                        const min = new Date(Math.min(...times));
+                        const max = new Date(Math.max(...times));
+                        const minKey = toDateKey(min);
+                        const maxKey = toDateKey(max);
+                        dateStr = minKey === maxKey ? formatDateShort(minKey) : `${formatDateShort(minKey)} → ${formatDateShort(maxKey)}`;
+                      }
                       return (
                         <div key={m.id} className={cn("border-b border-gray-200", complete ? "" : proposed ? "bg-gray-50/50" : (m.milestone_type === "project" || m.milestone_type === "initiative") && "bg-yellow-50/60")}>
                           <div className={cn("flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors", complete ? "opacity-50 hover:opacity-70" : proposed ? "hover:bg-gray-50" : "hover:bg-yellow-50")} onClick={() => setExpandedId(expanded ? null : m.id)}>
@@ -275,7 +283,7 @@ export default function TimelinePage() {
                               </button>
                             ) : <span className="w-4 flex-shrink-0" />}
                             <span className={cn("w-2.5 h-2.5 rounded-full flex-shrink-0", complete ? "bg-green-500" : proposed ? "border-2 border-dashed border-gray-400" : "bg-gray-700")} />
-                            <span className={cn("text-xs w-16 flex-shrink-0 font-medium", complete ? "text-gray-400" : "text-gray-500")}>{dateStr}</span>
+                            <span className={cn("text-xs flex-shrink-0 font-medium whitespace-nowrap", hasChildren ? "w-36" : "w-16", complete ? "text-gray-400" : "text-gray-500")}>{dateStr}</span>
                             <span className={cn("text-sm font-semibold flex-1 truncate", complete ? "text-gray-400" : proposed ? "text-gray-500" : "")}>
                               {m.title}
                               {hasChildren && <span className="ml-1.5 text-xs font-normal text-gray-400">({children.length})</span>}
