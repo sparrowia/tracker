@@ -1375,7 +1375,7 @@ const ACTION_COLUMNS: { key: ActionColumnKey; label: string; width: string }[] =
   { key: "owner", label: "Owner", width: "w-[150px]" },
   { key: "vendor", label: "Vendor", width: "w-[100px]" },
   { key: "stage", label: "Stage", width: "w-[88px]" },
-  { key: "due_date", label: "Due Date", width: "w-[80px]" },
+  { key: "due_date", label: "Due Date", width: "w-[140px]" },
   { key: "age", label: "Age", width: "w-12" },
 
   { key: "first_flagged", label: "Flagged", width: "w-[80px]" },
@@ -1599,8 +1599,21 @@ function ActionItemsPanel({
         const stageLabel = a.stage === "pre_launch" ? "Pre-Launch" : a.stage === "post_launch" ? "Post-Launch" : "—";
         return <span className="text-xs text-gray-600 flex-shrink-0 w-[88px] text-right">{stageLabel}</span>;
       }
-      case "due_date":
-        return <span className="text-xs text-gray-600 flex-shrink-0 w-[80px] text-right">{formatDateShort(a.due_date)}</span>;
+      case "due_date": {
+        const children = actions.filter((x) => x.parent_id === a.id);
+        if (children.length > 0) {
+          const dates = [a.due_date, ...children.map((c) => c.due_date)].filter((d): d is string => !!d);
+          if (dates.length >= 2) {
+            const sorted = [...dates].sort();
+            const min = sorted[0];
+            const max = sorted[sorted.length - 1];
+            if (min !== max) {
+              return <span className="text-xs text-gray-600 flex-shrink-0 w-[140px] text-right whitespace-nowrap">{formatDateShort(min)} → {formatDateShort(max)}</span>;
+            }
+          }
+        }
+        return <span className="text-xs text-gray-600 flex-shrink-0 w-[140px] text-right">{formatDateShort(a.due_date)}</span>;
+      }
       case "age":
         return <span className="text-xs text-gray-500 font-medium flex-shrink-0 w-12 text-right">{a.age_days != null ? formatAge(a.age_days) : ""}</span>;
       case "first_flagged":
