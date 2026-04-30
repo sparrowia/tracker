@@ -762,6 +762,15 @@ function VendorChangelogToggle({ entityType, entityId, orgId, people }: { entity
                   );
                 }
 
+                if (log.action === "created") {
+                  return (
+                    <div key={log.id} className="flex items-baseline gap-2 text-xs">
+                      <span className="text-gray-400 flex-shrink-0 w-[110px]">{when}</span>
+                      <span className="text-gray-600"><span className="font-medium text-gray-700">{who}</span> — Created</span>
+                    </div>
+                  );
+                }
+
                 return (
                   <div key={log.id} className="flex items-baseline gap-2 text-xs">
                     <span className="text-gray-400 flex-shrink-0 w-[110px]">{when}</span>
