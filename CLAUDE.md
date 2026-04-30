@@ -344,6 +344,7 @@ RAID entries have a `due_date` column (migration: `20260327000002_raid_due_date.
 - Uses the existing `activity_log` table
 - All RAID field edits and comments are logged with person, date/time, field name, old/new values
 - Human-readable labels for owner, vendor, status, priority fields (resolves IDs to names)
+- **Created entry**: AFTER INSERT triggers on `action_items`, `raid_entries`, and `blockers` write a `created` row to `activity_log` using the entity's `created_by` + `created_at`, so the changelog always shows who opened the item. Backfilled for existing rows in migration `20260430000001_log_entity_created.sql`. The 3 changelog panels (`ActionChangelogPanel` in project-tabs, `ChangelogPanel` in raid-log, `VendorChangelogToggle` in vendor-open-items) render `action === 'created'` as "&lt;Who&gt; — Created". Rows with NULL `created_by` show as "System".
 
 ## AI Contact Extraction
 
