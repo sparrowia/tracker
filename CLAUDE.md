@@ -588,6 +588,7 @@ The vendor detail page (`/settings/vendors/[id]`) is the hub for vendor meeting 
 - **Changelog** — "View changelog" in detail panels for all entity types
 - **"My Company" sidebar link** — vendors see their own vendor page via Building icon in sidebar
 - **Last Updated column** — replaces Age, shows relative time (3h ago, yesterday, 2w ago)
+- **Covered column (Fire tab only)** — rightmost checkbox on the 🔥 tab, used to mark items as discussed during a meeting. Checked rows grey out (`opacity-40`) while collapsed; expanded detail stays full opacity. State is per-user/per-device via `localStorage` (`vendor-covered-${vendorId}` → `{ date, ids[] }`) and resets daily — if the stored date isn't today, the entry is dropped on load. Pure UX state, no DB schema. Implemented in `src/components/vendor-open-items.tsx`.
 
 ## Two-Flag Meeting Toggle
 
