@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { priorityColor, priorityLabel, statusBadge, formatAge, formatDateShort } from "@/lib/utils";
@@ -69,7 +69,43 @@ export function VendorOpenItems({
   const [addTitle, setAddTitle] = useState("");
   const [addPriority, setAddPriority] = useState<PriorityLevel>("medium");
   const [addSaving, setAddSaving] = useState(false);
+  const [coveredIds, setCoveredIds] = useState<Set<string>>(new Set());
   const supabase = createClient();
+
+  // Daily-reset "Covered" state for the Fire tab — persisted per vendor in localStorage
+  // with today's date. If the stored date isn't today, we drop the entry on read.
+  const coveredStorageKey = `vendor-covered-${vendorId}`;
+  function todayKey() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = localStorage.getItem(coveredStorageKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as { date: string; ids: string[] };
+      if (parsed.date === todayKey() && Array.isArray(parsed.ids)) {
+        setCoveredIds(new Set(parsed.ids));
+      } else {
+        localStorage.removeItem(coveredStorageKey);
+      }
+    } catch {
+      localStorage.removeItem(coveredStorageKey);
+    }
+  }, [coveredStorageKey]);
+
+  function toggleCovered(key: string) {
+    setCoveredIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      try {
+        localStorage.setItem(coveredStorageKey, JSON.stringify({ date: todayKey(), ids: Array.from(next) }));
+      } catch {}
+      return next;
+    });
+  }
   const { role, profileId } = useRole();
   const canEdit = role === "super_admin" || role === "admin" || role === "user";
 
@@ -409,7 +445,7 @@ export function VendorOpenItems({
       ) : (
         <div>
           {/* Column headers */}
-          <div className="grid grid-cols-[28px_60px_1fr_100px_140px_80px_80px_80px_90px] bg-gray-50 border-b border-gray-300 px-4 py-2">
+          <div className={`grid ${isUrgent ? "grid-cols-[28px_60px_1fr_100px_140px_80px_80px_80px_90px_80px]" : "grid-cols-[28px_60px_1fr_100px_140px_80px_80px_80px_90px]"} bg-gray-50 border-b border-gray-300 px-4 py-2`}>
             <span />
             <span className="text-xs font-medium text-gray-500 uppercase">Type</span>
             <span className="text-xs font-medium text-gray-500 uppercase">Item</span>
@@ -419,6 +455,7 @@ export function VendorOpenItems({
             <span className="text-xs font-medium text-gray-500 uppercase">Due</span>
             <span className="text-xs font-medium text-gray-500 uppercase">Updated</span>
             <span className="text-xs font-medium text-gray-500 uppercase">Status</span>
+            {isUrgent && <span className="text-xs font-medium text-gray-500 uppercase text-center">Covered</span>}
           </div>
 
           {filtered.map((item) => {
@@ -428,6 +465,7 @@ export function VendorOpenItems({
             const isExpanded = expandedId === key;
 
             const isResolving = resolvingId === key;
+            const isCovered = isUrgent && coveredIds.has(key);
 
             return (
               <div
@@ -437,7 +475,7 @@ export function VendorOpenItems({
                 {/* Row */}
                 <div
                   onClick={() => toggleExpand(item)}
-                  className={`grid grid-cols-[28px_60px_1fr_100px_140px_80px_80px_80px_90px] px-4 py-3 border-b border-gray-200 cursor-pointer transition-colors ${isExpanded ? "bg-blue-50/40" : "hover:bg-gray-50"}`}
+                  className={`grid ${isUrgent ? "grid-cols-[28px_60px_1fr_100px_140px_80px_80px_80px_90px_80px]" : "grid-cols-[28px_60px_1fr_100px_140px_80px_80px_80px_90px]"} px-4 py-3 border-b border-gray-200 cursor-pointer transition-colors ${isExpanded ? "bg-blue-50/40" : "hover:bg-gray-50"} ${isCovered && !isExpanded ? "opacity-40" : ""}`}
                 >
                   {/* Complete circle */}
                   <span className="flex items-center">
@@ -500,6 +538,17 @@ export function VendorOpenItems({
                       {badge.label}
                     </span>
                   </span>
+                  {isUrgent && (
+                    <span className="flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={isCovered}
+                        onChange={() => toggleCovered(key)}
+                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                        title="Mark as covered (resets daily)"
+                      />
+                    </span>
+                  )}
                 </div>
 
                 {/* Expanded detail panel — matches RAID log layout */}
