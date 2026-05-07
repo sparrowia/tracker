@@ -272,6 +272,8 @@ All in `supabase/migrations/`:
 | `20260406000001_steering_committee.sql` | Steering phase/priority/sponsor on projects, department_status enum, project_department_statuses table |
 | `20260407000001_initiative_steering.sql` | Steering columns on initiatives (sponsor, phase, priority, completion dates) |
 | `20260408000001_product_type_asana_link.sql` | Add product_type and asana_link to projects and initiatives |
+| `20260507000001_project_owner_admin.sql` | `user_is_project_admin(project_id)` helper; project owners + initiative owners get admin UPDATE/DELETE on action_items, blockers, raid_entries, agenda_items in their projects |
+| `20260507000003_qa_lead_is_project_admin.sql` | Extend `user_is_project_admin` to also cover `projects.lead_qa_id` |
 
 ## Deployment
 

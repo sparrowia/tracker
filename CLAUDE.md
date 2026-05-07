@@ -177,7 +177,7 @@ Four roles defined as `user_role` enum in Supabase, stored on `profiles.role`:
 |------|------------|--------|------|--------|--------|-------------|
 | **super_admin** | All org data | Yes | All items | Yes | Yes | Yes |
 | **admin** | All org data | Yes | All items | Yes | Yes (not super_admin) | Yes |
-| **user** | All org data | Yes | Items they created or own | No | No | No |
+| **user** | All org data | Yes | Items they created/own + items in projects they own, are QA lead on, or whose initiative they own | Items in projects they own/QA-lead/initiative-own | No | No |
 | **vendor** | Only their vendor's items | No | Status only | No | No | No |
 
 ### Database Enforcement (RLS)
@@ -187,8 +187,11 @@ All access control is enforced at the Supabase RLS layer via helper functions:
 - `user_vendor_id()` — returns vendor_id for vendor-role users
 - `user_is_active()` — checks deactivated_at is null
 - `user_can_edit(created_by, owner_id)` — admin+ always true; user if creator or owner
+- `user_is_project_admin(project_id)` — true when auth user is the project's `project_owner_id`, `lead_qa_id`, listed in `initiative_owners` for the project's initiative, or set as the legacy `initiatives.owner_id`. Grants UPDATE + DELETE on `action_items`, `blockers`, `raid_entries`, and `agenda_items` linked to that project.
 
-Separate SELECT/INSERT/UPDATE/DELETE policies on every data table. Vendor-scoped reads filter by `vendor_id`. Migration: `20260310000001_rbac_and_invitations.sql`.
+Separate SELECT/INSERT/UPDATE/DELETE policies on every data table. Vendor-scoped reads filter by `vendor_id`. Migrations: `20260310000001_rbac_and_invitations.sql` (initial), `20260507000001_project_owner_admin.sql` + `20260507000003_qa_lead_is_project_admin.sql` (project-admin scope).
+
+**Silent-rollback caveat**: an RLS-denied UPDATE returns `200 OK` with `data: []` and `error: null` — it is NOT thrown. The save handlers across `project-tabs`, `raid-log`, `agenda-view`, `vendor-agenda-view`, `vendor-open-items` mutate local state optimistically, so a denied write looks like it succeeded until the next refetch reverts it. If you add a new save handler, chain `.select().single()` so RLS denials surface as errors.
 
 ### UI Enforcement
 
