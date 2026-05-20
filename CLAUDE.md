@@ -462,6 +462,7 @@ Action items support parent/child nesting (mirrors RAID log pattern):
 - Row layout order: checkbox → child arrow → disclosure triangle → complete circle → bell → NEW/indicators → title. Click row to toggle detail (no expand chevron). Auto-select children when selecting parent.
 - Intake extraction uses native `parent_id` instead of writing "Parent:"/"Related to:" text in notes
 - Type conversion dropdown: action items can be converted to Risk/Issue/Assumption/Decision/Blocker (and vice versa from RAID log)
+- **Deep links to subtasks** (`?item=<subtask-id>`): `ActionItemsPanel` and `RaidLog` seed `expandedParents` lazily from `deepLinkItemId` — if the target item has a `parent_id`, its parent is added on first render. Without this, child rows aren't in the DOM and the scroll-into-view target doesn't exist. Any new parent/child panel needs the same lazy initializer.
 - Migration: `20260324000002_action_item_subtasks.sql`
 
 ## @Mentions & Comment Notifications
