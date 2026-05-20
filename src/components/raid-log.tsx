@@ -303,7 +303,13 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
   const [activeTab, setActiveTab] = useState<RaidType>("risk");
   const [showArchived, setShowArchived] = useState(false);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
-  const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set());
+  const [expandedParents, setExpandedParents] = useState<Set<string>>(() => {
+    if (deepLinkItemId) {
+      const entry = entries.find((e) => e.id === deepLinkItemId);
+      if (entry?.parent_id) return new Set([entry.parent_id]);
+    }
+    return new Set();
+  });
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<{ id: string; zone: "above" | "nest" | "below" } | null>(null);
   const [addingType, setAddingType] = useState<RaidType | null>(null);

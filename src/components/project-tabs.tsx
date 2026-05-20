@@ -1485,7 +1485,13 @@ function ActionItemsPanel({
   const archivedActions = allFilteredActions.filter((a) => a.resolved_at).sort((a, b) => (b.resolved_at || b.updated_at).localeCompare(a.resolved_at || a.updated_at));
 
   const [showArchived, setShowArchived] = useState(false);
-  const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set());
+  const [expandedParents, setExpandedParents] = useState<Set<string>>(() => {
+    if (deepLinkItemId) {
+      const item = actions.find((a) => a.id === deepLinkItemId);
+      if (item?.parent_id) return new Set([item.parent_id]);
+    }
+    return new Set();
+  });
   const [expandedId, setExpandedId] = useState<string | null>(deepLinkItemId || null);
   const [callNotesId, setCallNotesId] = useState<string | null>(null);
   const [callNotes, setCallNotes] = useState("");
