@@ -125,8 +125,9 @@ export default function TimelinePage() {
   }
 
   async function updateField(id: string, field: string, value: string | null) {
-    await supabase.from("milestones").update({ [field]: value }).eq("id", id).then(() => {});
     setMilestones((prev) => prev.map((m) => m.id === id ? { ...m, [field]: value } : m));
+    const { error } = await supabase.from("milestones").update({ [field]: value }).eq("id", id).select().single();
+    if (error) load();
   }
 
   async function deleteMilestone(id: string) {
@@ -700,7 +701,7 @@ function GanttView({ milestones, getChildren, expandedId, setExpandedId, expande
 // ─── MILESTONE DETAIL ────────────────────────────────────────
 
 function MilestoneDetail({
-  milestone: m, people, projects, initiatives, role, onUpdate, onDelete, onPersonAdded, onReload,
+  milestone: m, people, projects, initiatives, role, onUpdate, onDelete, onPersonAdded,
 }: {
   milestone: Milestone;
 } & DetailProps) {
@@ -733,7 +734,7 @@ function MilestoneDetail({
           </>
         )}
         <span className="text-gray-500 font-medium">Target Date</span>
-        <input type="date" value={m.target_date} onChange={(e) => { onUpdate(m.id, "target_date", e.target.value); onReload(); }} className="rounded border border-gray-200 px-2 py-0.5 text-sm" />
+        <input type="date" value={m.target_date} onChange={(e) => { if (e.target.value) onUpdate(m.id, "target_date", e.target.value); }} className="rounded border border-gray-200 px-2 py-0.5 text-sm" />
         <span className="text-gray-500 font-medium">Owner</span>
         <OwnerPicker value={m.owner_id || ""} onChange={(id) => onUpdate(m.id, "owner_id", id || null)} people={people} onPersonAdded={onPersonAdded} />
         {(m.milestone_type === "project" || m.milestone_type === "proposed_project") && (
