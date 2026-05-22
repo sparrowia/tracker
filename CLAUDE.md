@@ -141,6 +141,8 @@ The app uses a consistent Asana-inspired visual style across all pages:
 - **Cross-tab state sync:** ALL field edits from Meeting Agenda sync to source tabs (Action Items, Blockers, RAID Log) via `registerUpdater` callback pattern on `itemAddersRef`. Resolving uses `registerResolver`. Undo restores both agenda and source tab state. Same ref pattern used for `registerAdder` when creating items from RAID log conversions or AI suggestions.
 - **Undo system:** `useUndo` hook in project-tabs provides a toast stack (up to 5). Panels and AgendaView receive `addUndo` prop. Undo callbacks restore DB state and re-add items to local state.
 - **Supabase query execution:** Fire-and-forget Supabase queries MUST have `.then(() => {})` appended — the query builder is lazy and won't execute unless the promise is consumed.
+- **Optimistic update order:** Save handlers for controlled inputs must `setState` BEFORE awaiting the Supabase write. Awaiting first leaves the input bound to the stale value during reconciliation, which makes the field appear to "snap back" mid-edit. Pair with `.select().single()` so RLS denials surface — see silent-rollback caveat below.
+- **Don't reload after a field edit:** A `setState((prev) => prev.map(...))` already re-renders the list with new sort/grouping. Chaining a full refetch on top of the local update creates a race with the optimistic write AND can reparent the row's DOM node when the new value crosses a group boundary. Reparenting unmounts the input, which kills any open native popover (date picker, color picker, etc.) anchored to it — that's why the timeline target-date picker was closing on first click.
 
 ## Key Data Models
 
