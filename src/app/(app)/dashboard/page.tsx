@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useRole } from "@/components/role-context";
 import Link from "next/link";
@@ -14,6 +15,7 @@ type ProjectRow = Project & { actionCount: number; blockerCount: number };
 type InitiativeGroup = Initiative & { projects: ProjectRow[] };
 
 export default function DashboardPage() {
+  const router = useRouter();
   const { role, profileId, userPersonId, impersonation } = useRole();
   const [loading, setLoading] = useState(true);
   const [overdue, setOverdue] = useState<ActionRow[]>([]);
@@ -30,34 +32,34 @@ export default function DashboardPage() {
 
   useEffect(() => {
     async function load() {
+      // A dead/expired session would make every query below return null, which
+      // renders a blank dashboard that looks like "you have no items." Detect it
+      // and send the user to re-authenticate instead. (This is the actual fix for
+      // the report where assigned items didn't show up.)
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) {
+        router.replace("/login");
+        return;
+      }
+
       const isAdmin = role === "super_admin" || role === "admin";
 
       // Get visible project IDs for regular users
       let visibleProjectIds: Set<string> | null = null;
       const effectiveProfileId = impersonation && !isAdmin ? "00000000-0000-0000-0000-000000000000" : profileId;
       if (!isAdmin && userPersonId) {
-        const { data: ids } = await supabase.rpc("user_visible_project_ids", { p_person_id: userPersonId, p_profile_id: effectiveProfileId });
-        visibleProjectIds = new Set((ids || []).map(String));
+        const { data: ids, error: idsError } = await supabase.rpc("user_visible_project_ids", { p_person_id: userPersonId, p_profile_id: effectiveProfileId });
+        if (idsError) console.error("Dashboard: user_visible_project_ids failed", idsError);
+        // Fall OPEN on error (null = no client-side scoping) rather than an empty
+        // Set, which would hide every item. RLS still gates the actual rows.
+        visibleProjectIds = idsError ? null : new Set((ids || []).map(String));
       }
 
       const today = new Date().toISOString().split("T")[0];
       const weekFromNow = new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0];
 
       // All queries in parallel
-      const [
-        { data: overdueData },
-        { data: dueWeekData },
-        { data: myTasksData },
-        { data: myRaidData },
-        { data: blockerData },
-        { data: riskData },
-        { data: decisionData },
-        { data: initData },
-        { data: projData },
-        { data: actionCounts },
-        { data: blockerCounts },
-        { data: reminderData },
-      ] = await Promise.all([
+      const results = await Promise.all([
         // Overdue action items — only items owned by the current user
         supabase
           .from("action_item_ages")
@@ -106,7 +108,7 @@ export default function DashboardPage() {
         // High/critical risks and issues
         supabase
           .from("raid_entries")
-          .select("*, owner:people(id, full_name, email, slack_member_id), project:projects(id, name, slug)")
+          .select("*, owner:people!raid_entries_owner_id_fkey(id, full_name, email, slack_member_id), project:projects(id, name, slug)")
           .in("raid_type", ["risk", "issue"])
           .in("priority", ["critical", "high"])
           .neq("status", "complete")
@@ -117,7 +119,7 @@ export default function DashboardPage() {
         // Pending decisions
         supabase
           .from("raid_entries")
-          .select("*, owner:people(id, full_name, email, slack_member_id), project:projects(id, name, slug)")
+          .select("*, owner:people!raid_entries_owner_id_fkey(id, full_name, email, slack_member_id), project:projects(id, name, slug)")
           .eq("raid_type", "decision")
           .neq("status", "complete")
           .order("priority")
@@ -138,6 +140,28 @@ export default function DashboardPage() {
           .lte("remind_at", new Date().toISOString())
           .order("remind_at"),
       ]);
+
+      // Log any per-query failures so they're diagnosable, but DO NOT blank the
+      // page — render whatever loaded. A single failed query must never hide the
+      // whole dashboard.
+      for (const r of results) {
+        if (r.error) console.error("Dashboard: query failed", r.error);
+      }
+
+      const [
+        { data: overdueData },
+        { data: dueWeekData },
+        { data: myTasksData },
+        { data: myRaidData },
+        { data: blockerData },
+        { data: riskData },
+        { data: decisionData },
+        { data: initData },
+        { data: projData },
+        { data: actionCounts },
+        { data: blockerCounts },
+        { data: reminderData },
+      ] = results;
 
       // Scope to visible projects for regular users
       function scopeByProject<T extends { project_id?: string | null; project?: { id: string } | null }>(items: T[]): T[] {
