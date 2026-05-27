@@ -55,7 +55,8 @@ src/
 │   │   ├── docs/                 # Documentation wiki (TipTap editor)
 │   │   └── settings/
 │   │       ├── page.tsx          # Term corrections for AI extraction
-│   │       └── team/page.tsx     # Team management (invites, roles, deactivation)
+│   │       ├── people/page.tsx   # People + team management (invites, roles, deactivation, impersonation)
+│   │       └── vendors/          # Vendor cards + detail (contacts, accountability, health report)
 │   ├── (auth)/login/             # Auth page (shows deactivation error)
 │   ├── auth/callback/            # Auth callback (marks invites accepted)
 │   ├── issues/[slug]/            # Public issue submission form (no auth required)
@@ -189,9 +190,9 @@ All access control is enforced at the Supabase RLS layer via helper functions:
 - `user_vendor_id()` — returns vendor_id for vendor-role users
 - `user_is_active()` — checks deactivated_at is null
 - `user_can_edit(created_by, owner_id)` — admin+ always true; user if creator or owner
-- `user_is_project_admin(project_id)` — true when auth user is the project's `project_owner_id`, `lead_qa_id`, listed in `initiative_owners` for the project's initiative, or set as the legacy `initiatives.owner_id`. Grants UPDATE + DELETE on `action_items`, `blockers`, `raid_entries`, and `agenda_items` linked to that project.
+- `user_is_project_admin(project_id)` — true when auth user is the project's `project_owner_id`, `project_manager_id`, `lead_qa_id`, listed in `initiative_owners` for the project's initiative, or set as the legacy `initiatives.owner_id`. Grants UPDATE + DELETE on `action_items`, `blockers`, `raid_entries`, and `agenda_items` linked to that project.
 
-Separate SELECT/INSERT/UPDATE/DELETE policies on every data table. Vendor-scoped reads filter by `vendor_id`. Migrations: `20260310000001_rbac_and_invitations.sql` (initial), `20260507000001_project_owner_admin.sql` + `20260507000003_qa_lead_is_project_admin.sql` (project-admin scope).
+Separate SELECT/INSERT/UPDATE/DELETE policies on every data table. Vendor-scoped reads filter by `vendor_id`. Migrations: `20260310000001_rbac_and_invitations.sql` (initial), `20260507000001_project_owner_admin.sql` + `20260507000002_pm_is_project_admin.sql` + `20260507000003_qa_lead_is_project_admin.sql` (project-admin scope: owner, PM, QA lead).
 
 **Silent-rollback caveat**: an RLS-denied UPDATE returns `200 OK` with `data: []` and `error: null` — it is NOT thrown. The save handlers across `project-tabs`, `raid-log`, `agenda-view`, `vendor-agenda-view`, `vendor-open-items` mutate local state optimistically, so a denied write looks like it succeeded until the next refetch reverts it. If you add a new save handler, chain `.select().single()` so RLS denials surface as errors.
 
@@ -218,9 +219,9 @@ Separate SELECT/INSERT/UPDATE/DELETE policies on every data table. Vendor-scoped
 
 ### Team Management UI
 
-`/settings/team` (admin/super_admin only):
-- Active members table with role badges, deactivate buttons
-- Pending invitations table with resend/cancel
+Team management lives on the **People page** (`/settings/people`) — the separate `/settings/team` page was removed and merged in. See the "People Page" section below for the full breakdown. Admin/super_admin capabilities there:
+- Active members with role badges + inline role editing, deactivate buttons
+- Pending invitations with resend/cancel
 - Deactivated users (collapsible) with reactivate button (super_admin only)
 - Invite form: email, role dropdown, vendor picker (for vendor role)
 
@@ -270,6 +271,8 @@ Client component (`/dashboard`) with role-scoped data:
 - Initiative health is **computed from worst child project health** (not the manually-set DB field)
 - Scoped via `user_visible_project_ids` RPC for regular users; admins see everything
 - Empty sections are hidden
+- **Stale-session handling:** `load()` calls `getUser()` first and redirects to `/login` if there's no user — a dead/expired session would otherwise make every query return null and render a blank dashboard that looks like "you have no items" (this was a real support report). The visibility RPC fails OPEN (null scoping, not an empty Set that hides everything) and per-query errors are logged but never blank the page.
+- **`raid_entries` → `people` embeds are ambiguous:** the table has two FKs to `people` (`owner_id` and `reporter_id`), so an unqualified `owner:people(...)` embed returns PostgREST error `PGRST201`. ALWAYS disambiguate with `owner:people!raid_entries_owner_id_fkey(...)` / `reporter:people!raid_entries_reporter_id_fkey(...)`. An un-hinted embed silently errored for months on the dashboard Risks/Decisions sections. Verify dashboard query changes against the live DB before pushing — a blanket "fail the page on any query error" once turned this benign error into a full outage.
 
 ## Initiative Detail
 

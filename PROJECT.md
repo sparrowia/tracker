@@ -120,9 +120,15 @@ src/
 | `milestones` | Company timeline milestones with parent/child grouping |
 | `wiki_pages` | Block-based wiki pages with parent/child hierarchy |
 | `project_department_statuses` | Department status cards for steering committee (green/yellow/red per department) |
+| `invitations` | Email-based invitations with role, token, expiry, accepted_at |
+| `project_documents` | AI-generated + editable Docs-tab section content |
+| `project_links` | External document links (Google Docs/Sheets/Slides) per project |
+| `reminders` | Per-user alarm reminders on action/blocker/RAID items |
+| `item_reads` | Per-user read tracking for unread/updated indicators |
+| `comment_notifications` | Queued email-digest notifications (@mentions, owner comments, assignments, file shares) |
 
 ### Junction Tables
-`project_vendors`, `meeting_projects`, `meeting_attendees`, `intake_entities`, `correction_log`
+`project_vendors`, `project_vendor_owners`, `project_members`, `initiative_owners`, `meeting_projects`, `meeting_attendees`, `intake_entities`, `correction_log`
 
 ### Views
 - `blocker_ages` — blockers with computed age
@@ -135,7 +141,7 @@ src/
 - `generate_project_agenda_from_selected(project_id, limit)` — agenda from items toggled for meeting (`include_in_meeting = true`)
 
 ### Key Enums
-- **item_status:** pending, in_progress, complete, needs_verification, paused, at_risk, blocked, identified, assessing, mitigated, closed
+- **item_status:** pending, in_progress, complete, needs_verification, paused, at_risk, blocked, identified, assessing, mitigated, closed, rejected
 - **priority_level:** critical, high, medium, low
 - **project_health:** on_track, in_progress, at_risk, blocked, paused, complete
 - **raid_type:** risk, assumption, issue, decision
@@ -242,6 +248,7 @@ All in `supabase/migrations/`:
 | `20260313000002_milestones_parent_id.sql` | Self-referencing `parent_id` on milestones for grouping |
 | `20260316000001_wiki_pages.sql` | Wiki pages table with parent/child hierarchy and block content |
 | `20260318000001_public_issue_form.sql` | Public issue form toggle on projects |
+| `20260319000001_project_files_bucket.sql` | `project-files` storage bucket for Docs-tab file uploads |
 | `20260320000001_reminders.sql` | Reminders table for action/blocker/RAID items |
 | `20260324000001_slack_member_id.sql` | Add `slack_member_id` to people for Slack DM links |
 | `20260324000002_action_item_subtasks.sql` | Add `parent_id` + `sort_order` to action_items for subtask nesting |
@@ -272,7 +279,22 @@ All in `supabase/migrations/`:
 | `20260406000001_steering_committee.sql` | Steering phase/priority/sponsor on projects, department_status enum, project_department_statuses table |
 | `20260407000001_initiative_steering.sql` | Steering columns on initiatives (sponsor, phase, priority, completion dates) |
 | `20260408000001_product_type_asana_link.sql` | Add product_type and asana_link to projects and initiatives |
+| `20260408000002_project_links.sql` | `project_links` table for external document links (Google Docs/Sheets/Slides, etc.) |
+| `20260408000003_file_share_notifications.sql` | Allow `file_share` as a `comment_notifications` type |
+| `20260409000001_agent_fields.sql` | Experimental agent fields on items (later removed) |
+| `20260409000002_agent_auto_status.sql` | Experimental agent auto-status (later removed) |
+| `20260410000001_fix_notification_insert_rls.sql` | Explicit INSERT policy on `comment_notifications` (FOR ALL/USING was blocking inserts) |
+| `20260413000001_remove_agent_fields.sql` | Remove the experimental agent fields/columns |
+| `20260415000001_junction_table_rls.sql` | Enable RLS on junction tables flagged by the Supabase security advisor |
+| `20260415000002_views_security_invoker.sql` | Switch `blocker_ages`/`action_item_ages`/`vendor_accountability` views to SECURITY INVOKER so they respect RLS |
+| `20260415000003_security_advisor_warnings.sql` | Set `search_path` on functions; remove anon access from `project-files` bucket |
+| `20260415000004_fix_search_path.sql` | Set `search_path = 'public'` on helper/trigger functions |
+| `20260415000005_issue_attachments_drop_select.sql` | Drop unneeded SELECT policies on the public `issue-attachments` bucket |
+| `20260415000006_qualify_policy_functions.sql` | Qualify function calls (`public.`) in RLS policies to be search_path-resilient |
+| `20260416000001_fix_owner_change_rls.sql` | Add WITH CHECK so owners (not just creators) can change `owner_id` |
+| `20260430000001_log_entity_created.sql` | AFTER INSERT triggers write a `created` row to `activity_log`; backfill existing rows |
 | `20260507000001_project_owner_admin.sql` | `user_is_project_admin(project_id)` helper; project owners + initiative owners get admin UPDATE/DELETE on action_items, blockers, raid_entries, agenda_items in their projects |
+| `20260507000002_pm_is_project_admin.sql` | Extend `user_is_project_admin` to also cover `projects.project_manager_id` |
 | `20260507000003_qa_lead_is_project_admin.sql` | Extend `user_is_project_admin` to also cover `projects.lead_qa_id` |
 
 ## Deployment
@@ -293,6 +315,6 @@ All docs live in this repo: [github.com/sparrowia/tracker](https://github.com/sp
 | [`CLAUDE.md`](https://github.com/sparrowia/tracker/blob/main/CLAUDE.md) | AI assistant instructions, conventions, and guardrails |
 | [`src/lib/types.ts`](https://github.com/sparrowia/tracker/blob/main/src/lib/types.ts) | All TypeScript interfaces and enums |
 | [`src/lib/utils.ts`](https://github.com/sparrowia/tracker/blob/main/src/lib/utils.ts) | Formatting helpers (priority colors, status badges, dates) |
-| [`supabase/migrations/`](https://github.com/sparrowia/tracker/tree/main/supabase/migrations) | Full database schema history (63 migrations) |
+| [`supabase/migrations/`](https://github.com/sparrowia/tracker/tree/main/supabase/migrations) | Full database schema history (80 migrations) |
 | [`.env.local.example`](https://github.com/sparrowia/tracker/blob/main/.env.local.example) | Required environment variables |
 | [`PROMPT.md`](https://github.com/sparrowia/tracker/blob/main/PROMPT.md) | Bootstrap prompt for AI assistants |
