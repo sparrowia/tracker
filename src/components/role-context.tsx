@@ -1,6 +1,8 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 import type { UserRole } from "@/lib/types";
 
 interface Impersonation {
@@ -42,7 +44,21 @@ interface RoleProviderProps {
 }
 
 export function RoleProvider({ children, value }: RoleProviderProps) {
+  const router = useRouter();
   const [impersonation, setImpersonation] = useState<Impersonation | null>(null);
+
+  // Recover from an involuntary sign-out (e.g. a failed token refresh on a
+  // long-open tab). Without this, the session silently dies and client
+  // queries return empty, leaving the user on a blank-but-authenticated page.
+  useEffect(() => {
+    const supabase = createClient();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_OUT" || (event === "TOKEN_REFRESHED" && !session)) {
+        router.replace("/login");
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [router]);
 
   // Load impersonation from sessionStorage on mount
   useEffect(() => {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useRole } from "@/components/role-context";
 import Link from "next/link";
@@ -14,8 +15,11 @@ type ProjectRow = Project & { actionCount: number; blockerCount: number };
 type InitiativeGroup = Initiative & { projects: ProjectRow[] };
 
 export default function DashboardPage() {
+  const router = useRouter();
   const { role, profileId, userPersonId, impersonation } = useRole();
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [retryKey, setRetryKey] = useState(0);
   const [overdue, setOverdue] = useState<ActionRow[]>([]);
   const [dueThisWeek, setDueThisWeek] = useState<ActionRow[]>([]);
   const [myTasks, setMyTasks] = useState<ActionRow[]>([]);
@@ -30,13 +34,32 @@ export default function DashboardPage() {
 
   useEffect(() => {
     async function load() {
+      setLoadError(false);
+
+      // Verify the session is still valid before fetching. A stale/expired
+      // token would otherwise make every query below silently return null,
+      // rendering a blank dashboard that looks like "you have no items."
+      const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+      if (authError || !authUser) {
+        router.replace("/login");
+        return;
+      }
+
       const isAdmin = role === "super_admin" || role === "admin";
 
       // Get visible project IDs for regular users
       let visibleProjectIds: Set<string> | null = null;
       const effectiveProfileId = impersonation && !isAdmin ? "00000000-0000-0000-0000-000000000000" : profileId;
       if (!isAdmin && userPersonId) {
-        const { data: ids } = await supabase.rpc("user_visible_project_ids", { p_person_id: userPersonId, p_profile_id: effectiveProfileId });
+        const { data: ids, error: idsError } = await supabase.rpc("user_visible_project_ids", { p_person_id: userPersonId, p_profile_id: effectiveProfileId });
+        if (idsError) {
+          // Don't fall through to an empty Set — that would filter out every
+          // item and blank the dashboard. Surface the failure instead.
+          console.error("Dashboard: user_visible_project_ids failed", idsError);
+          setLoadError(true);
+          setLoading(false);
+          return;
+        }
         visibleProjectIds = new Set((ids || []).map(String));
       }
 
@@ -44,20 +67,7 @@ export default function DashboardPage() {
       const weekFromNow = new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0];
 
       // All queries in parallel
-      const [
-        { data: overdueData },
-        { data: dueWeekData },
-        { data: myTasksData },
-        { data: myRaidData },
-        { data: blockerData },
-        { data: riskData },
-        { data: decisionData },
-        { data: initData },
-        { data: projData },
-        { data: actionCounts },
-        { data: blockerCounts },
-        { data: reminderData },
-      ] = await Promise.all([
+      const results = await Promise.all([
         // Overdue action items — only items owned by the current user
         supabase
           .from("action_item_ages")
@@ -138,6 +148,31 @@ export default function DashboardPage() {
           .lte("remind_at", new Date().toISOString())
           .order("remind_at"),
       ]);
+
+      // If any query failed, surface it rather than rendering empty sections —
+      // an error and a genuinely-empty result are indistinguishable to the user.
+      const failed = results.find((r) => r.error);
+      if (failed) {
+        console.error("Dashboard: query failed", failed.error);
+        setLoadError(true);
+        setLoading(false);
+        return;
+      }
+
+      const [
+        { data: overdueData },
+        { data: dueWeekData },
+        { data: myTasksData },
+        { data: myRaidData },
+        { data: blockerData },
+        { data: riskData },
+        { data: decisionData },
+        { data: initData },
+        { data: projData },
+        { data: actionCounts },
+        { data: blockerCounts },
+        { data: reminderData },
+      ] = results;
 
       // Scope to visible projects for regular users
       function scopeByProject<T extends { project_id?: string | null; project?: { id: string } | null }>(items: T[]): T[] {
@@ -222,8 +257,41 @@ export default function DashboardPage() {
       setInitiativeGroups(groups);
       setLoading(false);
     }
-    load();
-  }, [role, profileId, userPersonId]);
+    load().catch((err) => {
+      console.error("Dashboard: load threw", err);
+      setLoadError(true);
+      setLoading(false);
+    });
+  }, [role, profileId, userPersonId, retryKey]);
+
+  if (loadError) {
+    return (
+      <div className="max-w-7xl mx-auto">
+        <div className="bg-white rounded-lg border border-amber-300 p-6 text-center space-y-3">
+          <h2 className="text-lg font-semibold text-gray-900">Couldn&apos;t load your dashboard</h2>
+          <p className="text-sm text-gray-600">
+            Something went wrong fetching your items — this is usually a temporary
+            connection issue or an expired session, not missing data. Try again, or
+            sign in fresh if it persists.
+          </p>
+          <div className="flex items-center justify-center gap-3 pt-1">
+            <button
+              onClick={() => { setLoadError(false); setLoading(true); setRetryKey((k) => k + 1); }}
+              className="px-4 py-2 text-sm font-medium rounded bg-blue-600 text-white hover:bg-blue-700"
+            >
+              Try again
+            </button>
+            <button
+              onClick={() => router.replace("/login")}
+              className="px-4 py-2 text-sm font-medium rounded border border-gray-300 text-gray-700 hover:bg-gray-50"
+            >
+              Sign in again
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
