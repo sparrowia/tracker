@@ -184,3 +184,13 @@ export function formatDateShort(date: string | null): string {
     day: "numeric",
   });
 }
+
+/** Numeric MM/DD/YY, timezone-safe (parses YYYY-MM-DD as local). */
+export function formatDateNumeric(date: string | null): string {
+  if (!date) return "—";
+  const [y, m, d] = date.split("-").map(Number);
+  if (y && m && d) {
+    return `${String(m).padStart(2, "0")}/${String(d).padStart(2, "0")}/${String(y).slice(2)}`;
+  }
+  return date;
+}

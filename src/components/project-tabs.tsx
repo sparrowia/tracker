@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback, Fragment } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { priorityColor, priorityLabel, statusBadge, formatAge, formatDateShort } from "@/lib/utils";
+import { priorityColor, priorityLabel, statusBadge, formatAge, formatDateShort, formatDateNumeric } from "@/lib/utils";
 import type { Project, ActionItem, ActionItemSection, RaidEntry, Blocker, Person, Vendor, ProjectAgendaRow, PriorityLevel, ItemStatus, Intake, IntakeSource, ProjectDocument } from "@/lib/types";
 import RaidLog from "@/components/raid-log";
 import { AgendaView } from "@/components/agenda-view";
@@ -1375,7 +1375,7 @@ const ACTION_COLUMNS: { key: ActionColumnKey; label: string; width: string }[] =
   { key: "owner", label: "Owner", width: "w-[150px]" },
   { key: "vendor", label: "Vendor", width: "w-[100px]" },
   { key: "stage", label: "Stage", width: "w-[88px]" },
-  { key: "due_date", label: "Due Date", width: "w-[140px]" },
+  { key: "due_date", label: "Dates", width: "w-[150px]" },
   { key: "age", label: "Age", width: "w-12" },
 
   { key: "first_flagged", label: "Flagged", width: "w-[80px]" },
@@ -1621,6 +1621,12 @@ function ActionItemsPanel({
         return <span className="text-xs text-gray-600 flex-shrink-0 w-[88px] text-right">{stageLabel}</span>;
       }
       case "due_date": {
+        const cell = (content: React.ReactNode) => <span className="text-xs text-gray-600 flex-shrink-0 w-[150px] text-right whitespace-nowrap">{content}</span>;
+        // The item's own start → due range takes precedence
+        if (a.start_date && a.due_date) {
+          return cell(`${formatDateNumeric(a.start_date)} - ${formatDateNumeric(a.due_date)}`);
+        }
+        // Parent rollup: span of child due dates
         const children = actions.filter((x) => x.parent_id === a.id);
         if (children.length > 0) {
           const dates = [a.due_date, ...children.map((c) => c.due_date)].filter((d): d is string => !!d);
@@ -1628,12 +1634,11 @@ function ActionItemsPanel({
             const sorted = [...dates].sort();
             const min = sorted[0];
             const max = sorted[sorted.length - 1];
-            if (min !== max) {
-              return <span className="text-xs text-gray-600 flex-shrink-0 w-[140px] text-right whitespace-nowrap">{formatDateShort(min)} → {formatDateShort(max)}</span>;
-            }
+            if (min !== max) return cell(`${formatDateNumeric(min)} - ${formatDateNumeric(max)}`);
           }
         }
-        return <span className="text-xs text-gray-600 flex-shrink-0 w-[140px] text-right">{formatDateShort(a.due_date)}</span>;
+        // Single date (due, else start)
+        return cell(formatDateNumeric(a.due_date || a.start_date));
       }
       case "age":
         return <span className="text-xs text-gray-500 font-medium flex-shrink-0 w-12 text-right">{a.age_days != null ? formatAge(a.age_days) : ""}</span>;
