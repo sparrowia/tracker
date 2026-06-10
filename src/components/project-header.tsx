@@ -72,6 +72,14 @@ export default function ProjectHeader({ project, vendors, people: initialPeople 
     setEditing(true);
   }
 
+  function setProjectLink() {
+    const url = window.prompt("Project link (URL):", p.asana_link || "");
+    if (url === null) return; // cancelled
+    const val = url.trim() || null;
+    supabase.from("projects").update({ asana_link: val }).eq("id", p.id).then(({ error }) => { if (error) console.error("Save project link failed:", error); });
+    setP((prev) => ({ ...prev, asana_link: val } as Project));
+  }
+
   async function save() {
     setSaving(true);
     const newName = form.name.trim();
@@ -298,6 +306,35 @@ export default function ProjectHeader({ project, vendors, people: initialPeople 
             <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
           </svg>
         </button>
+        <div className="ml-auto flex items-center gap-2">
+          {p.asana_link ? (
+            <>
+              <a
+                href={p.asana_link}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-800"
+              >
+                Project link
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+                </svg>
+              </a>
+              {isAdmin(role) && (
+                <button onClick={setProjectLink} className="text-gray-400 hover:text-blue-600 transition-colors" title="Edit project link">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                  </svg>
+                </button>
+              )}
+            </>
+          ) : isAdmin(role) ? (
+            <button onClick={setProjectLink} className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-blue-600 transition-colors">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Project link
+            </button>
+          ) : null}
+        </div>
       </div>
       {p.description && <p className="text-sm text-gray-600">{p.description}</p>}
       <div className="flex gap-6 mt-3 text-sm text-gray-500 flex-wrap items-center">
