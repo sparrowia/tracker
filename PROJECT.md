@@ -106,7 +106,8 @@ src/
 | `people` | Internal team + vendor contacts (includes `slack_member_id` for DM links) |
 | `initiatives` | High-level strategic initiatives with steering committee fields |
 | `projects` | Tracked projects with health status, steering committee fields (sponsor, phase, priority, completion dates, product type, asana link) |
-| `action_items` | Tasks with owner, priority, due date, meeting toggle |
+| `action_items` | Tasks with owner (person **or** vendor via `owner_vendor_id`), priority, `start_date` + due date, `section_id`, `parent_id` nesting (≤5 deep), meeting toggle |
+| `action_item_sections` | Named sections for grouping action items within a project (read = org; write = non-vendor roles) |
 | `blockers` | Blocking issues with impact description |
 | `raid_entries` | Risks, assumptions, issues, decisions (owner, reporter, parent_id subtasks, sort_order, due_date) |
 | `agenda_items` | Vendor/project meeting topics with severity/context/ask |
@@ -125,15 +126,20 @@ src/
 | `project_links` | External document links (Google Docs/Sheets/Slides) per project |
 | `reminders` | Per-user alarm reminders on action/blocker/RAID items |
 | `item_reads` | Per-user read tracking for unread/updated indicators |
-| `comment_notifications` | Queued email-digest notifications (@mentions, owner comments, assignments, file shares) |
+| `comment_notifications` | Queued email-digest notifications (@mentions, owner comments, assignments, file shares, new-ticket alerts) |
 
 ### Junction Tables
 `project_vendors`, `project_vendor_owners`, `project_members`, `initiative_owners`, `meeting_projects`, `meeting_attendees`, `intake_entities`, `correction_log`
 
 ### Views
 - `blocker_ages` — blockers with computed age
-- `action_item_ages` — action items with computed age
+- `action_item_ages` — action items with computed age. Also exposes `section_id`, `start_date`, `owner_vendor_id`. ⚠️ Because `action_items` now has **two** FKs to `vendors` (`vendor_id` and `owner_vendor_id`), any PostgREST `vendor:vendors(*)` embed on this view/table **must** be disambiguated with the FK hint `vendor:vendors!action_items_vendor_id_fkey(*)` or it errors.
 - `vendor_accountability` — combined action items + blockers per vendor
+
+### Database Triggers (action items)
+- `check_action_item_depth` — BEFORE INSERT/UPDATE of `parent_id`; rejects nesting deeper than 5 levels and parent cycles.
+- `add_mentioned_to_project` — AFTER INSERT on `comments`; `@[Name](person_id)` mentions auto-add that person to `project_members` (grants visibility). SECURITY DEFINER.
+- `notify_new_ticket` — AFTER INSERT on `action_items`; a new **top-level** ticket queues a `new_item` digest notification to the project's PM (`project_manager_id`), falling back to the product owner (`project_owner_id`). SECURITY DEFINER.
 
 ### RPC Functions
 - `generate_vendor_agenda(vendor_id, limit)` — ranked vendor agenda with scoring
@@ -193,6 +199,13 @@ All tables have row-level security policies scoped to `org_id` via the `user_org
 36. **Vendor Add Item** — create action items, blockers, or issues directly on vendor detail page without project association. Project column shows source project or dash.
 37. **Initiative Dropdown** — project header allows reassigning projects between initiatives with sidebar refresh.
 38. **Tab-Based Initiative Phases** — initiatives with steering_phase set are hidden from sidebar and shown only in Reports page under their phase tab.
+39. **Action Item Sections** — group action items within a project under named, collapsible section headers (`action_item_sections` + `section_id`). Create/rename/delete via the panel header and section rows. Items without a section fall under "Ungrouped." Section/parent selectors in the add form; section selector in the detail panel.
+40. **5-Level Action Item Nesting** — action items nest up to 5 deep (recursive render, depth-based indent, expand/collapse at any level). Enforced by the `check_action_item_depth` DB trigger and a client-side guard on drag-to-nest.
+41. **@Mention Auto-Add to Project** — tagging someone in a task/blocker/RAID comment thread adds them as a `project_members` member (grants visibility) via the `add_mentioned_to_project` trigger.
+42. **New-Ticket Alerts** — a new top-level action item queues a digest notification (`new_item`) to the project's PM, falling back to the product owner (`notify_new_ticket` trigger). Rendered as a purple block in the email digest.
+43. **Task Start + End Dates** — `start_date` alongside `due_date`, both editable in the detail panel. The action-items list column is labeled **Dates** and shows a numeric range (`MM/DD/YY - MM/DD/YY`) when both are set, the single date otherwise, or a parent's child-due span.
+44. **Vendor as Owner** — an action item's owner can be a person **or** a vendor (`owner_vendor_id`, mutually exclusive with `owner_id`). The Owner picker shows a "Vendors" group; the Owner column renders a purple vendor chip. Distinct from the `vendor_id` "associated vendor" field.
+45. **Project Link in Header** — the project's `asana_link` is surfaced top-right of the project header (opposite the title); admins set/edit it inline.
 
 ## UI Design System
 
@@ -296,6 +309,12 @@ All in `supabase/migrations/`:
 | `20260507000001_project_owner_admin.sql` | `user_is_project_admin(project_id)` helper; project owners + initiative owners get admin UPDATE/DELETE on action_items, blockers, raid_entries, agenda_items in their projects |
 | `20260507000002_pm_is_project_admin.sql` | Extend `user_is_project_admin` to also cover `projects.project_manager_id` |
 | `20260507000003_qa_lead_is_project_admin.sql` | Extend `user_is_project_admin` to also cover `projects.lead_qa_id` |
+| `20260610000001_sections_nesting_membership.sql` | `action_item_sections` table + `section_id`; 5-level depth-guard trigger; `add_mentioned_to_project` trigger; allow `new_item` notification type |
+| `20260610000002_new_ticket_alerts.sql` | `notify_new_ticket` trigger — new top-level ticket → digest alert to PM (fallback product owner) |
+| `20260610000003_action_item_ages_section_id.sql` | Expose `section_id` through `action_item_ages` |
+| `20260610000004_sections_rls_least_privilege.sql` | Sections RLS: org-wide read, non-vendor write |
+| `20260610000005_action_item_start_date.sql` | `start_date` on action_items, exposed via `action_item_ages` |
+| `20260610000006_action_item_owner_vendor.sql` | `owner_vendor_id` (vendor as owner) on action_items, exposed via `action_item_ages` |
 
 ## Deployment
 
