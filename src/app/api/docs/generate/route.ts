@@ -73,7 +73,7 @@ export async function POST(request: Request) {
     // Fetch all project data in parallel
     const [projectRes, actionsOpenRes, actionsClosedRes, blockersOpenRes, blockersClosedRes, raidOpenRes, raidResolvedRes, pvRes] = await Promise.all([
       supabase.from("projects").select("*, initiative:initiatives(name)").eq("id", project_id).single(),
-      supabase.from("action_item_ages").select("*, owner:people!action_items_owner_id_fkey(id, full_name), vendor:vendors(id, name)").eq("project_id", project_id),
+      supabase.from("action_item_ages").select("*, owner:people!action_items_owner_id_fkey(id, full_name), vendor:vendors!action_items_vendor_id_fkey(id, name)").eq("project_id", project_id),
       supabase.from("action_items").select("id, title, owner:people!action_items_owner_id_fkey(full_name)").eq("project_id", project_id).eq("status", "complete"),
       supabase.from("blocker_ages").select("*, owner:people!blockers_owner_id_fkey(id, full_name), vendor:vendors(id, name)").eq("project_id", project_id),
       supabase.from("blockers").select("id, title, owner:people!blockers_owner_id_fkey(full_name)").eq("project_id", project_id).not("resolved_at", "is", null),
