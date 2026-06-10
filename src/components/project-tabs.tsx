@@ -194,7 +194,7 @@ export default function ProjectTabs({
 
   const handleAgendaItemRestored = useCallback(async (entityType: string, entityId: string) => {
     if (entityType === "action_item") {
-      const { data } = await supabase.from("action_items").select("*, owner:people!action_items_owner_id_fkey(*), vendor:vendors(*)").eq("id", entityId).single();
+      const { data } = await supabase.from("action_items").select("*, owner:people!action_items_owner_id_fkey(*), vendor:vendors!action_items_vendor_id_fkey(*)").eq("id", entityId).single();
       if (data) itemAddersRef.current.addAction?.(data as ActionRow);
     } else if (entityType === "blocker") {
       const { data } = await supabase.from("blockers").select("*, owner:people!blockers_owner_id_fkey(*), vendor:vendors(*)").eq("id", entityId).single();
@@ -339,7 +339,7 @@ export default function ProjectTabs({
         <div style={{ display: active === "raid" ? "block" : "none" }}>
           <RaidLog initialEntries={raidEntries} project={project} people={peopleList} vendors={vendorsList} onPersonAdded={addPerson} onVendorAdded={addVendor} addUndo={addUndo} onCountChange={setRaidCount} intakeSourceMap={intakeSourceMap} onMeetingToggle={bumpAgendaRefresh} searchFilter={searchFilter} deepLinkItemId={resolvedTab === "raid" ? urlItem : undefined}
             onConvertedToAction={async (actionId) => {
-              const { data } = await supabase.from("action_items").select("*, owner:people!action_items_owner_id_fkey(*), vendor:vendors(*)").eq("id", actionId).single();
+              const { data } = await supabase.from("action_items").select("*, owner:people!action_items_owner_id_fkey(*), vendor:vendors!action_items_vendor_id_fkey(*)").eq("id", actionId).single();
               if (data && itemAddersRef.current.addAction) {
                 itemAddersRef.current.addAction(data as ActionRow);
               }
@@ -2065,7 +2065,7 @@ function ActionItemsPanel({
         section_id: addSectionId || null,
         parent_id: addParentId || null,
       })
-      .select("*, owner:people!action_items_owner_id_fkey(*), vendor:vendors(*)")
+      .select("*, owner:people!action_items_owner_id_fkey(*), vendor:vendors!action_items_vendor_id_fkey(*)")
       .single();
 
     if (error) {

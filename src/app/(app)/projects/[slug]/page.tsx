@@ -37,13 +37,13 @@ export default async function ProjectDetailPage({
   ] = await Promise.all([
     supabase
       .from("action_item_ages")
-      .select("*, owner:people(*), vendor:vendors(*)")
+      .select("*, owner:people(*), vendor:vendors!action_items_vendor_id_fkey(*)")
       .eq("project_id", p.id)
       .order("priority")
       .order("due_date", { ascending: true, nullsFirst: false }),
     supabase
       .from("action_items")
-      .select("*, owner:people(*), vendor:vendors(*)")
+      .select("*, owner:people(*), vendor:vendors!action_items_vendor_id_fkey(*)")
       .eq("project_id", p.id)
       .eq("status", "complete")
       .order("resolved_at", { ascending: false }),
