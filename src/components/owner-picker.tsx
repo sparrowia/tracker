@@ -2,19 +2,24 @@
 
 import { useState, useRef, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
-import type { Person } from "@/lib/types";
+import type { Person, Vendor } from "@/lib/types";
 import { useRole } from "@/components/role-context";
 
 const ADD_SENTINEL = "__add_new__";
+const VENDOR_PREFIX = "v:";
 
 interface OwnerPickerProps {
   value: string;
   onChange: (id: string) => void;
   people: Person[];
   onPersonAdded: (person: Person) => void;
+  // Optional: allow a vendor to be selected as the owner (mutually exclusive with a person).
+  vendors?: Vendor[];
+  vendorValue?: string;
+  onVendorChange?: (id: string) => void;
 }
 
-export default function OwnerPicker({ value, onChange, people, onPersonAdded }: OwnerPickerProps) {
+export default function OwnerPicker({ value, onChange, people, onPersonAdded, vendors, vendorValue, onVendorChange }: OwnerPickerProps) {
   const { profileId, orgId } = useRole();
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
@@ -28,6 +33,8 @@ export default function OwnerPicker({ value, onChange, people, onPersonAdded }: 
   function handleSelectChange(val: string) {
     if (val === ADD_SENTINEL) {
       setAdding(true);
+    } else if (val.startsWith(VENDOR_PREFIX)) {
+      onVendorChange?.(val.slice(VENDOR_PREFIX.length));
     } else {
       onChange(val);
     }
@@ -106,7 +113,7 @@ export default function OwnerPicker({ value, onChange, people, onPersonAdded }: 
 
   return (
     <select
-      value={value}
+      value={vendorValue ? `${VENDOR_PREFIX}${vendorValue}` : value}
       onChange={(e) => handleSelectChange(e.target.value)}
       className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
     >
@@ -114,6 +121,13 @@ export default function OwnerPicker({ value, onChange, people, onPersonAdded }: 
       {people.map((p) => (
         <option key={p.id} value={p.id} style={p.profile_id ? undefined : { color: "#9ca3af" }}>{p.full_name}{p.profile_id ? "" : " ○"}</option>
       ))}
+      {vendors && vendors.length > 0 && (
+        <optgroup label="Vendors">
+          {vendors.map((v) => (
+            <option key={v.id} value={`${VENDOR_PREFIX}${v.id}`}>{v.name}</option>
+          ))}
+        </optgroup>
+      )}
       <option value={ADD_SENTINEL}>+ Add Person</option>
     </select>
   );

@@ -186,6 +186,7 @@ export interface ActionItem {
   title: string;
   description: string | null;
   owner_id: string | null;
+  owner_vendor_id: string | null;
   vendor_id: string | null;
   project_id: string | null;
   status: ItemStatus;

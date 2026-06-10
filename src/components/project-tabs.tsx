@@ -1595,7 +1595,8 @@ function ActionItemsPanel({
             <span className={`inline-flex px-1.5 py-0.5 text-xs rounded ${badge.className}`}>{badge.label}</span>
           </div>
         );
-      case "owner":
+      case "owner": {
+        const ownerVendor = a.owner_vendor_id ? vendors.find((v) => v.id === a.owner_vendor_id) : null;
         return (
           <div className="w-[150px] flex-shrink-0 flex justify-end">
             {a.owner ? (
@@ -1605,11 +1606,19 @@ function ActionItemsPanel({
                 </span>
                 <span className="text-xs text-gray-600 truncate">{a.owner.full_name}</span>
               </div>
+            ) : ownerVendor ? (
+              <div className="flex items-center gap-1">
+                <span className="w-5 h-5 rounded bg-purple-100 text-[9px] font-medium text-purple-700 flex items-center justify-center flex-shrink-0" title="Vendor">
+                  {ownerVendor.name.slice(0, 2).toUpperCase()}
+                </span>
+                <span className="text-xs text-gray-600 truncate">{ownerVendor.name}</span>
+              </div>
             ) : (
               <span className="text-xs text-gray-400 italic">Unassigned</span>
             )}
           </div>
         );
+      }
       case "vendor":
         return (
           <div className="w-[100px] flex-shrink-0 text-right">
@@ -1708,12 +1717,17 @@ function ActionItemsPanel({
     if (field === "owner_id") {
       const newOwner = people.find((p) => p.id === value) || null;
       dbUpdates.owner_id = value || null;
-      setActions((prev) => prev.map((a) => a.id === id ? { ...a, owner_id: value || null, owner: newOwner } as ActionRow : a));
+      dbUpdates.owner_vendor_id = null; // a person owner clears any vendor owner
+      setActions((prev) => prev.map((a) => a.id === id ? { ...a, owner_id: value || null, owner: newOwner, owner_vendor_id: null } as ActionRow : a));
       // Notify new owner
       if (value) {
         const action = actions.find((a) => a.id === id);
         if (action) notifyAssignment(value, action.title, "action item", action.id);
       }
+    } else if (field === "owner_vendor_id") {
+      dbUpdates.owner_vendor_id = value || null;
+      dbUpdates.owner_id = null; // a vendor owner clears any person owner
+      setActions((prev) => prev.map((a) => a.id === id ? { ...a, owner_vendor_id: value || null, owner_id: null, owner: null as Person | null } as ActionRow : a));
     } else if (field === "vendor_id") {
       const newVendor = vendors.find((v) => v.id === value) || null;
       dbUpdates.vendor_id = value || null;
@@ -2503,6 +2517,9 @@ function ActionItemsPanel({
                           onChange={(id) => saveField(a.id, "owner_id", id)}
                           people={people}
                           onPersonAdded={onPersonAdded}
+                          vendors={vendors}
+                          vendorValue={a.owner_vendor_id || ""}
+                          onVendorChange={(id) => saveField(a.id, "owner_vendor_id", id)}
                         />
                       </div>
                       <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-100">Vendor</span>
