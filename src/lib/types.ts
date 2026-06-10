@@ -200,6 +200,7 @@ export interface ActionItem {
   include_in_project_meeting: boolean;
   include_in_vendor_meeting: boolean;
   parent_id: string | null;
+  section_id: string | null;
   sort_order: number;
   created_by: string | null;
   created_at: string;
@@ -207,10 +208,23 @@ export interface ActionItem {
   owner?: Person;
   vendor?: Vendor;
   project?: Project;
+  section?: ActionItemSection;
   // computed
   age_days?: number;
   days_overdue?: number;
   urgency?: string;
+}
+
+export interface ActionItemSection {
+  id: string;
+  org_id: string;
+  project_id: string | null;
+  title: string;
+  description: string | null;
+  sort_order: number;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface RaidEntry {

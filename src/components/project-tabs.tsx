@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback, Fragment } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { priorityColor, priorityLabel, statusBadge, formatAge, formatDateShort } from "@/lib/utils";
-import type { Project, ActionItem, RaidEntry, Blocker, Person, Vendor, ProjectAgendaRow, PriorityLevel, ItemStatus, Intake, IntakeSource, ProjectDocument } from "@/lib/types";
+import type { Project, ActionItem, ActionItemSection, RaidEntry, Blocker, Person, Vendor, ProjectAgendaRow, PriorityLevel, ItemStatus, Intake, IntakeSource, ProjectDocument } from "@/lib/types";
 import RaidLog from "@/components/raid-log";
 import { AgendaView } from "@/components/agenda-view";
 import OwnerPicker from "@/components/owner-picker";
@@ -1501,6 +1501,21 @@ function ActionItemsPanel({
   const [adding, setAdding] = useState(false);
   const [addTitle, setAddTitle] = useState("");
   const [addPriority, setAddPriority] = useState<PriorityLevel>("medium");
+  const [addSectionId, setAddSectionId] = useState("");
+  const [addParentId, setAddParentId] = useState("");
+  const [actionSections, setActionSections] = useState<ActionItemSection[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    supabase
+      .from("action_item_sections")
+      .select("*")
+      .eq("project_id", projectId)
+      .order("sort_order")
+      .then(({ data }) => { if (active) setActionSections((data as ActionItemSection[]) || []); });
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]);
   const colPickerRef = useRef<HTMLDivElement>(null);
   const [readAtMap, setReadAtMap] = useState<Map<string, string>>(new Map());
   const [draggedId, setDraggedId] = useState<string | null>(null);
@@ -1699,13 +1714,15 @@ function ActionItemsPanel({
       dbUpdates.vendor_id = value || null;
       setActions((prev) => prev.map((a) => a.id === id ? { ...a, vendor_id: value || null, vendor: newVendor } as ActionRow : a));
     } else {
-      dbUpdates[field] = value;
+      // uuid FK fields must be null (not "") when cleared
+      const coerced = ((field === "section_id" || field === "parent_id") && value === "") ? null : value;
+      dbUpdates[field] = coerced;
       // When changing status away from complete, clear resolved_at so RPC picks it up again
       if (field === "status" && value !== "complete") {
         dbUpdates.resolved_at = null;
-        setActions((prev) => prev.map((a) => a.id === id ? { ...a, [field]: value, resolved_at: null } as ActionRow : a));
+        setActions((prev) => prev.map((a) => a.id === id ? { ...a, [field]: coerced, resolved_at: null } as ActionRow : a));
       } else {
-        setActions((prev) => prev.map((a) => a.id === id ? { ...a, [field]: value } as ActionRow : a));
+        setActions((prev) => prev.map((a) => a.id === id ? { ...a, [field]: coerced } as ActionRow : a));
       }
       if (field === "status") { const a = actions.find((a) => a.id === id); if (a) notifyActionStatusChange(a, value); }
     }
@@ -1849,6 +1866,15 @@ function ActionItemsPanel({
         return children.some((c) => c.id === childId || isDescendant(c.id, childId));
       };
       if (isDescendant(draggedId, targetId)) return;
+      // Enforce max 5-level nesting (matches DB depth guard) before attempting
+      const depthOf = (id: string): number => { let d = 1; let cur = actions.find((a) => a.id === id)?.parent_id; while (cur) { d++; cur = actions.find((a) => a.id === cur)?.parent_id; } return d; };
+      const heightOf = (id: string): number => { const kids = actions.filter((a) => a.parent_id === id); return kids.length ? 1 + Math.max(...kids.map((k) => heightOf(k.id))) : 1; };
+      if (depthOf(targetId) + heightOf(draggedId) > 5) {
+        window.alert("Can't nest here — that would exceed the 5-level limit.");
+        setDraggedId(null);
+        setDropTarget(null);
+        return;
+      }
       newParentId = targetId;
       // Place at end of children
       const children = actions.filter((a) => a.parent_id === targetId && a.id !== draggedId);
@@ -1875,6 +1901,8 @@ function ActionItemsPanel({
     const { error } = await supabase.from("action_items").update({ parent_id: newParentId, sort_order: newSortOrder }).eq("id", draggedId);
     if (!error) {
       setActions((prev) => prev.map((a) => a.id === draggedId ? { ...a, parent_id: newParentId, sort_order: newSortOrder } : a));
+    } else {
+      window.alert(`Couldn't move item: ${error.message}`);
     }
 
     setDraggedId(null);
@@ -1973,6 +2001,37 @@ function ActionItemsPanel({
     onConvertedToBlocker?.(data.id);
   }
 
+  async function handleAddSection() {
+    const title = window.prompt("New section name:");
+    if (!title || !title.trim()) return;
+    const nextOrder = actionSections.length > 0 ? Math.max(...actionSections.map((s) => s.sort_order || 0)) + 1 : 0;
+    const { data, error } = await supabase
+      .from("action_item_sections")
+      .insert({ org_id: orgId, project_id: projectId, title: title.trim(), sort_order: nextOrder, created_by: profileId })
+      .select("*")
+      .single();
+    if (error) { console.error("Add section failed:", error); return; }
+    if (data) setActionSections((prev) => [...prev, data as ActionItemSection]);
+  }
+
+  async function handleRenameSection(id: string, title: string) {
+    if (!title.trim()) return;
+    setActionSections((prev) => prev.map((s) => s.id === id ? { ...s, title: title.trim() } : s));
+    const { error } = await supabase.from("action_item_sections").update({ title: title.trim() }).eq("id", id);
+    if (error) console.error("Rename section failed:", error);
+  }
+
+  async function handleDeleteSection(id: string) {
+    const sec = actionSections.find((s) => s.id === id);
+    if (!sec) return;
+    if (!window.confirm(`Delete section "${sec.title}"? Its items will become ungrouped (not deleted).`)) return;
+    const { error } = await supabase.from("action_item_sections").delete().eq("id", id);
+    if (error) { console.error("Delete section failed:", error); return; }
+    setActionSections((prev) => prev.filter((s) => s.id !== id));
+    // FK is ON DELETE SET NULL — reflect locally so items fall into "Ungrouped"
+    setActions((prev) => prev.map((a) => a.section_id === id ? { ...a, section_id: null } as ActionRow : a));
+  }
+
   async function handleAdd() {
     if (!addTitle.trim()) return;
     const { data, error } = await supabase
@@ -1984,18 +2043,24 @@ function ActionItemsPanel({
         project_id: projectId,
         org_id: orgId,
         created_by: profileId,
+        section_id: addSectionId || null,
+        parent_id: addParentId || null,
       })
       .select("*, owner:people!action_items_owner_id_fkey(*), vendor:vendors(*)")
       .single();
 
     if (error) {
       console.error("Add failed:", error);
+      window.alert(`Could not add item: ${error.message}`);
       return;
     }
     if (data) {
       setActions((prev) => [...prev, data as ActionRow]);
+      if (addParentId) setExpandedParents((prev) => new Set([...prev, addParentId]));
       setAddTitle("");
       setAddPriority("medium");
+      setAddSectionId("");
+      setAddParentId("");
       setAdding(false);
     }
   }
@@ -2045,12 +2110,20 @@ function ActionItemsPanel({
             )}
           </div>
           {canCreate(role) && (
-            <button
-              onClick={() => { setAdding(!adding); setAddTitle(""); setAddPriority("medium"); }}
-              className="text-xs text-blue-300 hover:text-white transition-colors"
-            >
-              + Add Action Item
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleAddSection}
+                className="text-xs text-blue-300 hover:text-white transition-colors"
+              >
+                + Section
+              </button>
+              <button
+                onClick={() => { setAdding(!adding); setAddTitle(""); setAddPriority("medium"); }}
+                className="text-xs text-blue-300 hover:text-white transition-colors"
+              >
+                + Add Action Item
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -2073,6 +2146,30 @@ function ActionItemsPanel({
             >
               {actionPriorityOptions.map((p) => (
                 <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</option>
+              ))}
+            </select>
+            {actionSections.length > 0 && (
+              <select
+                value={addSectionId}
+                onChange={(e) => setAddSectionId(e.target.value)}
+                className="rounded border border-gray-300 px-2 py-1 text-xs focus:border-blue-500 focus:outline-none"
+                title="Section"
+              >
+                <option value="">No section</option>
+                {actionSections.map((s) => (
+                  <option key={s.id} value={s.id}>{s.title}</option>
+                ))}
+              </select>
+            )}
+            <select
+              value={addParentId}
+              onChange={(e) => setAddParentId(e.target.value)}
+              className="rounded border border-gray-300 px-2 py-1 text-xs focus:border-blue-500 focus:outline-none"
+              title="Nest under (optional)"
+            >
+              <option value="">Top-level</option>
+              {actions.filter((a) => !a.resolved_at).map((a) => (
+                <option key={a.id} value={a.id}>↳ {a.title.length > 40 ? a.title.slice(0, 40) + "…" : a.title}</option>
               ))}
             </select>
             <button
@@ -2107,8 +2204,7 @@ function ActionItemsPanel({
       </div>
       <div>
         {(() => {
-          // Build parent/child ordered list, sorted by sort_order
-          const parentActions = filteredActions.filter((a) => !a.parent_id).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+          // Build child map (sorted by sort_order) for recursive nesting up to 5 deep
           const childMap = new Map<string, ActionRow[]>();
           for (const a of filteredActions) {
             if (a.parent_id) {
@@ -2117,26 +2213,67 @@ function ActionItemsPanel({
               childMap.set(a.parent_id, arr);
             }
           }
-          // Sort children by sort_order
           for (const [key, children] of childMap) {
             childMap.set(key, children.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0)));
           }
-          const orderedList: { action: ActionRow; isChild: boolean }[] = [];
-          for (const p of parentActions) {
-            orderedList.push({ action: p, isChild: false });
-            if (expandedParents.has(p.id)) {
-              for (const c of (childMap.get(p.id) || [])) {
-                orderedList.push({ action: c, isChild: true });
-              }
+          const topLevel = filteredActions.filter((a) => !a.parent_id).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+
+          type RenderEntry = { section: ActionItemSection | null; count: number } | { action: ActionRow; depth: number };
+          const entries: RenderEntry[] = [];
+          const pushTree = (item: ActionRow, depth: number) => {
+            entries.push({ action: item, depth });
+            if (expandedParents.has(item.id)) {
+              for (const c of (childMap.get(item.id) || [])) pushTree(c, depth + 1);
             }
+          };
+
+          if (actionSections.length > 0) {
+            const ordered = [...actionSections].sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+            const bySection = new Map<string, ActionRow[]>();
+            const ungrouped: ActionRow[] = [];
+            for (const t of topLevel) {
+              if (t.section_id && actionSections.some((s) => s.id === t.section_id)) {
+                const arr = bySection.get(t.section_id) || []; arr.push(t); bySection.set(t.section_id, arr);
+              } else { ungrouped.push(t); }
+            }
+            for (const s of ordered) {
+              const items = bySection.get(s.id) || [];
+              entries.push({ section: s, count: items.length });
+              for (const t of items) pushTree(t, 0);
+            }
+            if (ungrouped.length > 0) {
+              entries.push({ section: null, count: ungrouped.length });
+              for (const t of ungrouped) pushTree(t, 0);
+            }
+          } else {
+            for (const t of topLevel) pushTree(t, 0);
           }
-          // Include orphaned children (parent filtered out or completed)
+
+          // Orphaned children (parent completed/filtered out) — show at the end
+          const renderedIds = new Set(entries.filter((e): e is { action: ActionRow; depth: number } => "action" in e).map((e) => e.action.id));
           for (const a of filteredActions) {
-            if (a.parent_id && !parentActions.some((p) => p.id === a.parent_id) && !orderedList.some((o) => o.action.id === a.id)) {
-              orderedList.push({ action: a, isChild: true });
-            }
+            if (a.parent_id && !renderedIds.has(a.id)) entries.push({ action: a, depth: 1 });
           }
-          return orderedList.map(({ action: a, isChild }) => {
+
+          return entries.map((entry) => {
+          if ("section" in entry) {
+            const sec = entry.section;
+            return (
+              <div key={sec ? `sec-${sec.id}` : "sec-ungrouped"} className="flex items-center gap-2 bg-gray-100 border-b border-gray-300 px-3 py-1.5">
+                <span className="text-[11px] font-bold text-gray-700 uppercase tracking-wide">{sec ? sec.title : "Ungrouped"}</span>
+                <span className="text-[10px] text-gray-500 bg-gray-200 rounded px-1.5 py-0.5">{entry.count}</span>
+                {sec && canCreate(role) && (
+                  <div className="ml-auto flex items-center gap-2">
+                    <button onClick={() => { const t = window.prompt("Rename section:", sec.title); if (t) handleRenameSection(sec.id, t); }} className="text-[10px] text-gray-400 hover:text-gray-700">Rename</button>
+                    <button onClick={() => handleDeleteSection(sec.id)} className="text-[10px] text-gray-400 hover:text-red-600">Delete</button>
+                  </div>
+                )}
+              </div>
+            );
+          }
+          const a = entry.action;
+          const depth = entry.depth;
+          const isChild = depth > 0;
           const isExpanded = expandedId === a.id;
           const badge = statusBadge(a.status);
           const childCount = filteredActions.filter((x) => x.parent_id === a.id).length;
@@ -2151,7 +2288,7 @@ function ActionItemsPanel({
               <div
                 id={`action-${a.id}`}
                 className={`border-b last:border-b-0 cursor-pointer relative overflow-hidden ${isDragging ? "opacity-40 bg-white border-gray-400" : isDropNest ? "bg-blue-50 border-blue-300" : selectedActionIds.has(a.id) ? "bg-blue-50 border-gray-400" : "bg-white hover:bg-gray-50 border-gray-400"}`}
-                style={{ paddingLeft: isChild ? "2rem" : "0.75rem", paddingRight: "0.75rem", paddingTop: "0.5rem", paddingBottom: "0.5rem" }}
+                style={{ paddingLeft: `${0.75 + depth * 1.5}rem`, paddingRight: "0.75rem", paddingTop: "0.5rem", paddingBottom: "0.5rem" }}
                 onClick={() => toggleExpand(a.id)}
                 draggable
                 onDragStart={(e) => handleDragStart(a.id, e)}
@@ -2199,8 +2336,8 @@ function ActionItemsPanel({
                   </button>
                   {/* 2. Child arrow */}
                   {isChild && <span className="text-gray-300 flex-shrink-0 -ml-2">↳</span>}
-                  {/* 3. Subtask disclosure triangle or spacer */}
-                  {!isChild && childCount > 0 ? (
+                  {/* 3. Subtask disclosure triangle or spacer (any depth) */}
+                  {childCount > 0 ? (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -2217,7 +2354,7 @@ function ActionItemsPanel({
                         <polygon points="6,4 20,12 6,20" />
                       </svg>
                     </button>
-                  ) : !isChild ? <span className="w-[20px] flex-shrink-0" /> : null}
+                  ) : <span className="w-[20px] flex-shrink-0" />}
                   {/* 4. Complete button */}
                   <button
                     onClick={(e) => { e.stopPropagation(); handleResolve(a.id); }}
@@ -2383,6 +2520,24 @@ function ActionItemsPanel({
                         <span className="text-sm text-gray-600 font-medium">{a.age_days != null ? formatAge(a.age_days) : "—"}</span>
                       </div>
 
+                      {/* Row: Section */}
+                      {actionSections.length > 0 && (
+                        <>
+                          <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-100">Section</span>
+                          <div className="px-3 py-2.5 border-b border-gray-100 col-span-3">
+                            <select
+                              value={a.section_id || ""}
+                              onChange={(e) => saveField(a.id, "section_id", e.target.value)}
+                              className="text-sm rounded border border-transparent hover:border-gray-300 bg-transparent py-0 focus:border-blue-500 focus:outline-none cursor-pointer -ml-0.5"
+                            >
+                              <option value="">No section</option>
+                              {actionSections.map((s) => (
+                                <option key={s.id} value={s.id}>{s.title}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </>
+                      )}
                       {/* Row: Stage */}
                       <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-100">Stage</span>
                       <div className="px-3 py-2.5 border-b border-gray-100 border-r border-gray-100">

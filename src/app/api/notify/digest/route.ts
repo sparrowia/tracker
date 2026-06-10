@@ -40,7 +40,8 @@ export async function GET(req: NextRequest) {
     const assignments = items.filter((n) => n.mention_type === "assignment");
     const statusChanges = items.filter((n) => n.mention_type === "status_change");
     const fileShares = items.filter((n) => n.mention_type === "file_share");
-    const comments = items.filter((n) => !["assignment", "status_change", "file_share"].includes(n.mention_type));
+    const newItems = items.filter((n) => n.mention_type === "new_item");
+    const comments = items.filter((n) => !["assignment", "status_change", "file_share", "new_item"].includes(n.mention_type));
     const totalCount = items.length;
 
     const subject = totalCount === 1
@@ -50,6 +51,8 @@ export async function GET(req: NextRequest) {
         ? `You've been assigned: ${items[0].item_title}`
         : items[0].mention_type === "status_change"
         ? `Status updated: ${items[0].item_title}`
+        : items[0].mention_type === "new_item"
+        ? `New ticket added: ${items[0].item_title}`
         : `New comment on ${items[0].item_type}: ${items[0].item_title}`
       : `${totalCount} new notifications from Edcetera Tracker`;
 
@@ -88,6 +91,15 @@ export async function GET(req: NextRequest) {
       </div>
     `).join("");
 
+    const newItemBlocks = newItems.map((n) => `
+      <div style="margin-bottom: 16px; padding: 12px; background: #f5f3ff; border-radius: 8px; border-left: 3px solid #8b5cf6;">
+        <p style="margin: 0 0 4px; font-size: 12px; color: #6b7280;">
+          New ${n.item_type} added${n.project_name ? ` to <strong>${n.project_name}</strong>` : ""}: <strong>${n.item_title}</strong>
+        </p>
+        <a href="${itemLink(n)}" style="color: #3b82f6; text-decoration: none; font-size: 12px;">Open in Tracker →</a>
+      </div>
+    `).join("");
+
     const commentBlocks = comments.map((n) => `
       <div style="margin-bottom: 16px; padding: 12px; background: #f9fafb; border-radius: 8px; border-left: 3px solid ${n.mention_type === "mention" ? "#3b82f6" : "#8b5cf6"};">
         <p style="margin: 0 0 4px; font-size: 12px; color: #6b7280;">
@@ -98,11 +110,12 @@ export async function GET(req: NextRequest) {
       </div>
     `).join("");
 
-    const categoryCount = [assignments.length > 0, statusChanges.length > 0, fileShares.length > 0, comments.length > 0].filter(Boolean).length;
+    const categoryCount = [assignments.length > 0, statusChanges.length > 0, fileShares.length > 0, newItems.length > 0, comments.length > 0].filter(Boolean).length;
     const heading = categoryCount > 1 || totalCount > 1
       ? `${totalCount} New Notifications`
       : assignments.length === 1 ? "New Assignment"
       : statusChanges.length === 1 ? "Status Update"
+      : newItems.length === 1 ? "New Ticket Added"
       : "New Comment";
 
     const html = `
@@ -110,7 +123,7 @@ export async function GET(req: NextRequest) {
         <h2 style="color: #1f2937; font-size: 16px; margin-bottom: 16px;">
           ${heading}
         </h2>
-        ${assignmentBlocks}${statusChangeBlocks}${fileShareBlocks}${commentBlocks}
+        ${assignmentBlocks}${statusChangeBlocks}${fileShareBlocks}${newItemBlocks}${commentBlocks}
         <p style="margin-top: 16px; font-size: 11px; color: #9ca3af;">
           Edcetera Tracker · <a href="${siteUrl}" style="color: #3b82f6; text-decoration: none;">Sign in</a> to view and manage your items.
         </p>
