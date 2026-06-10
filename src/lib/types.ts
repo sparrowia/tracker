@@ -191,6 +191,7 @@ export interface ActionItem {
   status: ItemStatus;
   priority: PriorityLevel;
   due_date: string | null;
+  start_date: string | null;
   first_flagged_at: string;
   resolved_at: string | null;
   notes: string | null;

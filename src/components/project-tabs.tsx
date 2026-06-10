@@ -1714,8 +1714,8 @@ function ActionItemsPanel({
       dbUpdates.vendor_id = value || null;
       setActions((prev) => prev.map((a) => a.id === id ? { ...a, vendor_id: value || null, vendor: newVendor } as ActionRow : a));
     } else {
-      // uuid FK fields must be null (not "") when cleared
-      const coerced = ((field === "section_id" || field === "parent_id") && value === "") ? null : value;
+      // uuid FK + date fields must be null (not "") when cleared
+      const coerced = (["section_id", "parent_id", "start_date", "due_date"].includes(field) && value === "") ? null : value;
       dbUpdates[field] = coerced;
       // When changing status away from complete, clear resolved_at so RPC picks it up again
       if (field === "status" && value !== "complete") {
@@ -2510,19 +2510,23 @@ function ActionItemsPanel({
                         />
                       </div>
 
-                      {/* Row: Due Date / Flagged */}
-                      <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-100">Due Date</span>
+                      {/* Row: Start Date / Due Date (end) */}
+                      <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-100">Start Date</span>
+                      <div className="px-3 py-2.5 border-b border-gray-100">
+                        <InlineDate value={a.start_date} onSave={(v) => saveField(a.id, "start_date", v)} />
+                      </div>
+                      <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-100">Due Date</span>
                       <div className="px-3 py-2.5 border-b border-gray-100">
                         <InlineDate value={a.due_date} onSave={(v) => saveField(a.id, "due_date", v)} />
                       </div>
-                      <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-100">Flagged</span>
+
+                      {/* Row: Flagged / Age */}
+                      <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-100">Flagged</span>
                       <div className="px-3 py-2.5 border-b border-gray-100">
                         <span className="text-sm text-gray-700">{new Date(a.first_flagged_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
                       </div>
-
-                      {/* Row: Age */}
-                      <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-100">Age</span>
-                      <div className="px-3 py-2.5 border-b border-gray-100 col-span-3">
+                      <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-100">Age</span>
+                      <div className="px-3 py-2.5 border-b border-gray-100">
                         <span className="text-sm text-gray-600 font-medium">{a.age_days != null ? formatAge(a.age_days) : "—"}</span>
                       </div>
 
