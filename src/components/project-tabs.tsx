@@ -2249,10 +2249,16 @@ function ActionItemsPanel({
             for (const t of topLevel) pushTree(t, 0);
           }
 
-          // Orphaned children (parent completed/filtered out) — show at the end
+          // True orphans only: a child whose parent isn't in the visible set (e.g. the
+          // parent was completed/filtered out). Render at top level so they don't masquerade
+          // as subtasks. Children of a *collapsed* parent are intentionally hidden and must
+          // NOT land here — that was the bug.
+          const presentIds = new Set(filteredActions.map((a) => a.id));
           const renderedIds = new Set(entries.filter((e): e is { action: ActionRow; depth: number } => "action" in e).map((e) => e.action.id));
           for (const a of filteredActions) {
-            if (a.parent_id && !renderedIds.has(a.id)) entries.push({ action: a, depth: 1 });
+            if (a.parent_id && !presentIds.has(a.parent_id) && !renderedIds.has(a.id)) {
+              entries.push({ action: a, depth: 0 });
+            }
           }
 
           return entries.map((entry) => {
