@@ -55,6 +55,36 @@ export default function DashboardPage() {
         visibleProjectIds = idsError ? null : new Set((ids || []).map(String));
       }
 
+      // Tasks/RAID the user has been @mentioned on (in any comment, at any point)
+      // should also surface in their lists - not just items they own. Resolve the
+      // mentioned item ids first, then widen the "my" filters below to owner OR mentioned.
+      const meId = userPersonId || "00000000-0000-0000-0000-000000000000";
+      let mentionedTaskIds: string[] = [];
+      let mentionedRaidIds: string[] = [];
+      if (userPersonId) {
+        const { data: mentionRows } = await supabase
+          .from("comment_notifications")
+          .select("comment_id")
+          .eq("recipient_person_id", userPersonId)
+          .eq("mention_type", "mention")
+          .not("comment_id", "is", null);
+        const commentIds = [...new Set((mentionRows || []).map((m) => m.comment_id as string))];
+        if (commentIds.length) {
+          const { data: cmts } = await supabase
+            .from("comments")
+            .select("action_item_id, raid_entry_id")
+            .in("id", commentIds);
+          mentionedTaskIds = [...new Set((cmts || []).map((c) => c.action_item_id).filter(Boolean) as string[])];
+          mentionedRaidIds = [...new Set((cmts || []).map((c) => c.raid_entry_id).filter(Boolean) as string[])];
+        }
+      }
+      const myTaskFilter = mentionedTaskIds.length
+        ? `owner_id.eq.${meId},id.in.(${mentionedTaskIds.join(",")})`
+        : `owner_id.eq.${meId}`;
+      const myRaidFilter = mentionedRaidIds.length
+        ? `owner_id.eq.${meId},id.in.(${mentionedRaidIds.join(",")})`
+        : `owner_id.eq.${meId}`;
+
       const today = new Date().toISOString().split("T")[0];
       const weekFromNow = new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0];
 
@@ -66,7 +96,7 @@ export default function DashboardPage() {
           .select("*, owner:people(id, full_name, email, slack_member_id), project:projects(id, name, slug)")
           .lt("due_date", today)
           .in("status", ["pending", "in_progress", "at_risk", "blocked"])
-          .eq("owner_id", userPersonId || "00000000-0000-0000-0000-000000000000")
+          .or(myTaskFilter)
           .order("due_date")
           .limit(20),
         // Due this week — only items owned by the current user
@@ -76,7 +106,7 @@ export default function DashboardPage() {
           .gte("due_date", today)
           .lte("due_date", weekFromNow)
           .in("status", ["pending", "in_progress", "at_risk", "blocked"])
-          .eq("owner_id", userPersonId || "00000000-0000-0000-0000-000000000000")
+          .or(myTaskFilter)
           .order("due_date")
           .limit(20),
         // My Tasks — all active tasks owned by the current user
@@ -84,7 +114,7 @@ export default function DashboardPage() {
           .from("action_item_ages")
           .select("*, owner:people(id, full_name, email, slack_member_id), project:projects(id, name, slug)")
           .in("status", ["pending", "in_progress", "at_risk", "blocked", "needs_verification"])
-          .eq("owner_id", userPersonId || "00000000-0000-0000-0000-000000000000")
+          .or(myTaskFilter)
           .order("priority")
           .order("due_date", { ascending: true, nullsFirst: false })
           .limit(50),
@@ -93,7 +123,7 @@ export default function DashboardPage() {
           .from("raid_entries")
           .select("*, owner:people!raid_entries_owner_id_fkey(id, full_name, email, slack_member_id), project:projects(id, name, slug)")
           .in("status", ["pending", "in_progress", "at_risk", "blocked", "needs_verification", "identified", "assessing"])
-          .eq("owner_id", userPersonId || "00000000-0000-0000-0000-000000000000")
+          .or(myRaidFilter)
           .is("resolved_at", null)
           .order("priority")
           .order("due_date", { ascending: true, nullsFirst: false })
