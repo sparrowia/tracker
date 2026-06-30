@@ -1923,7 +1923,8 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
             className="bg-gray-700 text-white text-xs rounded border border-gray-600 px-2 py-1 focus:outline-none focus:border-blue-400 max-w-[160px]"
           >
             <option value="">Nest under...</option>
-            {entries.filter((e) => !selectedIds.has(e.id) && e.raid_type === activeTab).map((e) => (
+            {/* Only top-level items are nest-under targets — never already-nested ones. */}
+            {entries.filter((e) => !selectedIds.has(e.id) && e.raid_type === activeTab && !e.parent_id).map((e) => (
               <option key={e.id} value={e.id}>{e.title.slice(0, 40)}</option>
             ))}
           </select>
