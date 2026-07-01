@@ -515,11 +515,14 @@ Comments use TipTap editor with `@tiptap/extension-mention`:
 
 ## Vendor RLS — Personal Items
 
-Vendor-role users see items where:
+Vendor-role users see an `action_items` / `raid_entries` / `blockers` item where:
 - `vendor_id` matches their vendor (original behavior), OR
-- `owner_id` matches their person record (added)
+- `owner_id` matches their person record (added), OR
+- the item's `project_id` is one they are a `project_members` member of (added — see below)
 - `user_person_id()` helper function maps `auth.uid()` to `people.id`
-- Migration: `20260326000003_vendor_see_personal_items.sql`
+- Migrations: `20260326000003_vendor_see_personal_items.sql`, `20260701000001_vendor_project_member_item_visibility.sql`
+
+**Project members see ALL items in their projects (including vendors).** Being an "approved person" (a `project_members` row, added via the Docs-tab People section) grants a vendor visibility to *every* item in that project — not just items assigned to their vendor or owned by them. Enforced by the `user_project_member_ids()` SECURITY DEFINER helper (returns the project ids the current auth user is a member of, bypassing `project_members` RLS to avoid recursion), added to the three vendor SELECT policies. This closes the gap where a vendor project member could open a project but not see its unassigned tasks (e.g. a RAID entry with `vendor_id = null` and `owner_id = null`). **Trade-off:** a vendor added to a project's approved-people list sees items assigned to *other* vendors and internal-only items in that project too — don't add a vendor as a member on projects where cross-vendor items must stay hidden; assign individual items to them instead. `agenda_items` is intentionally NOT covered — vendor agenda-item visibility stays `vendor_id`-only.
 
 ## Password Reset
 
@@ -614,7 +617,7 @@ Projects have three person-reference fields: `project_owner_id`, `project_manage
 
 ## Project Members
 
-`project_members` junction table controls project visibility. People added via the "People" section in the Docs tab can see and interact with the project even without assigned tasks. `user_visible_project_ids` RPC includes project_members.
+`project_members` junction table controls project visibility. People added via the "People" section in the Docs tab can see and interact with the project even without assigned tasks. `user_visible_project_ids` RPC includes project_members. For **vendor**-role members this also grants item-level visibility to every item in the project via `user_project_member_ids()` — see "Vendor RLS — Personal Items".
 
 ## Status Change Notifications
 

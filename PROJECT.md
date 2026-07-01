@@ -185,7 +185,7 @@ All tables have row-level security policies scoped to `org_id` via the `user_org
 22. **Vendor Detail Page** — project-tabbed item view (🔥 urgent, All, per-project), health report (A-F grade, 8 metrics), filters, expandable detail panels with comments, vendor reassignment.
 23. **Two-Flag Meeting Toggle** — separate `include_in_project_meeting` and `include_in_vendor_meeting` flags. Project and vendor agendas are independent.
 24. **Project Roles** — Project Owner, Project Manager, Lead QA fields on projects. Vendor Owner per project-vendor relationship via junction table.
-25. **Project Members** — `project_members` junction table for project visibility. People section in Docs tab.
+25. **Project Members** — `project_members` junction table for project visibility. People section in Docs tab. For vendor-role members this also grants item-level visibility to every item in the project (via `user_project_member_ids()`), so approved vendors can see unassigned tasks too.
 26. **Status Change Notifications** — digest notifications on status changes to reporter/owner. Verify → Lead QA, Rejected → Vendor Owner.
 27. **Custom Invite/Reset Flow** — bypasses Supabase email, uses Gmail SMTP + server-side token verification to avoid PKCE issues.
 28. **Rejected Status** — new status option for items that fail QA review.
@@ -315,6 +315,8 @@ All in `supabase/migrations/`:
 | `20260610000004_sections_rls_least_privilege.sql` | Sections RLS: org-wide read, non-vendor write |
 | `20260610000005_action_item_start_date.sql` | `start_date` on action_items, exposed via `action_item_ages` |
 | `20260610000006_action_item_owner_vendor.sql` | `owner_vendor_id` (vendor as owner) on action_items, exposed via `action_item_ages` |
+| `20260615000001_scope_vendor_project_visibility.sql` | Scope `projects_select` for vendors to `vendor_visible_project_ids()` (no more org-wide project leak) |
+| `20260701000001_vendor_project_member_item_visibility.sql` | Vendor `project_members` see ALL items in their projects; `user_project_member_ids()` helper added to vendor SELECT policies on action_items/raid_entries/blockers |
 
 ## Deployment
 
