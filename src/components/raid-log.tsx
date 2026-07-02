@@ -1332,7 +1332,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                       {entry.raid_type !== "decision" && (
                         <button
                           onClick={(e) => { e.stopPropagation(); handleResolve(entry.id); }}
-                          className="w-[18px] h-[18px] rounded-full border-2 border-gray-300 hover:border-green-500 hover:bg-green-50 flex items-center justify-center flex-shrink-0 transition-colors group/check"
+                          className="w-[18px] h-[18px] rounded-full border-2 border-gray-400 bg-gray-100 hover:border-green-500 hover:bg-green-50 flex items-center justify-center flex-shrink-0 transition-colors group/check"
                           title="Resolve"
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-transparent group-hover/check:text-green-500 transition-colors">
