@@ -8,7 +8,7 @@ import OwnerPicker from "@/components/owner-picker";
 import CommentThread from "@/components/comment-thread";
 import VendorPicker from "@/components/vendor-picker";
 import { useRole } from "@/components/role-context";
-import { canCreate, canDelete, canEditItem } from "@/lib/permissions";
+import { canCreate, canDeleteItem, canEditItem } from "@/lib/permissions";
 import ReminderButton from "@/components/reminder-button";
 
 type RaidRow = RaidEntry & { owner: Person | null; reporter: Person | null; vendor: Vendor | null };
@@ -616,7 +616,15 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
     }
 
     supabase.from("raid_entries").update(dbUpdates).eq("id", id).select("updated_at").single().then(({ data, error }) => {
-      if (error) { console.error("Save failed:", error); return; }
+      if (error) {
+        console.error("Save failed:", error);
+        // PGRST116 = zero rows came back — the update was blocked by
+        // permissions (RLS) and the optimistic UI above is lying.
+        if (error.code === "PGRST116") {
+          window.alert("This change wasn't saved — you don't have permission to edit this item. Refresh to see its actual state.");
+        }
+        return;
+      }
       // Use the DB-set updated_at (from trigger) as read_at so our own changes don't show ❗
       if (data && profileId) {
         const dbUpdatedAt = data.updated_at;
@@ -779,12 +787,18 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
     const resolveStatus = entry.raid_type === "risk" ? "closed" : "complete";
 
     // Start DB update in parallel with animation
-    const dbPromise = supabase.from("raid_entries").update({ status: resolveStatus, resolved_at: now }).eq("id", id);
+    // .select() so an RLS-blocked update (no error, zero rows) is detectable
+    // instead of silently reverting on the next refresh.
+    const dbPromise = supabase.from("raid_entries").update({ status: resolveStatus, resolved_at: now }).eq("id", id).select("id");
     // Wait for animation
     await new Promise((r) => setTimeout(r, 400));
-    const { error } = await dbPromise;
+    const { data: updatedRows, error } = await dbPromise;
 
     setResolvingId(null);
+    if (!error && (updatedRows?.length ?? 0) === 0) {
+      window.alert("This item wasn't updated — you don't have permission to change it. Ask an admin for access.");
+      return;
+    }
     if (!error) {
       setEntries((prev) => prev.map((e) => e.id === id ? { ...e, status: resolveStatus as ItemStatus, resolved_at: now } : e));
       notifyStatusChange(entry, resolveStatus);
@@ -799,7 +813,11 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
     const entry = entries.find((e) => e.id === id);
     if (!entry) return;
     const newStatus = entry.raid_type === "risk" ? "identified" : "pending";
-    const { error } = await supabase.from("raid_entries").update({ status: newStatus, resolved_at: null }).eq("id", id);
+    const { data: reopenedRows, error } = await supabase.from("raid_entries").update({ status: newStatus, resolved_at: null }).eq("id", id).select("id");
+    if (!error && (reopenedRows?.length ?? 0) === 0) {
+      window.alert("This item wasn't updated — you don't have permission to change it. Ask an admin for access.");
+      return;
+    }
     if (!error) {
       setEntries((prev) => prev.map((e) => e.id === id ? { ...e, status: newStatus as ItemStatus, resolved_at: null } : e));
     }
@@ -1597,7 +1615,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                             <path d="M15 3h6v6"/><path d="M10 14L21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
                           </svg>
                         </button>
-                        {canDelete(role) && (
+                        {canDeleteItem(role, profileId, entry, userPersonId) && (
                           <button
                             onClick={() => handleDelete(entry.id)}
                             className="text-gray-400 hover:text-red-600 transition-colors"

@@ -272,6 +272,7 @@ export default function PeopleList({ initialPeople, vendors, profiles, initialIn
                   className="text-sm rounded border border-gray-300 px-2 py-1.5 focus:border-blue-500 focus:outline-none cursor-pointer"
                 >
                   <option value="admin">Admin</option>
+                  <option value="qa">QA</option>
                   <option value="user">User</option>
                   <option value="vendor">Vendor</option>
                 </select>
@@ -341,6 +342,7 @@ export default function PeopleList({ initialPeople, vendors, profiles, initialIn
                   className="text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 >
                   <option value="user">User</option>
+                  <option value="qa">QA</option>
                   <option value="admin">Admin</option>
                   <option value="vendor">Vendor</option>
                 </select>

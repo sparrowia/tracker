@@ -39,7 +39,7 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!["admin", "user", "vendor"].includes(role)) {
+  if (!["admin", "qa", "user", "vendor"].includes(role)) {
     return NextResponse.json(
       { error: "Invalid role. Cannot assign super_admin." },
       { status: 400 }

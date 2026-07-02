@@ -30,7 +30,7 @@ export type MilestoneStatus = "pending" | "in_progress" | "complete";
 
 export type SeverityIndicator = "critical" | "high" | "new" | "normal";
 
-export type UserRole = "super_admin" | "admin" | "user" | "vendor";
+export type UserRole = "super_admin" | "admin" | "qa" | "user" | "vendor";
 
 export type SteeringPhase =
   | "in_progress"
