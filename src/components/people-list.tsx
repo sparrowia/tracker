@@ -18,9 +18,12 @@ interface PeopleListProps {
   initialInvitations: Pick<Invitation, "id" | "email" | "accepted_at">[];
 }
 
-export default function PeopleList({ initialPeople, vendors, profiles, initialInvitations }: PeopleListProps) {
+export default function PeopleList({ initialPeople, vendors, profiles: initialProfiles, initialInvitations }: PeopleListProps) {
   const { role, profileId, orgId } = useRole();
   const [people, setPeople] = useState<PersonRow[]>(initialPeople);
+  // Local copy so a role change re-renders immediately (the prop only updates
+  // on a full page refresh, which made the dropdown look like it didn't take).
+  const [profiles, setProfiles] = useState(initialProfiles);
   const [invitations, setInvitations] = useState(initialInvitations);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [addingInternal, setAddingInternal] = useState(false);
@@ -267,7 +270,14 @@ export default function PeopleList({ initialPeople, vendors, profiles, initialIn
                 <select
                   value={linkedProfile.role}
                   onChange={async (e) => {
-                    await supabase.from("profiles").update({ role: e.target.value }).eq("id", person.profile_id!);
+                    const newRole = e.target.value as Profile["role"];
+                    const prevRole = linkedProfile.role;
+                    setProfiles((prev) => prev.map((pr) => pr.id === person.profile_id ? { ...pr, role: newRole } : pr));
+                    const { error } = await supabase.from("profiles").update({ role: newRole }).eq("id", person.profile_id!);
+                    if (error) {
+                      setProfiles((prev) => prev.map((pr) => pr.id === person.profile_id ? { ...pr, role: prevRole } : pr));
+                      window.alert("Role change didn't save: " + error.message);
+                    }
                   }}
                   className="text-sm rounded border border-gray-300 px-2 py-1.5 focus:border-blue-500 focus:outline-none cursor-pointer"
                 >
