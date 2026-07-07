@@ -1290,10 +1290,10 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                           }
                           lastSelectedRef.current = entry.id;
                         }}
-                        className={`w-[18px] h-[18px] rounded flex items-center justify-center flex-shrink-0 transition-colors ${
+                        className={`w-[18px] h-[18px] rounded border flex items-center justify-center flex-shrink-0 transition-colors ${
                           selectedIds.has(entry.id)
-                            ? "bg-blue-600 text-white"
-                            : "text-transparent hover:text-gray-300 hover:bg-gray-100"
+                            ? "bg-blue-600 border-blue-600 text-white"
+                            : "border-gray-300 text-transparent hover:border-gray-400 hover:text-gray-400 hover:bg-gray-100"
                         }`}
                         title={selectedIds.has(entry.id) ? "Deselect" : "Select (Shift+click for range)"}
                       >

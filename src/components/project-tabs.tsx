@@ -1152,7 +1152,7 @@ function BlockersPanel({
                       }
                       lastSelectedBlockerRef.current = b.id;
                     }}
-                    className={`w-[18px] h-[18px] rounded flex items-center justify-center flex-shrink-0 transition-colors ${selectedIds.has(b.id) ? "bg-blue-600 text-white" : "text-transparent hover:text-gray-300 hover:bg-gray-100"}`}
+                    className={`w-[18px] h-[18px] rounded border flex items-center justify-center flex-shrink-0 transition-colors ${selectedIds.has(b.id) ? "bg-blue-600 border-blue-600 text-white" : "border-gray-300 text-transparent hover:border-gray-400 hover:text-gray-400 hover:bg-gray-100"}`}
                     title={selectedIds.has(b.id) ? "Deselect" : "Select (Shift for range)"}
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
@@ -2330,7 +2330,13 @@ function ActionItemsPanel({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      const actionIds = filteredActions.map((x) => x.id);
+                      // Range must follow the VISIBLE row order (tree-flattened,
+                      // sort_order- and expand-aware) — NOT filteredActions' order,
+                      // which diverges after drag-reordering and made shift-select
+                      // grab a wrong set. `entries` is the exact rendered order.
+                      const actionIds = entries
+                        .filter((en): en is { action: ActionRow; depth: number } => "action" in en)
+                        .map((en) => en.action.id);
                       if (e.shiftKey && lastSelectedActionRef.current) {
                         const from = actionIds.indexOf(lastSelectedActionRef.current);
                         const to = actionIds.indexOf(a.id);
@@ -2354,7 +2360,7 @@ function ActionItemsPanel({
                       }
                       lastSelectedActionRef.current = a.id;
                     }}
-                    className={`w-[18px] h-[18px] rounded flex items-center justify-center flex-shrink-0 transition-colors ${selectedActionIds.has(a.id) ? "bg-blue-600 text-white" : "text-transparent hover:text-gray-300 hover:bg-gray-100"}`}
+                    className={`w-[18px] h-[18px] rounded border flex items-center justify-center flex-shrink-0 transition-colors ${selectedActionIds.has(a.id) ? "bg-blue-600 border-blue-600 text-white" : "border-gray-300 text-transparent hover:border-gray-400 hover:text-gray-400 hover:bg-gray-100"}`}
                     title={selectedActionIds.has(a.id) ? "Deselect" : "Select (Shift for range)"}
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
