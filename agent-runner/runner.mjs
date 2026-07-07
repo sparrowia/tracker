@@ -65,10 +65,19 @@ async function threadHistory(taskId) {
   return (data || []).map((e) => `[${e.agent}·${e.kind}] ${e.body}`).join('\n\n').slice(0, 20000);
 }
 // Run the agent CLI headless in the repo. Returns its final stdout.
-function runAgent(prompt) {
+// Passes AGENT_ROLE ('lead' | 'qa') + AGENT_TASK_STATE as env so a wrapper can
+// pick its sandbox (read-only for QA — §11.7) DETERMINISTICALLY, instead of
+// inferring the role from prompt wording (which couples safety to prose).
+function runAgent(prompt, role, state) {
   const cmd = `${AGENT_CMD} ${JSON.stringify(prompt)}`;
-  log('invoking:', AGENT_CMD, `(${prompt.length} char prompt) in ${REPO_PATH}`);
-  return execSync(cmd, { cwd: REPO_PATH, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'inherit'] });
+  log('invoking:', AGENT_CMD, `role=${role} (${prompt.length} char prompt) in ${REPO_PATH}`);
+  return execSync(cmd, {
+    cwd: REPO_PATH,
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
+    stdio: ['ignore', 'pipe', 'inherit'],
+    env: { ...process.env, AGENT_ROLE: role, AGENT_TASK_STATE: state || '' },
+  });
 }
 
 // --- prompt builders (the protocol steps) -----------------------------------
@@ -120,11 +129,12 @@ async function handle(task) {
   const iAmLead = task.lead === AGENT;
   const history = await threadHistory(task.id);
   const isReview = task.state === 'in_progress' && task.qa === AGENT;
+  const role = isReview ? 'qa' : 'lead';
 
   // STOP/PAUSE respected: only 'pending'/'in_progress' get here (claimNext filters).
   let output;
   try {
-    output = runAgent(iAmLead && task.state === 'pending' ? leadPrompt(task, history) : isReview ? qaPrompt(task, history) : leadPrompt(task, history));
+    output = runAgent(role === 'qa' ? qaPrompt(task, history) : leadPrompt(task, history), role, task.state);
   } catch (e) {
     log('agent run failed:', e.message);
     await db.from('agent_tasks').update({ lease_until: null, leased_by: null }).eq('id', task.id);
