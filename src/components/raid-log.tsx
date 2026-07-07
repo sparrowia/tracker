@@ -1289,7 +1289,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                         className={`w-[18px] h-[18px] rounded flex items-center justify-center flex-shrink-0 transition-colors text-white ${
                           selectedIds.has(entry.id)
                             ? "bg-blue-600"
-                            : "bg-gray-300 hover:bg-gray-400"
+                            : "bg-[#dcdfe4] hover:bg-gray-300"
                         }`}
                         title={selectedIds.has(entry.id) ? "Deselect" : "Select (Shift+click for range)"}
                       >
