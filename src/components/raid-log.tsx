@@ -1286,10 +1286,10 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                           }
                           lastSelectedRef.current = entry.id;
                         }}
-                        className={`w-[18px] h-[18px] rounded flex items-center justify-center flex-shrink-0 transition-colors ${
+                        className={`w-[18px] h-[18px] rounded flex items-center justify-center flex-shrink-0 transition-colors text-white ${
                           selectedIds.has(entry.id)
-                            ? "bg-blue-600 text-white"
-                            : "text-gray-400 hover:text-gray-500 hover:bg-gray-100"
+                            ? "bg-blue-600"
+                            : "bg-gray-300 hover:bg-gray-400"
                         }`}
                         title={selectedIds.has(entry.id) ? "Deselect" : "Select (Shift+click for range)"}
                       >
