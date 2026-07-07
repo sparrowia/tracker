@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, Fragment } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { priorityColor, priorityLabel, statusBadge, formatAge, formatDateShort } from "@/lib/utils";
+import { shiftSelectRange } from "@/lib/selection";
 import type { RaidEntry, RaidType, PriorityLevel, ItemStatus, Person, Vendor, Project } from "@/lib/types";
 import OwnerPicker from "@/components/owner-picker";
 import CommentThread from "@/components/comment-thread";
@@ -1261,18 +1262,13 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                         onClick={(e) => {
                           e.stopPropagation();
                           if (e.shiftKey && lastSelectedRef.current) {
-                            // Range select
-                            const ids = visibleIdsRef.current;
-                            const from = ids.indexOf(lastSelectedRef.current);
-                            const to = ids.indexOf(entry.id);
-                            if (from !== -1 && to !== -1) {
-                              const [start, end] = from < to ? [from, to] : [to, from];
-                              setSelectedIds((prev) => {
-                                const next = new Set(prev);
-                                for (let i = start; i <= end; i++) next.add(ids[i]);
-                                return next;
-                              });
-                            }
+                            // Range select over the VISIBLE rendered order.
+                            const range = shiftSelectRange(visibleIdsRef.current, lastSelectedRef.current, entry.id);
+                            setSelectedIds((prev) => {
+                              const next = new Set(prev);
+                              for (const id of range) next.add(id);
+                              return next;
+                            });
                           } else {
                             // Get children of this entry
                             const childIds = items.filter((e) => e.parent_id === entry.id).map((e) => e.id);
@@ -1290,10 +1286,10 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                           }
                           lastSelectedRef.current = entry.id;
                         }}
-                        className={`w-[18px] h-[18px] rounded border flex items-center justify-center flex-shrink-0 transition-colors ${
+                        className={`w-[18px] h-[18px] rounded flex items-center justify-center flex-shrink-0 transition-colors ${
                           selectedIds.has(entry.id)
-                            ? "bg-blue-600 border-blue-600 text-white"
-                            : "border-gray-300 text-transparent hover:border-gray-400 hover:text-gray-400 hover:bg-gray-100"
+                            ? "bg-blue-600 text-white"
+                            : "text-gray-400 hover:text-gray-500 hover:bg-gray-100"
                         }`}
                         title={selectedIds.has(entry.id) ? "Deselect" : "Select (Shift+click for range)"}
                       >
