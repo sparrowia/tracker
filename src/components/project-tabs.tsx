@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { priorityColor, priorityLabel, statusBadge, formatAge, formatDateShort, formatDateNumeric } from "@/lib/utils";
 import { shiftSelectRange } from "@/lib/selection";
+import { isClaudeQueueAssignment, pingClaudeQueue } from "@/lib/claude-notify";
 import type { Project, ActionItem, ActionItemSection, RaidEntry, Blocker, Person, Vendor, ProjectAgendaRow, PriorityLevel, ItemStatus, Intake, IntakeSource, ProjectDocument } from "@/lib/types";
 import RaidLog from "@/components/raid-log";
 import { AgendaView } from "@/components/agenda-view";
@@ -1720,6 +1721,10 @@ function ActionItemsPanel({
       if (value) {
         const action = actions.find((a) => a.id === id);
         if (action) notifyAssignment(value, action.title, "action item", action.id);
+        // Phase 0: ping the coding channel when the new owner is Claude (private project only).
+        if (action && isClaudeQueueAssignment(value, projectSlug)) {
+          pingClaudeQueue({ itemTitle: action.title, itemType: "action item", entityId: action.id, projectSlug });
+        }
       }
     } else if (field === "owner_vendor_id") {
       dbUpdates.owner_vendor_id = value || null;
