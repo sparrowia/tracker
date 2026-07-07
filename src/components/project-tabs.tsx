@@ -1149,7 +1149,7 @@ function BlockersPanel({
                       }
                       lastSelectedBlockerRef.current = b.id;
                     }}
-                    className={`w-[18px] h-[18px] rounded flex items-center justify-center flex-shrink-0 transition-colors text-white ${selectedIds.has(b.id) ? "bg-blue-600" : "bg-[#dcdfe4] hover:bg-gray-300"}`}
+                    className={`w-[18px] h-[18px] rounded flex items-center justify-center flex-shrink-0 transition-colors text-white ${selectedIds.has(b.id) ? "bg-blue-600" : "bg-gray-200 hover:bg-gray-300"}`}
                     title={selectedIds.has(b.id) ? "Deselect" : "Select (Shift for range)"}
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
@@ -2353,7 +2353,7 @@ function ActionItemsPanel({
                       }
                       lastSelectedActionRef.current = a.id;
                     }}
-                    className={`w-[18px] h-[18px] rounded flex items-center justify-center flex-shrink-0 transition-colors text-white ${selectedActionIds.has(a.id) ? "bg-blue-600" : "bg-[#dcdfe4] hover:bg-gray-300"}`}
+                    className={`w-[18px] h-[18px] rounded flex items-center justify-center flex-shrink-0 transition-colors text-white ${selectedActionIds.has(a.id) ? "bg-blue-600" : "bg-gray-200 hover:bg-gray-300"}`}
                     title={selectedActionIds.has(a.id) ? "Deselect" : "Select (Shift for range)"}
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
