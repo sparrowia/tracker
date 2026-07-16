@@ -4,7 +4,6 @@ import { useState, useEffect, useRef, Fragment } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { priorityColor, priorityLabel, statusBadge, formatAge, formatDateShort } from "@/lib/utils";
 import { shiftSelectRange } from "@/lib/selection";
-import { isClaudeQueueAssignment, pingClaudeQueue } from "@/lib/claude-notify";
 import type { RaidEntry, RaidType, PriorityLevel, ItemStatus, Person, Vendor, Project } from "@/lib/types";
 import OwnerPicker from "@/components/owner-picker";
 import CommentThread from "@/components/comment-thread";
@@ -577,10 +576,6 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
       const newOwner = people.find((p) => p.id === value) || null;
       dbUpdates.owner_id = value || null;
       setEntries((prev) => prev.map((e) => e.id === id ? { ...e, owner_id: value || null, owner: newOwner } as RaidRow : e));
-      // Phase 0: ping the coding channel when the new owner is Claude (private project only).
-      if (isClaudeQueueAssignment(value, project.slug)) {
-        pingClaudeQueue({ itemTitle: entry.title, itemType: entry.raid_type, entityId: entry.id, projectSlug: project.slug, displayId: entry.display_id });
-      }
       if (value && value !== userPersonId) {
         const person = people.find((p) => p.id === value);
         if (person?.email) {
