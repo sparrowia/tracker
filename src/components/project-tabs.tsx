@@ -5,7 +5,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { priorityColor, priorityLabel, statusBadge, formatAge, formatDateShort, formatDateNumeric } from "@/lib/utils";
 import { shiftSelectRange } from "@/lib/selection";
-import { isClaudeQueueAssignment, pingClaudeQueue } from "@/lib/claude-notify";
 import type { Project, ActionItem, ActionItemSection, RaidEntry, Blocker, Person, Vendor, ProjectAgendaRow, PriorityLevel, ItemStatus, Intake, IntakeSource, ProjectDocument } from "@/lib/types";
 import RaidLog from "@/components/raid-log";
 import { AgendaView } from "@/components/agenda-view";
@@ -1721,10 +1720,6 @@ function ActionItemsPanel({
       if (value) {
         const action = actions.find((a) => a.id === id);
         if (action) notifyAssignment(value, action.title, "action item", action.id);
-        // Phase 0: ping the coding channel when the new owner is Claude (private project only).
-        if (action && isClaudeQueueAssignment(value, projectSlug)) {
-          pingClaudeQueue({ itemTitle: action.title, itemType: "action item", entityId: action.id, projectSlug });
-        }
       }
     } else if (field === "owner_vendor_id") {
       dbUpdates.owner_vendor_id = value || null;
@@ -3391,6 +3386,7 @@ function DocsPanel({ projectId, projectCreatedBy, projectOwnerId, orgId, project
   const [linkTitle, setLinkTitle] = useState("");
   const [linkUrl, setLinkUrl] = useState("");
   const [shareTarget, setShareTarget] = useState<{ name: string; url: string; storagePath?: string } | null>(null);
+  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [shareNote, setShareNote] = useState("");
   const [sharePersonIds, setSharePersonIds] = useState<string[]>([]);
   const [shareSending, setShareSending] = useState(false);
@@ -3650,7 +3646,7 @@ function DocsPanel({ projectId, projectCreatedBy, projectOwnerId, orgId, project
                       : "text-gray-600 hover:bg-gray-100 border-l-2 border-transparent"
                   }`}
                 >
-                  Files
+                  Files / Links
                 </button>
                 <button
                   onClick={() => { setActiveSection("__notes__"); setEditing(false); }}
@@ -3784,8 +3780,54 @@ function DocsPanel({ projectId, projectCreatedBy, projectOwnerId, orgId, project
               ) : activeSection === "__files__" ? (
                 <div className="flex-1 px-6 py-4">
                   <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-sm font-semibold text-gray-700">Files</h3>
+                    <h3 className="text-sm font-semibold text-gray-700">Files / Links</h3>
                     <div className="flex items-center gap-2">
+                      {selectedItems.size > 0 && (
+                        <>
+                          <span className="text-xs text-gray-500">{selectedItems.size} selected</span>
+                          <button
+                            onClick={() => {
+                              if (selectedItems.size !== 1) return;
+                              const key = Array.from(selectedItems)[0];
+                              if (key.startsWith("link:")) {
+                                const link = links.find((l) => `link:${l.id}` === key);
+                                if (link) setShareTarget({ name: link.title, url: link.url });
+                              } else {
+                                const f = fileList.find((f) => `file:${f.name}` === key);
+                                if (f) setShareTarget({ name: f.name, url: f.url, storagePath: `${projectId}/${f.name}` });
+                              }
+                            }}
+                            disabled={selectedItems.size !== 1}
+                            title={selectedItems.size === 1 ? "Share" : "Select a single item to share"}
+                            className="text-xs bg-white hover:bg-gray-50 disabled:opacity-50 text-gray-700 border border-gray-300 px-3 py-1 rounded transition-colors font-medium"
+                          >
+                            Share
+                          </button>
+                          <button
+                            onClick={async () => {
+                              const keys = Array.from(selectedItems);
+                              const linkTargets = links.filter((l) => keys.includes(`link:${l.id}`) && (canDeleteFiles || (profileId && l.created_by === profileId)));
+                              const fileTargets = canDeleteFiles ? fileList.filter((f) => keys.includes(`file:${f.name}`)) : [];
+                              const total = linkTargets.length + fileTargets.length;
+                              if (total === 0) return;
+                              if (!confirm(`Delete ${total} item${total === 1 ? "" : "s"}? This cannot be undone.`)) return;
+                              if (linkTargets.length) {
+                                await supabase.from("project_links").delete().in("id", linkTargets.map((l) => l.id));
+                                setLinks((prev) => prev.filter((l) => !linkTargets.some((t) => t.id === l.id)));
+                              }
+                              if (fileTargets.length) {
+                                await supabase.storage.from("project-files").remove(fileTargets.map((f) => `${projectId}/${f.name}`));
+                                setFileList((prev) => prev.filter((f) => !fileTargets.some((t) => t.name === f.name)));
+                              }
+                              setSelectedItems(new Set());
+                            }}
+                            className="text-xs bg-red-600 hover:bg-red-500 text-white px-3 py-1 rounded transition-colors font-medium"
+                          >
+                            Delete
+                          </button>
+                          <span className="w-px h-4 bg-gray-200" />
+                        </>
+                      )}
                       <button
                         onClick={() => setShowLinkForm(true)}
                         className="text-xs bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 px-3 py-1 rounded transition-colors font-medium"
@@ -3955,29 +3997,13 @@ function DocsPanel({ projectId, projectCreatedBy, projectOwnerId, orgId, project
                         {links.map((link) => {
                           const icon = link.link_type === "google_doc" ? "📄" : link.link_type === "google_sheet" ? "📊" : link.link_type === "google_slides" ? "📽️" : "🔗";
                           return (
-                            <div key={link.id} className="flex items-center gap-1.5 py-1.5 px-2 rounded hover:bg-gray-50 border-b border-gray-100 last:border-b-0 group">
-                              <div className="flex items-center gap-1.5 flex-shrink-0">
-                                <button
-                                  onClick={() => setShareTarget({ name: link.title, url: link.url })}
-                                  className="text-gray-400 hover:text-blue-500 transition-colors"
-                                  title="Share"
-                                >
-                                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
-                                </button>
-                                {(canDeleteFiles || (profileId && link.created_by === profileId)) && (
-                                  <button
-                                    onClick={async () => {
-                                      if (!confirm(`Delete "${link.title}"?`)) return;
-                                      await supabase.from("project_links").delete().eq("id", link.id);
-                                      setLinks((prev) => prev.filter((l) => l.id !== link.id));
-                                    }}
-                                    className="text-gray-400 hover:text-red-500 transition-colors"
-                                    title="Remove link"
-                                  >
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                                  </button>
-                                )}
-                              </div>
+                            <div key={link.id} className="flex items-center gap-2 py-1.5 px-2 rounded hover:bg-gray-50 border-b border-gray-100 last:border-b-0 group">
+                              <input
+                                type="checkbox"
+                                checked={selectedItems.has(`link:${link.id}`)}
+                                onChange={() => setSelectedItems((prev) => { const next = new Set(prev); const k = `link:${link.id}`; if (next.has(k)) next.delete(k); else next.add(k); return next; })}
+                                className="w-3.5 h-3.5 flex-shrink-0 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                              />
                               <a href={link.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-blue-600 hover:underline truncate">
                                 <span>{icon}</span>
                                 {link.title}
@@ -3998,7 +4024,13 @@ function DocsPanel({ projectId, projectCreatedBy, projectOwnerId, orgId, project
                   ) : fileList.length === 0 ? null : (
                     <div className="space-y-1">
                       {fileList.map((f, i) => (
-                        <div key={i} className="flex items-center gap-1.5 py-1.5 px-2 rounded hover:bg-gray-50 border-b border-gray-100 last:border-b-0 group">
+                        <div key={i} className="flex items-center gap-2 py-1.5 px-2 rounded hover:bg-gray-50 border-b border-gray-100 last:border-b-0 group">
+                          <input
+                            type="checkbox"
+                            checked={selectedItems.has(`file:${f.name}`)}
+                            onChange={() => setSelectedItems((prev) => { const next = new Set(prev); const k = `file:${f.name}`; if (next.has(k)) next.delete(k); else next.add(k); return next; })}
+                            className="w-3.5 h-3.5 flex-shrink-0 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                          />
                           {renamingFileIdx === i ? (
                             <input
                               type="text"
@@ -4025,37 +4057,15 @@ function DocsPanel({ projectId, projectCreatedBy, projectOwnerId, orgId, project
                             />
                           ) : (
                             <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                              <div className="flex items-center gap-1.5 flex-shrink-0">
+                              {canEditDocs && (
                                 <button
-                                  onClick={() => setShareTarget({ name: f.name, url: f.url, storagePath: `${projectId}/${f.name}` })}
-                                  className="text-gray-400 hover:text-blue-500 transition-colors"
-                                  title="Share"
+                                  onClick={(e) => { e.preventDefault(); setRenamingFileIdx(i); setRenameDraft(f.name); }}
+                                  className="text-gray-400 hover:text-blue-600 transition-colors flex-shrink-0"
+                                  title="Rename"
                                 >
-                                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                                 </button>
-                                {canEditDocs && (
-                                  <button
-                                    onClick={(e) => { e.preventDefault(); setRenamingFileIdx(i); setRenameDraft(f.name); }}
-                                    className="text-gray-400 hover:text-blue-600 transition-colors"
-                                    title="Rename"
-                                  >
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                                  </button>
-                                )}
-                                {canDeleteFiles && (
-                                  <button
-                                    onClick={async () => {
-                                      if (!confirm(`Delete "${f.name}"? This cannot be undone.`)) return;
-                                      await supabase.storage.from("project-files").remove([`${projectId}/${f.name}`]);
-                                      setFileList((prev) => prev.filter((_, j) => j !== i));
-                                    }}
-                                    className="text-gray-400 hover:text-red-500 transition-colors"
-                                    title="Delete file"
-                                  >
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                                  </button>
-                                )}
-                              </div>
+                              )}
                               <a href={f.url} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline truncate">{f.name}</a>
                             </div>
                           )}
