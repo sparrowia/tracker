@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, Fragment } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { priorityColor, priorityLabel, statusBadge, formatAge, formatDateShort } from "@/lib/utils";
 import { shiftSelectRange } from "@/lib/selection";
-import type { RaidEntry, RaidType, PriorityLevel, ItemStatus, Person, Vendor, Project } from "@/lib/types";
+import type { RaidEntry, RaidType, IssueType, PriorityLevel, ItemStatus, Person, Vendor, Project } from "@/lib/types";
 import OwnerPicker from "@/components/owner-picker";
 import CommentThread from "@/components/comment-thread";
 import VendorPicker from "@/components/vendor-picker";
@@ -41,9 +41,24 @@ const decisionStatusOptions: ItemStatus[] = ["pending", "complete"];
 
 const typePrefix: Record<RaidType, string> = { risk: "R", assumption: "A", issue: "I", decision: "D" };
 
-type RaidColumnKey = "priority" | "status" | "owner" | "reporter" | "vendor" | "due_date" | "age" | "updated" | "first_flagged";
+// Issues-only categorization. Ordered as it should read in every dropdown.
+const issueTypeOptions: IssueType[] = ["feature", "bug", "media", "ux", "copy"];
+const issueTypeLabel: Record<IssueType, string> = { feature: "Feature", bug: "Bug", media: "Media", ux: "UX", copy: "Copy" };
+const issueTypeColor: Record<IssueType, string> = {
+  feature: "text-indigo-700 bg-indigo-50 border-indigo-200",
+  bug: "text-red-700 bg-red-50 border-red-200",
+  media: "text-amber-700 bg-amber-50 border-amber-200",
+  ux: "text-teal-700 bg-teal-50 border-teal-200",
+  copy: "text-purple-700 bg-purple-50 border-purple-200",
+};
+
+type RaidColumnKey = "issue_type" | "priority" | "status" | "owner" | "reporter" | "vendor" | "due_date" | "age" | "updated" | "first_flagged";
+
+// Columns only meaningful for one RAID type — hidden (header, cell, and picker) elsewhere.
+const TYPE_SCOPED_COLUMNS: Partial<Record<RaidColumnKey, RaidType>> = { issue_type: "issue" };
 
 const RAID_COLUMNS: { key: RaidColumnKey; label: string; width: string }[] = [
+  { key: "issue_type", label: "Type", width: "w-[72px]" },
   { key: "priority", label: "Priority", width: "w-[68px]" },
   { key: "status", label: "Status", width: "w-[88px]" },
   { key: "owner", label: "Owner", width: "w-[150px]" },
@@ -55,8 +70,13 @@ const RAID_COLUMNS: { key: RaidColumnKey; label: string; width: string }[] = [
   { key: "first_flagged", label: "Opened", width: "w-[80px]" },
 ];
 
-const DEFAULT_RAID_COLS: RaidColumnKey[] = ["priority", "status", "owner", "updated"];
+const DEFAULT_RAID_COLS: RaidColumnKey[] = ["issue_type", "priority", "status", "owner", "updated"];
 const RAID_COL_STORAGE_KEY = "raid-columns";
+// One-time additions folded into an existing saved column set, so a new column
+// actually shows up for people who already customized their columns instead of
+// silently staying off. Bumping the key would wipe their customization.
+const RAID_COL_BACKFILL_KEY = "raid-columns-backfilled";
+const RAID_COL_BACKFILL: RaidColumnKey[] = ["issue_type"];
 
 function loadRaidColumns(): RaidColumnKey[] {
   if (typeof window === "undefined") return DEFAULT_RAID_COLS;
@@ -64,7 +84,16 @@ function loadRaidColumns(): RaidColumnKey[] {
     const stored = localStorage.getItem(RAID_COL_STORAGE_KEY);
     if (stored) {
       const parsed = JSON.parse(stored) as RaidColumnKey[];
-      if (parsed.length > 0 && parsed.every((k) => RAID_COLUMNS.some((c) => c.key === k))) return parsed;
+      if (parsed.length > 0 && parsed.every((k) => RAID_COLUMNS.some((c) => c.key === k))) {
+        const alreadyBackfilled = (JSON.parse(localStorage.getItem(RAID_COL_BACKFILL_KEY) || "[]") as RaidColumnKey[]);
+        const missing = RAID_COL_BACKFILL.filter((k) => !parsed.includes(k) && !alreadyBackfilled.includes(k));
+        if (missing.length === 0) return parsed;
+        // Insert each new column at its canonical position rather than the end.
+        const next = RAID_COLUMNS.map((c) => c.key).filter((k) => parsed.includes(k) || missing.includes(k));
+        localStorage.setItem(RAID_COL_STORAGE_KEY, JSON.stringify(next));
+        localStorage.setItem(RAID_COL_BACKFILL_KEY, JSON.stringify([...alreadyBackfilled, ...missing]));
+        return next;
+      }
     }
   } catch {}
   return DEFAULT_RAID_COLS;
@@ -176,7 +205,7 @@ function InlineDate({ value, onSave }: { value: string | null; onSave: (v: strin
 
 const FIELD_LABELS: Record<string, string> = {
   status: "Status", priority: "Priority", owner_id: "Owner", reporter_id: "Reporter",
-  vendor_id: "Vendor", raid_type: "Type", impact: "Impact", due_date: "Due Date",
+  vendor_id: "Vendor", raid_type: "Type", issue_type: "Issue Type", impact: "Impact", due_date: "Due Date",
   decision_date: "Decision Date", title: "Title", description: "Description",
   notes: "Notes", next_steps: "Next Steps", parent_id: "Parent", comment: "Comment",
   include_in_project_meeting: "Project Meeting", include_in_vendor_meeting: "Vendor Meeting", resolved_at: "Resolved",
@@ -316,8 +345,10 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
   const [addingType, setAddingType] = useState<RaidType | null>(null);
   const [addTitle, setAddTitle] = useState("");
   const [addPriority, setAddPriority] = useState<PriorityLevel>("medium");
+  const [addIssueType, setAddIssueType] = useState<IssueType | "">("");
   const [visibleCols, setVisibleCols] = useState<RaidColumnKey[]>(loadRaidColumns);
   const [showColPicker, setShowColPicker] = useState(false);
+  const [filterIssueType, setFilterIssueType] = useState<IssueType | "">("");
   const [filterPriority, setFilterPriority] = useState<PriorityLevel | "">("");
   const [filterStatus, setFilterStatus] = useState<ItemStatus | "">("");
   const [filterOwner, setFilterOwner] = useState("");
@@ -371,10 +402,11 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
     setReadAtMap((prev) => new Map(prev).set(id, now));
   }
 
-  const hasActiveFilters = filterPriority || filterStatus || filterOwner || filterNew || filterUpdated || searchFilter;
+  const hasActiveFilters = filterIssueType || filterPriority || filterStatus || filterOwner || filterNew || filterUpdated || searchFilter;
 
   function applyFilters(items: RaidRow[]): RaidRow[] {
     let filtered = items;
+    if (filterIssueType) filtered = filtered.filter((e) => e.issue_type === filterIssueType);
     if (filterPriority) filtered = filtered.filter((e) => e.priority === filterPriority);
     if (filterStatus) filtered = filtered.filter((e) => e.status === filterStatus);
     if (filterOwner) {
@@ -432,6 +464,18 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
     const badge = statusBadge(entry.status);
     const age = ageFromDate(entry.first_flagged_at);
     switch (col) {
+      case "issue_type": {
+        const it = entry.issue_type;
+        return (
+          <div className="w-[72px] flex-shrink-0 flex justify-end">
+            {it ? (
+              <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border ${issueTypeColor[it]}`}>{issueTypeLabel[it]}</span>
+            ) : (
+              <span className="text-xs text-gray-400">—</span>
+            )}
+          </div>
+        );
+      }
       case "priority":
         return (
           <div className="w-[68px] flex-shrink-0 flex justify-end">
@@ -546,6 +590,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
     if (field === "status") return value.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
     if (field === "priority") return value.charAt(0).toUpperCase() + value.slice(1);
     if (field === "raid_type") return value.charAt(0).toUpperCase() + value.slice(1);
+    if (field === "issue_type") return issueTypeLabel[value as IssueType] || value;
     return value;
   }
 
@@ -600,6 +645,11 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
       const newReporter = people.find((p) => p.id === value) || null;
       dbUpdates.reporter_id = value || null;
       setEntries((prev) => prev.map((e) => e.id === id ? { ...e, reporter_id: value || null, reporter: newReporter } as RaidRow : e));
+    } else if (field === "issue_type") {
+      // "" = cleared. The CHECK constraint rejects an empty string, so store NULL.
+      const newType = (value || null) as IssueType | null;
+      dbUpdates.issue_type = newType;
+      setEntries((prev) => prev.map((e) => e.id === id ? { ...e, issue_type: newType } as RaidRow : e));
     } else if (field === "vendor_id") {
       const newVendor = vendors.find((v) => v.id === value) || null;
       dbUpdates.vendor_id = value || null;
@@ -966,6 +1016,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
     const newEntry = {
       title: addTitle.trim(),
       raid_type: addingType,
+      issue_type: addingType === "issue" ? (addIssueType || null) : null,
       display_id: displayId,
       priority: addPriority,
       status: (addingType === "risk" ? "identified" : "pending") as ItemStatus,
@@ -985,12 +1036,16 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
       setEntries((prev) => [data as RaidRow, ...prev]);
       setAddTitle("");
       setAddPriority("medium");
+      setAddIssueType("");
       setAddingType(null);
     }
   }
 
   function renderQuadrant(label: string, raidType: RaidType, allItems: RaidRow[]) {
     const items = applyFilters(allItems);
+    // Type-scoped columns (e.g. the Issues "Type" column) never render outside their own quadrant.
+    const columnsForType = RAID_COLUMNS.filter((c) => !TYPE_SCOPED_COLUMNS[c.key] || TYPE_SCOPED_COLUMNS[c.key] === raidType);
+    const activeCols = columnsForType.filter((c) => visibleCols.includes(c.key));
     const statusesForType = raidType === "decision" ? decisionStatusOptions : raidType === "risk" ? riskStatusOptions : statusOptions;
     // Collect unique owners from unfiltered items for the filter dropdown
     const ownerOptions = Array.from(
@@ -1016,7 +1071,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
               </button>
               {showColPicker && (
                 <div className="absolute right-0 top-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg z-20 py-1 w-44">
-                  {RAID_COLUMNS.map((col) => (
+                  {columnsForType.map((col) => (
                     <label key={col.key} className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 cursor-pointer text-xs text-gray-700">
                       <input
                         type="checkbox"
@@ -1032,7 +1087,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
             </div>
             {canCreate(role) && (
               <button
-                onClick={() => { setAddingType(addingType === raidType ? null : raidType); setAddTitle(""); setAddPriority("medium"); }}
+                onClick={() => { setAddingType(addingType === raidType ? null : raidType); setAddTitle(""); setAddPriority("medium"); setAddIssueType(""); }}
                 className="text-xs text-blue-300 hover:text-white transition-colors"
               >
                 + Add {label.slice(0, -1)}
@@ -1052,6 +1107,18 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                 className="flex-1 rounded border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 autoFocus
               />
+              {raidType === "issue" && (
+                <select
+                  value={addIssueType}
+                  onChange={(e) => setAddIssueType(e.target.value as IssueType | "")}
+                  className="rounded border border-gray-300 px-2 py-1 text-xs focus:border-blue-500 focus:outline-none"
+                >
+                  <option value="">Type…</option>
+                  {issueTypeOptions.map((t) => (
+                    <option key={t} value={t}>{issueTypeLabel[t]}</option>
+                  ))}
+                </select>
+              )}
               <select
                 value={addPriority}
                 onChange={(e) => setAddPriority(e.target.value as PriorityLevel)}
@@ -1082,6 +1149,18 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
           <div className="bg-white border-b border-gray-200 px-3 py-1.5">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide mr-1">Filters</span>
+              {raidType === "issue" && (
+                <select
+                  value={filterIssueType}
+                  onChange={(e) => setFilterIssueType(e.target.value as IssueType | "")}
+                  className={`rounded border px-1.5 py-0.5 text-xs focus:border-blue-500 focus:outline-none ${filterIssueType ? "border-blue-400 bg-blue-50 text-blue-700" : "border-gray-300 text-gray-600"}`}
+                >
+                  <option value="">Type</option>
+                  {issueTypeOptions.map((t) => (
+                    <option key={t} value={t}>{issueTypeLabel[t]}</option>
+                  ))}
+                </select>
+              )}
               <select
                 value={filterPriority}
                 onChange={(e) => setFilterPriority(e.target.value as PriorityLevel | "")}
@@ -1123,7 +1202,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
               </label>
               {hasActiveFilters && (
                 <button
-                  onClick={() => { setFilterPriority(""); setFilterStatus(""); setFilterOwner(""); setFilterNew(false); setFilterUpdated(false); }}
+                  onClick={() => { setFilterIssueType(""); setFilterPriority(""); setFilterStatus(""); setFilterOwner(""); setFilterNew(false); setFilterUpdated(false); }}
                   className="text-[10px] text-gray-400 hover:text-red-500 ml-1"
                 >
                   Clear
@@ -1148,7 +1227,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                   {titleSort === "asc" && <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg>}
                   {titleSort === "desc" && <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>}
                 </button>
-                {RAID_COLUMNS.filter((c) => visibleCols.includes(c.key)).map((col) => {
+                {activeCols.map((col) => {
                   if (col.key === "priority") {
                     const upArrow = <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg>;
                     const downArrow = <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>;
@@ -1362,7 +1441,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                         <span className="text-[10px] text-[#000000] bg-gray-200 rounded px-1.5 py-0.5 flex-shrink-0">{childCount}</span>
                       )}
                       {/* Metadata — dynamic columns */}
-                      {RAID_COLUMNS.filter((c) => visibleCols.includes(c.key)).map((col) => (
+                      {activeCols.map((col) => (
                         <Fragment key={col.key}>{renderColumnCell(entry, col.key)}</Fragment>
                       ))}
                       {intakeSourceMap[entry.id] && (
@@ -1550,8 +1629,29 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                               <option value="high">High</option>
                             </select>
                           </div>
-                          <span className="px-5 py-2.5 bg-gray-50/50 border-b border-l border-gray-200" />
-                          <div className="px-3 py-2.5 border-b border-gray-200" />
+                          {entry.raid_type === "issue" ? (
+                            <>
+                              {/* Labeled "Issue Type" here so it isn't confused with the RAID Type selector above. */}
+                              <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-200">Issue Type</span>
+                              <div className="px-3 py-2.5 border-b border-gray-200">
+                                <select
+                                  value={entry.issue_type || ""}
+                                  onChange={(e) => saveField(entry.id, "issue_type", e.target.value)}
+                                  className="text-sm rounded border border-transparent hover:border-gray-300 bg-transparent py-0 focus:border-blue-500 focus:outline-none cursor-pointer -ml-0.5"
+                                >
+                                  <option value="">None</option>
+                                  {issueTypeOptions.map((t) => (
+                                    <option key={t} value={t}>{issueTypeLabel[t]}</option>
+                                  ))}
+                                </select>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <span className="px-5 py-2.5 bg-gray-50/50 border-b border-l border-gray-200" />
+                              <div className="px-3 py-2.5 border-b border-gray-200" />
+                            </>
+                          )}
 
                           {/* Row: Due Date / Changelog */}
                           <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-200">Due Date</span>
@@ -1789,7 +1889,9 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
         {tabs.map((tab, i) => (
           <button
             key={tab.type}
-            onClick={() => { setActiveTab(tab.type); setShowArchived(false); }}
+            // The Type filter only has a visible control in the Issues quadrant — clear it on
+            // the way out so it can't silently empty another tab.
+            onClick={() => { setActiveTab(tab.type); setShowArchived(false); if (tab.type !== "issue") setFilterIssueType(""); }}
             className={`px-3 text-sm font-medium text-left border border-gray-300 transition-colors ${
               i > 0 ? "-mt-px" : ""
             } ${
@@ -1806,7 +1908,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
           </button>
         ))}
         <button
-          onClick={() => setShowArchived(true)}
+          onClick={() => { setShowArchived(true); setFilterIssueType(""); }}
           className={`mt-3 px-3 text-xs text-left transition-colors ${showArchived ? "text-gray-900 font-medium" : "text-gray-400 hover:text-gray-600"}`}
         >
           Archived ({archivedEntries.length})
@@ -1846,6 +1948,24 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-30 bg-gray-800 text-white rounded-lg shadow-2xl px-4 py-3 flex items-center gap-3 text-sm">
           <span className="font-medium">{selectedIds.size} selected</span>
           <div className="w-px h-5 bg-gray-600" />
+          {entries.filter((e) => selectedIds.has(e.id)).every((e) => e.raid_type === "issue") && (
+            <select
+              defaultValue=""
+              onChange={(e) => {
+                if (!e.target.value) return;
+                const val = e.target.value === "__none" ? "" : e.target.value;
+                for (const id of selectedIds) { saveField(id, "issue_type", val); }
+                e.target.value = "";
+              }}
+              className="bg-gray-700 text-white text-xs rounded border border-gray-600 px-2 py-1 focus:outline-none focus:border-blue-400"
+            >
+              <option value="">Type</option>
+              {issueTypeOptions.map((t) => (
+                <option key={t} value={t}>{issueTypeLabel[t]}</option>
+              ))}
+              <option value="__none">None</option>
+            </select>
+          )}
           <select
             defaultValue=""
             onChange={(e) => {

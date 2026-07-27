@@ -24,6 +24,9 @@ export type ProjectHealth =
 
 export type RaidType = "risk" | "assumption" | "issue" | "decision";
 
+/** Issues-log-only categorization (raid_entries.issue_type). */
+export type IssueType = "feature" | "bug" | "media" | "ux" | "copy";
+
 export type MilestoneType = "project" | "initiative" | "proposed_project" | "proposed_initiative";
 
 export type MilestoneStatus = "pending" | "in_progress" | "complete";
@@ -233,6 +236,8 @@ export interface RaidEntry {
   id: string;
   org_id: string;
   raid_type: RaidType;
+  /** Issues only — Feature / Bug / Media / UX / Copy. Null until set. */
+  issue_type: IssueType | null;
   display_id: string;
   project_id: string | null;
   title: string;
