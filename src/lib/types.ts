@@ -25,7 +25,7 @@ export type ProjectHealth =
 export type RaidType = "risk" | "assumption" | "issue" | "decision";
 
 /** Issues-log-only categorization (raid_entries.issue_type). */
-export type IssueType = "feature" | "bug" | "media" | "ux" | "copy";
+export type IssueType = "feature" | "bug" | "media" | "ux" | "copy" | "ext_system";
 
 export type MilestoneType = "project" | "initiative" | "proposed_project" | "proposed_initiative";
 

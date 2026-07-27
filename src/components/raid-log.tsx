@@ -43,14 +43,17 @@ const decisionStatusOptions: ItemStatus[] = ["pending", "complete"];
 const typePrefix: Record<RaidType, string> = { risk: "R", assumption: "A", issue: "I", decision: "D" };
 
 // Issues-only categorization. Ordered as it should read in every dropdown.
-const issueTypeOptions: IssueType[] = ["feature", "bug", "media", "ux", "copy"];
-const issueTypeLabel: Record<IssueType, string> = { feature: "Feature", bug: "Bug", media: "Media", ux: "UX", copy: "Copy" };
+const issueTypeOptions: IssueType[] = ["feature", "bug", "media", "ux", "copy", "ext_system"];
+const issueTypeLabel: Record<IssueType, string> = { feature: "Feature", bug: "Bug", media: "Media", ux: "UX", copy: "Copy", ext_system: "Ext System" };
 const issueTypeColor: Record<IssueType, string> = {
   feature: "text-indigo-700 bg-indigo-50 border-indigo-200",
   bug: "text-red-700 bg-red-50 border-red-200",
   media: "text-amber-700 bg-amber-50 border-amber-200",
   ux: "text-teal-700 bg-teal-50 border-teal-200",
   copy: "text-purple-700 bg-purple-50 border-purple-200",
+  // Neutral slate on purpose: an external-system defect is not ours to fix, so it
+  // should read as parked rather than competing with our own bugs for attention.
+  ext_system: "text-slate-700 bg-slate-100 border-slate-300",
 };
 
 type RaidColumnKey = "issue_type" | "priority" | "status" | "owner" | "reporter" | "vendor" | "due_date" | "age" | "updated" | "first_flagged";
@@ -59,7 +62,7 @@ type RaidColumnKey = "issue_type" | "priority" | "status" | "owner" | "reporter"
 const TYPE_SCOPED_COLUMNS: Partial<Record<RaidColumnKey, RaidType>> = { issue_type: "issue" };
 
 const RAID_COLUMNS: { key: RaidColumnKey; label: string; width: string }[] = [
-  { key: "issue_type", label: "Type", width: "w-[72px]" },
+  { key: "issue_type", label: "Type", width: "w-[92px]" },
   { key: "priority", label: "Priority", width: "w-[68px]" },
   { key: "status", label: "Status", width: "w-[88px]" },
   { key: "owner", label: "Owner", width: "w-[150px]" },
@@ -476,7 +479,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
       case "issue_type": {
         const it = entry.issue_type;
         return (
-          <div className="w-[72px] flex-shrink-0 flex justify-end">
+          <div className="w-[92px] flex-shrink-0 flex justify-end">
             {it ? (
               <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border ${issueTypeColor[it]}`}>{issueTypeLabel[it]}</span>
             ) : (
