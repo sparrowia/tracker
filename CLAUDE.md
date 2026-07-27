@@ -351,6 +351,17 @@ RAID entries have a `due_date` column (migration: `20260327000002_raid_due_date.
 - Stage field removed from RAID detail panel and column toggles
 - Parent dropdown removed from issue detail panel (nesting is visually obvious via parent-child display)
 
+## RAID Log — Issue Type (Issues only)
+
+RAID entries have an `issue_type` column (migration: `20260727000001_raid_issue_type.sql`):
+- Values: `feature` | `bug` | `media` | `ux` | `copy`. Nullable — untyped rows render `—`. Enforced by a CHECK constraint, not a Postgres enum, so extending the list is a one-line constraint swap. No backfill was run (a bulk UPDATE trips `set_updated_at` and flags every item unread for every user).
+- **Issues-only.** `TYPE_SCOPED_COLUMNS` in `raid-log.tsx` maps the column key to a single `raid_type`, so the header, the cell, the column picker, the filter, and the add-row selector all disappear on Risks / Assumptions / Decisions. Reuse that map for any future type-scoped column.
+- Column label is **Type**; the detail-panel field is labelled **Issue Type** to avoid colliding with the RAID Type selector (risk/assumption/issue/decision) in the same panel.
+- Surfaces: column badge (colour per type), filter dropdown, add-row selector, detail-panel select (with "None" to clear), and bulk-set in the floating toolbar when the whole selection is issues.
+- Clearing writes NULL, not `""` — `saveField` has a dedicated `issue_type` branch because the CHECK rejects an empty string.
+- **New-column rollout pattern:** `RAID_COL_BACKFILL` + `raid-columns-backfilled` in localStorage injects a newly-added column once into a saved layout, at its canonical position, without wiping the user's other choices. Bumping `RAID_COL_STORAGE_KEY` would have reset everyone. Add future columns to that array.
+- The public issue-submission form does not collect a type — submissions arrive untyped.
+
 ## RAID Log — Changelog
 
 "View changelog" link in RAID detail panel opens a modal showing activity history:
