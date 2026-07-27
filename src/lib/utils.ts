@@ -194,3 +194,26 @@ export function formatDateNumeric(date: string | null): string {
   }
   return date;
 }
+
+/**
+ * Write query params into the URL so a refresh (or a bookmark, or a pasted link)
+ * restores the view the user was actually looking at.
+ *
+ * Uses history.replaceState rather than router.replace on purpose: the project
+ * page is a server component with a large data fetch, so a real Next navigation
+ * on every tab click would re-run it and flash the whole screen. We only need the
+ * URL to be correct for the NEXT page load, and each tab already reads its
+ * initial state from the query string.
+ *
+ * replaceState (not pushState) keeps tab clicks out of the back-button history.
+ * A null / empty value deletes the param.
+ */
+export function syncUrlParams(updates: Record<string, string | null | undefined>) {
+  if (typeof window === "undefined") return;
+  const url = new URL(window.location.href);
+  for (const [key, value] of Object.entries(updates)) {
+    if (value === null || value === undefined || value === "") url.searchParams.delete(key);
+    else url.searchParams.set(key, value);
+  }
+  window.history.replaceState(null, "", url.toString());
+}

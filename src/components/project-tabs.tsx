@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback, Fragment } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { priorityColor, priorityLabel, statusBadge, formatAge, formatDateShort, formatDateNumeric } from "@/lib/utils";
+import { priorityColor, priorityLabel, statusBadge, formatAge, formatDateShort, formatDateNumeric, syncUrlParams } from "@/lib/utils";
 import { shiftSelectRange } from "@/lib/selection";
 import type { Project, ActionItem, ActionItemSection, RaidEntry, Blocker, Person, Vendor, ProjectAgendaRow, PriorityLevel, ItemStatus, Intake, IntakeSource, ProjectDocument } from "@/lib/types";
 import RaidLog from "@/components/raid-log";
@@ -268,7 +268,10 @@ export default function ProjectTabs({
               onDragOver={(e) => onTabDragOver(e, tabKey)}
               onDrop={(e) => onTabDrop(e, tabKey)}
               onDragEnd={onTabDragEnd}
-              onClick={() => setActive(tabKey)}
+              // Persist the tab in the URL so a refresh comes back here instead of
+              // falling through to tabOrder[0] (Action Items). `item` belongs to the
+              // tab being left, so it is cleared on the way out.
+              onClick={() => { setActive(tabKey); syncUrlParams({ tab: tabKey, item: null }); }}
               className={`px-5 py-2.5 text-sm font-medium transition-colors relative cursor-grab active:cursor-grabbing select-none ${
                 active === tabKey
                   ? "text-blue-700 border-b-2 border-blue-600 -mb-px"

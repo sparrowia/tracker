@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect, useRef, Fragment } from "react";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { priorityColor, priorityLabel, statusBadge, formatAge, formatDateShort } from "@/lib/utils";
+import { priorityColor, priorityLabel, statusBadge, formatAge, formatDateShort, syncUrlParams } from "@/lib/utils";
 import { shiftSelectRange } from "@/lib/selection";
 import type { RaidEntry, RaidType, IssueType, PriorityLevel, ItemStatus, Person, Vendor, Project } from "@/lib/types";
 import OwnerPicker from "@/components/owner-picker";
@@ -330,7 +331,15 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
       }, 200);
     }
   }, [deepLinkItemId]); // eslint-disable-line react-hooks/exhaustive-deps
-  const [activeTab, setActiveTab] = useState<RaidType>("risk");
+  // Sub-tab survives a refresh via ?raid=. useSearchParams (not window.location)
+  // so the server and client renders agree and hydration stays clean.
+  const raidSearchParams = useSearchParams();
+  const urlRaidTab = raidSearchParams.get("raid");
+  const initialRaidTab: RaidType =
+    urlRaidTab === "risk" || urlRaidTab === "assumption" || urlRaidTab === "issue" || urlRaidTab === "decision"
+      ? urlRaidTab
+      : "risk";
+  const [activeTab, setActiveTab] = useState<RaidType>(initialRaidTab);
   const [showArchived, setShowArchived] = useState(false);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
   const [expandedParents, setExpandedParents] = useState<Set<string>>(() => {
@@ -1891,7 +1900,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
             key={tab.type}
             // The Type filter only has a visible control in the Issues quadrant — clear it on
             // the way out so it can't silently empty another tab.
-            onClick={() => { setActiveTab(tab.type); setShowArchived(false); if (tab.type !== "issue") setFilterIssueType(""); }}
+            onClick={() => { setActiveTab(tab.type); setShowArchived(false); if (tab.type !== "issue") setFilterIssueType(""); syncUrlParams({ raid: tab.type, item: null }); }}
             className={`px-3 text-sm font-medium text-left border border-gray-300 transition-colors ${
               i > 0 ? "-mt-px" : ""
             } ${
