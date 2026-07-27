@@ -10,7 +10,8 @@ export type ItemStatus =
   | "assessing"
   | "mitigated"
   | "closed"
-  | "rejected";
+  | "rejected"
+  | "migrated_to_jira";
 
 export type PriorityLevel = "critical" | "high" | "medium" | "low";
 

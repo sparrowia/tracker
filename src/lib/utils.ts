@@ -50,6 +50,8 @@ export function statusBadge(status: ItemStatus): { label: string; className: str
     case "mitigated": return { label: "Mitigated", className: "text-teal-700 bg-teal-100" };
     case "closed": return { label: "Closed", className: "text-green-700 bg-green-100" };
     case "rejected": return { label: "Rejected", className: "text-red-700 bg-red-100" };
+    // Tracked in Jira now. Sky reads as "handed off", not as a state we act on here.
+    case "migrated_to_jira": return { label: "Migrated to JIRA", className: "text-sky-700 bg-sky-100" };
   }
 }
 

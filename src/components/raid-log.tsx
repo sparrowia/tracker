@@ -36,7 +36,7 @@ interface RaidLogProps {
 
 const raidTypes: RaidType[] = ["risk", "assumption", "issue", "decision"];
 const priorityOptions: PriorityLevel[] = ["critical", "high", "medium", "low"];
-const statusOptions: ItemStatus[] = ["pending", "in_progress", "complete", "needs_verification", "paused", "at_risk", "blocked", "rejected"];
+const statusOptions: ItemStatus[] = ["pending", "in_progress", "complete", "needs_verification", "paused", "at_risk", "blocked", "rejected", "migrated_to_jira"];
 const riskStatusOptions: ItemStatus[] = ["identified", "assessing", "in_progress", "mitigated", "closed"];
 const decisionStatusOptions: ItemStatus[] = ["pending", "complete"];
 
