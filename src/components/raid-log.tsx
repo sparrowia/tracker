@@ -64,7 +64,7 @@ const TYPE_SCOPED_COLUMNS: Partial<Record<RaidColumnKey, RaidType>> = { issue_ty
 const RAID_COLUMNS: { key: RaidColumnKey; label: string; width: string }[] = [
   { key: "issue_type", label: "Type", width: "w-[92px]" },
   { key: "priority", label: "Priority", width: "w-[68px]" },
-  { key: "status", label: "Status", width: "w-[88px]" },
+  { key: "status", label: "Status", width: "w-[124px]" },
   { key: "owner", label: "Owner", width: "w-[150px]" },
   { key: "reporter", label: "Reporter", width: "w-[150px]" },
   { key: "vendor", label: "Vendor", width: "w-[100px]" },
@@ -498,8 +498,11 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
         const statusLabel = entry.raid_type === "decision" && entry.status === "complete" ? "Final" : badge.label;
         const statusClass = entry.raid_type === "decision" && entry.status === "complete" ? "text-green-700 bg-green-100" : badge.className;
         return (
-          <div className="w-[88px] flex-shrink-0 flex justify-end">
-            <span className={`inline-flex px-1.5 py-0.5 text-xs rounded ${statusClass}`}>{statusLabel}</span>
+          <div className="w-[124px] flex-shrink-0 flex justify-end">
+            {/* nowrap + a width that fits the longest label ("Migrated to JIRA").
+                The badge is right-justified in a fixed-width box, so a label that
+                does not fit wraps to two lines and pushes the row taller. */}
+            <span className={`inline-flex whitespace-nowrap px-1.5 py-0.5 text-xs rounded ${statusClass}`}>{statusLabel}</span>
           </div>
         );
       }
