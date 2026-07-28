@@ -21,6 +21,11 @@
 -- UPDATE trigger (set_updated_at) that would stamp updated_at on every touched
 -- row and show them as unread for every user.
 
+-- Constraint comes off FIRST. The new slugs are not in the old CHECK, so
+-- renaming before dropping it fails on the first row updated.
+ALTER TABLE raid_entries
+  DROP CONSTRAINT IF EXISTS raid_entries_issue_type_check;
+
 ALTER TABLE raid_entries DISABLE TRIGGER set_updated_at;
 
 UPDATE raid_entries SET issue_type = 'feature_request' WHERE issue_type = 'feature';
@@ -29,11 +34,8 @@ UPDATE raid_entries SET issue_type = 'content'         WHERE issue_type = 'copy'
 
 ALTER TABLE raid_entries ENABLE TRIGGER set_updated_at;
 
--- Constraint swap, as anticipated in 20260727000001 (CHECK rather than an enum
--- so the option list is a one-line change).
-ALTER TABLE raid_entries
-  DROP CONSTRAINT IF EXISTS raid_entries_issue_type_check;
-
+-- Re-added with the 16 shared values, as anticipated in 20260727000001 (CHECK
+-- rather than an enum so the option list is a one-line change).
 ALTER TABLE raid_entries
   ADD CONSTRAINT raid_entries_issue_type_check
   CHECK (issue_type IS NULL OR issue_type IN (
