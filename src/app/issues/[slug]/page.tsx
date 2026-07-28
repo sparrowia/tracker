@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { createClient } from "@supabase/supabase-js";
+import { ISSUE_TYPE_OPTIONS, ISSUE_TYPE_LABEL } from "@/lib/issue-types";
 
 // Supabase client used only for storage uploads (anon key)
 function getStorageClient() {
@@ -11,22 +12,8 @@ function getStorageClient() {
   );
 }
 
-const ISSUE_TYPES = [
-  "Accessibility",
-  "Broken Link",
-  "Bug",
-  "Content",
-  "Error",
-  "Feature Request",
-  "Functionality",
-  "Navigation",
-  "Performance - Load or Lag Times",
-  "Responsive Issue",
-  "Security",
-  "Support Request",
-  "UI/UX",
-  "Other",
-];
+// Option list is shared with the RAID log Type column — do not fork it here.
+
 
 const OS_OPTIONS = ["Mac", "iOS", "Windows", "Android", "All"];
 const BROWSER_OPTIONS = ["Chrome", "Safari", "Edge", "Firefox", "All"];
@@ -312,8 +299,8 @@ export default function PublicIssueForm({
               className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
               <option value="">Select issue type</option>
-              {ISSUE_TYPES.map((t) => (
-                <option key={t} value={t}>{t}</option>
+              {ISSUE_TYPE_OPTIONS.map((t) => (
+                <option key={t} value={t}>{ISSUE_TYPE_LABEL[t]}</option>
               ))}
             </select>
           </div>

@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { notifyNewIssue } from "@/lib/slack";
+import {
+  ISSUE_TYPE_LABEL,
+  FEATURE_REQUEST_TYPE,
+  resolveIssueType,
+} from "@/lib/issue-types";
 
 export async function POST(req: NextRequest) {
   try {
@@ -25,6 +30,21 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const resolvedType = resolveIssueType(issue_type);
+    if (!resolvedType) {
+      return NextResponse.json(
+        { error: "Unrecognized issue type" },
+        { status: 400 }
+      );
+    }
+    const typeLabel = ISSUE_TYPE_LABEL[resolvedType];
+
+    // A feature request is a proposal, not a defect, so it is filed as a
+    // Decision (D##) rather than an Issue (I##) and shows up in the Decisions
+    // section of the RAID log for a call to be made on it.
+    const raidType = resolvedType === FEATURE_REQUEST_TYPE ? "decision" : "issue";
+    const displayPrefix = raidType === "decision" ? "D" : "I";
+
     const supabase = createAdminClient();
 
     // Look up project by slug and check public_issue_form is enabled
@@ -48,28 +68,29 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Generate display_id: find max I## for this project
-    const { data: existingIssues } = await supabase
+    // Generate display_id: find max I## / D## for this project, numbered within
+    // its own RAID section.
+    const { data: existingOfType } = await supabase
       .from("raid_entries")
       .select("display_id")
       .eq("project_id", project.id)
-      .eq("raid_type", "issue");
+      .eq("raid_type", raidType);
 
     let maxNum = 0;
-    if (existingIssues) {
-      for (const e of existingIssues) {
+    if (existingOfType) {
+      for (const e of existingOfType) {
         const num = parseInt(e.display_id.slice(1));
         if (!isNaN(num) && num > maxNum) maxNum = num;
       }
     }
-    const displayId = `I${maxNum + 1}`;
+    const displayId = `${displayPrefix}${maxNum + 1}`;
 
     // Build formatted description with metadata
     const descParts: string[] = [];
     descParts.push(description.trim());
     descParts.push(""); // blank line
     descParts.push("---");
-    descParts.push(`**Issue Type:** ${issue_type}`);
+    descParts.push(`**Issue Type:** ${typeLabel}`);
     descParts.push(`**OS:** ${os}`);
     descParts.push(`**Browser:** ${browser}`);
     descParts.push(`**Reporter:** ${reporter_name.trim()}`);
@@ -88,7 +109,8 @@ export async function POST(req: NextRequest) {
     const { data: entry, error: insertError } = await supabase
       .from("raid_entries")
       .insert({
-        raid_type: "issue",
+        raid_type: raidType,
+        issue_type: resolvedType,
         title: title.trim(),
         description: formattedDescription,
         notes: url?.trim() ? url.trim() : null,
@@ -122,7 +144,7 @@ export async function POST(req: NextRequest) {
       notifyNewIssue({
         projectName: project.name,
         title,
-        issueType: issue_type,
+        issueType: typeLabel,
         reporter: reporter_name,
         channel: slackChannel,
       }).catch(() => {});

@@ -25,8 +25,28 @@ export type ProjectHealth =
 
 export type RaidType = "risk" | "assumption" | "issue" | "decision";
 
-/** Issues-log-only categorization (raid_entries.issue_type). */
-export type IssueType = "feature" | "bug" | "media" | "ux" | "copy" | "ext_system";
+/**
+ * Categorization shared by the public reporting form and the RAID log Type
+ * column — the two lists are deliberately identical, so a reported type lands
+ * on the board unchanged. Option list and labels live in lib/issue-types.ts.
+ */
+export type IssueType =
+  | "accessibility"
+  | "broken_link"
+  | "bug"
+  | "content"
+  | "error"
+  | "ext_system"
+  | "feature_request"
+  | "functionality"
+  | "media"
+  | "navigation"
+  | "performance"
+  | "responsive"
+  | "security"
+  | "support_request"
+  | "ui_ux"
+  | "other";
 
 export type MilestoneType = "project" | "initiative" | "proposed_project" | "proposed_initiative";
 

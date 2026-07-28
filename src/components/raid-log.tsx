@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { priorityColor, priorityLabel, statusBadge, formatAge, formatDateShort, syncUrlParams } from "@/lib/utils";
 import { shiftSelectRange } from "@/lib/selection";
 import type { RaidEntry, RaidType, IssueType, PriorityLevel, ItemStatus, Person, Vendor, Project } from "@/lib/types";
+import { ISSUE_TYPE_OPTIONS, ISSUE_TYPE_LABEL } from "@/lib/issue-types";
 import OwnerPicker from "@/components/owner-picker";
 import CommentThread from "@/components/comment-thread";
 import VendorPicker from "@/components/vendor-picker";
@@ -42,27 +43,44 @@ const decisionStatusOptions: ItemStatus[] = ["pending", "complete"];
 
 const typePrefix: Record<RaidType, string> = { risk: "R", assumption: "A", issue: "I", decision: "D" };
 
-// Issues-only categorization. Ordered as it should read in every dropdown.
-const issueTypeOptions: IssueType[] = ["feature", "bug", "media", "ux", "copy", "ext_system"];
-const issueTypeLabel: Record<IssueType, string> = { feature: "Feature", bug: "Bug", media: "Media", ux: "UX", copy: "Copy", ext_system: "Ext System" };
+// Option list and labels are shared with the public reporting form so the two
+// lists stay identical — see lib/issue-types.ts.
+const issueTypeOptions = ISSUE_TYPE_OPTIONS;
+const issueTypeLabel = ISSUE_TYPE_LABEL;
 const issueTypeColor: Record<IssueType, string> = {
-  feature: "text-indigo-700 bg-indigo-50 border-indigo-200",
+  accessibility: "text-blue-700 bg-blue-50 border-blue-200",
+  broken_link: "text-orange-700 bg-orange-50 border-orange-200",
   bug: "text-red-700 bg-red-50 border-red-200",
-  media: "text-amber-700 bg-amber-50 border-amber-200",
-  ux: "text-teal-700 bg-teal-50 border-teal-200",
-  copy: "text-purple-700 bg-purple-50 border-purple-200",
+  content: "text-purple-700 bg-purple-50 border-purple-200",
+  error: "text-rose-700 bg-rose-50 border-rose-200",
   // Neutral slate on purpose: an external-system defect is not ours to fix, so it
   // should read as parked rather than competing with our own bugs for attention.
   ext_system: "text-slate-700 bg-slate-100 border-slate-300",
+  feature_request: "text-indigo-700 bg-indigo-50 border-indigo-200",
+  functionality: "text-cyan-700 bg-cyan-50 border-cyan-200",
+  media: "text-amber-700 bg-amber-50 border-amber-200",
+  navigation: "text-sky-700 bg-sky-50 border-sky-200",
+  performance: "text-yellow-700 bg-yellow-50 border-yellow-200",
+  responsive: "text-violet-700 bg-violet-50 border-violet-200",
+  security: "text-pink-700 bg-pink-50 border-pink-200",
+  support_request: "text-emerald-700 bg-emerald-50 border-emerald-200",
+  ui_ux: "text-teal-700 bg-teal-50 border-teal-200",
+  other: "text-gray-700 bg-gray-100 border-gray-300",
 };
+
+// RAID sections that carry an issue type. Decisions are included because a
+// feature request submitted on the public form is filed as a Decision, and its
+// type still has to be visible and editable there.
+const ISSUE_TYPED_SECTIONS: RaidType[] = ["issue", "decision"];
+const hasIssueType = (t: RaidType) => ISSUE_TYPED_SECTIONS.includes(t);
 
 type RaidColumnKey = "issue_type" | "priority" | "status" | "owner" | "reporter" | "vendor" | "due_date" | "age" | "updated" | "first_flagged";
 
-// Columns only meaningful for one RAID type — hidden (header, cell, and picker) elsewhere.
-const TYPE_SCOPED_COLUMNS: Partial<Record<RaidColumnKey, RaidType>> = { issue_type: "issue" };
+// Columns only meaningful for some RAID types — hidden (header, cell, and picker) elsewhere.
+const TYPE_SCOPED_COLUMNS: Partial<Record<RaidColumnKey, RaidType[]>> = { issue_type: ISSUE_TYPED_SECTIONS };
 
 const RAID_COLUMNS: { key: RaidColumnKey; label: string; width: string }[] = [
-  { key: "issue_type", label: "Type", width: "w-[92px]" },
+  { key: "issue_type", label: "Type", width: "w-[124px]" },
   { key: "priority", label: "Priority", width: "w-[68px]" },
   { key: "status", label: "Status", width: "w-[124px]" },
   { key: "owner", label: "Owner", width: "w-[150px]" },
@@ -1031,7 +1049,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
     const newEntry = {
       title: addTitle.trim(),
       raid_type: addingType,
-      issue_type: addingType === "issue" ? (addIssueType || null) : null,
+      issue_type: hasIssueType(addingType) ? (addIssueType || null) : null,
       display_id: displayId,
       priority: addPriority,
       status: (addingType === "risk" ? "identified" : "pending") as ItemStatus,
@@ -1059,7 +1077,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
   function renderQuadrant(label: string, raidType: RaidType, allItems: RaidRow[]) {
     const items = applyFilters(allItems);
     // Type-scoped columns (e.g. the Issues "Type" column) never render outside their own quadrant.
-    const columnsForType = RAID_COLUMNS.filter((c) => !TYPE_SCOPED_COLUMNS[c.key] || TYPE_SCOPED_COLUMNS[c.key] === raidType);
+    const columnsForType = RAID_COLUMNS.filter((c) => !TYPE_SCOPED_COLUMNS[c.key] || TYPE_SCOPED_COLUMNS[c.key]!.includes(raidType));
     const activeCols = columnsForType.filter((c) => visibleCols.includes(c.key));
     const statusesForType = raidType === "decision" ? decisionStatusOptions : raidType === "risk" ? riskStatusOptions : statusOptions;
     // Collect unique owners from unfiltered items for the filter dropdown
@@ -1122,7 +1140,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                 className="flex-1 rounded border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 autoFocus
               />
-              {raidType === "issue" && (
+              {hasIssueType(raidType) && (
                 <select
                   value={addIssueType}
                   onChange={(e) => setAddIssueType(e.target.value as IssueType | "")}
@@ -1164,7 +1182,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
           <div className="bg-white border-b border-gray-200 px-3 py-1.5">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide mr-1">Filters</span>
-              {raidType === "issue" && (
+              {hasIssueType(raidType) && (
                 <select
                   value={filterIssueType}
                   onChange={(e) => setFilterIssueType(e.target.value as IssueType | "")}
@@ -1644,7 +1662,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                               <option value="high">High</option>
                             </select>
                           </div>
-                          {entry.raid_type === "issue" ? (
+                          {hasIssueType(entry.raid_type) ? (
                             <>
                               {/* Labeled "Issue Type" here so it isn't confused with the RAID Type selector above. */}
                               <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-l border-gray-200">Issue Type</span>
