@@ -44,7 +44,7 @@ export const ISSUE_TYPE_LABEL: Record<IssueType, string> = {
   media: "Media",
   navigation: "Navigation",
   performance: "Performance",
-  responsive: "Responsive Issue",
+  responsive: "Responsive",
   security: "Security",
   support_request: "Support Request",
   ui_ux: "UI/UX",
@@ -76,7 +76,8 @@ export function resolveIssueType(value: unknown): IssueType | null {
     (t) => ISSUE_TYPE_LABEL[t].toLowerCase() === legacy
   );
   if (match) return match;
-  // Pre-rename label from the original form list.
+  // Pre-rename labels from earlier form lists.
   if (legacy === "performance - load or lag times") return "performance";
+  if (legacy === "responsive issue") return "responsive";
   return null;
 }
