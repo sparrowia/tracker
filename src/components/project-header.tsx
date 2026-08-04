@@ -32,14 +32,16 @@ export default function ProjectHeader({ project, vendors, people: initialPeople 
     notes: p.notes || "",
   });
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [publicIssueForm, setPublicIssueForm] = useState(project.public_issue_form ?? false);
   const [togglingForm, setTogglingForm] = useState(false);
   const [copied, setCopied] = useState(false);
   const [vendorOwners, setVendorOwners] = useState<Record<string, string>>({}); // vendor_id -> person_id
   const [healthOverride, setHealthOverride] = useState<ProjectHealth | null>(null);
   const [allInitiatives, setAllInitiatives] = useState<Initiative[]>([]);
-  const { role } = useRole();
+  const { role, profileId } = useRole();
   const displayHealth = healthOverride ?? p.health;
+  const canDeleteProject = role === "super_admin" || (!!profileId && p.created_by === profileId);
 
   // Load initiatives for reassignment dropdown
   useEffect(() => {
@@ -109,6 +111,20 @@ export default function ProjectHeader({ project, vendors, people: initialPeople 
       }
     }
     setSaving(false);
+  }
+
+  async function deleteProject() {
+    if (!confirm(`Delete "${p.name}"? Action items, blockers, and RAID entries will be kept but detached from this project.`)) return;
+    setDeleting(true);
+    // .select() so an RLS-denied delete (0 rows, no error) doesn't look like success
+    const { data, error } = await supabase.from("projects").delete().eq("id", p.id).select("id");
+    if (error || !data?.length) {
+      alert(error ? `Could not delete project: ${error.message}` : "Could not delete project — you may not have permission.");
+      setDeleting(false);
+      return;
+    }
+    window.dispatchEvent(new CustomEvent("sidebar:refresh"));
+    window.location.href = "/projects";
   }
 
   async function togglePublicIssueForm() {
@@ -270,20 +286,33 @@ export default function ProjectHeader({ project, vendors, people: initialPeople 
           ))}
         </div>
 
-        <div className="flex justify-end gap-2 pt-2 border-t border-gray-200">
-          <button
-            onClick={() => setEditing(false)}
-            className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded hover:bg-gray-50"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={save}
-            disabled={saving || !form.name.trim()}
-            className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50"
-          >
-            {saving ? "Saving..." : "Save"}
-          </button>
+        <div className="flex items-center justify-between pt-2 border-t border-gray-200">
+          {canDeleteProject ? (
+            <button
+              onClick={deleteProject}
+              disabled={deleting}
+              className="px-3 py-1.5 text-xs font-medium text-red-600 bg-white border border-red-300 rounded hover:bg-red-50 disabled:opacity-50"
+            >
+              {deleting ? "Deleting..." : "Delete Project"}
+            </button>
+          ) : (
+            <span />
+          )}
+          <div className="flex gap-2">
+            <button
+              onClick={() => setEditing(false)}
+              className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={save}
+              disabled={saving || !form.name.trim()}
+              className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50"
+            >
+              {saving ? "Saving..." : "Save"}
+            </button>
+          </div>
         </div>
       </div>
     );
