@@ -314,19 +314,30 @@ export function Sidebar({ role: propRole = "user" as UserRole, profileId, userPe
 
         {/* Initiatives group */}
         <div>
-          <button
-            onClick={() => setInitiativesOpen((prev) => !prev)}
+          <div
             className={cn(
-              "w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors",
+              "flex items-center rounded-md transition-colors",
               isOnInitiatives
                 ? "bg-blue-50 text-blue-700"
                 : "text-gray-700 hover:bg-gray-100"
             )}
           >
-            <FolderKanban className="h-4 w-4 flex-shrink-0" />
-            <span className="flex-1 text-left">Initiatives</span>
-            <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", initiativesOpen ? "rotate-180" : "")} />
-          </button>
+            <Link
+              href="/initiatives"
+              onClick={() => setInitiativesOpen(true)}
+              className="flex-1 flex items-center gap-3 px-3 py-2 text-sm font-medium"
+            >
+              <FolderKanban className="h-4 w-4 flex-shrink-0" />
+              <span className="flex-1 text-left">Initiatives</span>
+            </Link>
+            <button
+              onClick={() => setInitiativesOpen((prev) => !prev)}
+              className="p-2 flex-shrink-0 text-gray-400 hover:text-gray-600"
+              title={initiativesOpen ? "Collapse" : "Expand"}
+            >
+              <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", initiativesOpen ? "rotate-180" : "")} />
+            </button>
+          </div>
 
           {initiativesOpen && (
             <div className="mt-1 ml-4 space-y-0.5">
