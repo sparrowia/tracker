@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, Fragment } from "react";
+import { useState, useEffect, useRef, Fragment, type PointerEvent as ReactPointerEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { priorityColor, priorityLabel, statusBadge, formatAge, formatDateShort, syncUrlParams } from "@/lib/utils";
@@ -393,6 +393,30 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const lastSelectedRef = useRef<string | null>(null);
   const visibleIdsRef = useRef<string[]>([]);
+  // null = default docked position (bottom center); set once the user drags the bulk toolbar
+  const [toolbarPos, setToolbarPos] = useState<{ x: number; y: number } | null>(null);
+  const toolbarRef = useRef<HTMLDivElement>(null);
+
+  function startToolbarDrag(e: ReactPointerEvent<HTMLDivElement>) {
+    const el = toolbarRef.current;
+    if (!el) return;
+    e.preventDefault();
+    const rect = el.getBoundingClientRect();
+    const offsetX = e.clientX - rect.left;
+    const offsetY = e.clientY - rect.top;
+    const onMove = (ev: PointerEvent) => {
+      setToolbarPos({
+        x: Math.min(Math.max(ev.clientX - offsetX, 8), window.innerWidth - rect.width - 8),
+        y: Math.min(Math.max(ev.clientY - offsetY, 8), window.innerHeight - rect.height - 8),
+      });
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  }
   const [movingId, setMovingId] = useState<string | null>(null);
   const [readAtMap, setReadAtMap] = useState<Map<string, string>>(new Map());
   const [moveProjects, setMoveProjects] = useState<{ id: string; name: string; slug: string }[]>([]);
@@ -1978,7 +2002,18 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
 
       {/* Floating bulk toolbar */}
       {selectedIds.size > 0 && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-30 bg-gray-800 text-white rounded-lg shadow-2xl px-4 py-3 flex items-center gap-3 text-sm">
+        <div
+          ref={toolbarRef}
+          className={`fixed z-30 bg-gray-800 text-white rounded-lg shadow-2xl px-4 pb-3 pt-6 flex items-center gap-3 text-sm ${toolbarPos ? "" : "bottom-4 left-1/2 -translate-x-1/2"}`}
+          style={toolbarPos ? { left: toolbarPos.x, top: toolbarPos.y } : undefined}
+        >
+          <div
+            onPointerDown={startToolbarDrag}
+            className="absolute top-0 inset-x-0 h-5 flex items-center justify-center rounded-t-lg cursor-grab active:cursor-grabbing hover:bg-gray-700 touch-none"
+            title="Drag to move"
+          >
+            <div className="h-1 w-10 rounded-full bg-gray-500" />
+          </div>
           <span className="font-medium">{selectedIds.size} selected</span>
           <div className="w-px h-5 bg-gray-600" />
           {entries.filter((e) => selectedIds.has(e.id)).every((e) => e.raid_type === "issue") && (
