@@ -37,6 +37,8 @@ export default function PublicIssueForm({
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [issueType, setIssueType] = useState("");
+  const [priority, setPriority] = useState("");
+  const [criticalConfirmed, setCriticalConfirmed] = useState(false);
   const [url, setUrl] = useState("");
   const [os, setOs] = useState("");
   const [browser, setBrowser] = useState("");
@@ -117,8 +119,13 @@ export default function PublicIssueForm({
   async function handleSubmit(andNew: boolean) {
     setError(null);
 
-    if (!reporterName.trim() || !title.trim() || !description.trim() || !issueType || !url.trim() || !os || !browser) {
+    if (!reporterName.trim() || !title.trim() || !description.trim() || !issueType || !priority || !url.trim() || !os || !browser) {
       setError("Please fill in all required fields.");
+      return;
+    }
+
+    if (priority === "critical" && !criticalConfirmed) {
+      setError("Please confirm that this issue is blocking a customer action before submitting as Critical.");
       return;
     }
 
@@ -135,6 +142,8 @@ export default function PublicIssueForm({
           title: title.trim(),
           description: description.trim(),
           issue_type: issueType,
+          priority,
+          critical_confirmed: priority === "critical" ? criticalConfirmed : undefined,
           url: url.trim() || undefined,
           os,
           browser,
@@ -154,6 +163,8 @@ export default function PublicIssueForm({
         setTitle("");
         setDescription("");
         setIssueType("");
+        setPriority("");
+        setCriticalConfirmed(false);
         setUrl("");
         setOs("");
         setBrowser("");
@@ -207,6 +218,8 @@ export default function PublicIssueForm({
               setTitle("");
               setDescription("");
               setIssueType("");
+              setPriority("");
+              setCriticalConfirmed(false);
               setUrl("");
               setOs("");
               setBrowser("");
@@ -303,6 +316,41 @@ export default function PublicIssueForm({
                 <option key={t} value={t}>{ISSUE_TYPE_LABEL[t]}</option>
               ))}
             </select>
+          </div>
+
+          {/* Priority */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Priority <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={priority}
+              onChange={(e) => { setPriority(e.target.value); setCriticalConfirmed(false); }}
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            >
+              <option value="">Select priority</option>
+              <option value="critical">Critical</option>
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
+            </select>
+            {priority === "critical" && (
+              <div className="mt-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2.5 space-y-2">
+                <p className="text-sm text-amber-800">
+                  <span className="font-semibold">Critical</span> is limited to issues that block a customer
+                  from performing a necessary action on the site — like completing a purchase or taking a course.
+                </p>
+                <label className="flex items-start gap-2 text-sm text-amber-900 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={criticalConfirmed}
+                    onChange={(e) => setCriticalConfirmed(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-amber-400 text-amber-600 focus:ring-amber-500"
+                  />
+                  I confirm this issue is blocking a customer from completing a necessary action.
+                </label>
+              </div>
+            )}
           </div>
 
           {/* URL */}

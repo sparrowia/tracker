@@ -16,6 +16,8 @@ export async function POST(req: NextRequest) {
       title,
       description,
       issue_type,
+      priority,
+      critical_confirmed,
       url,
       os,
       browser,
@@ -34,6 +36,17 @@ export async function POST(req: NextRequest) {
     if (!resolvedType) {
       return NextResponse.json(
         { error: "Unrecognized issue type" },
+        { status: 400 }
+      );
+    }
+
+    // Older cached form bundles don't send a priority — default those to medium.
+    const resolvedPriority = ["critical", "high", "medium", "low"].includes(priority) ? priority : "medium";
+    // Critical is reserved for customer-blocking issues; the form makes the
+    // reporter tick an acknowledgement, and the API holds the same line.
+    if (resolvedPriority === "critical" && critical_confirmed !== true) {
+      return NextResponse.json(
+        { error: "Critical priority requires confirming the issue blocks a customer action" },
         { status: 400 }
       );
     }
@@ -114,7 +127,7 @@ export async function POST(req: NextRequest) {
         title: title.trim(),
         description: formattedDescription,
         notes: url?.trim() ? url.trim() : null,
-        priority: "medium",
+        priority: resolvedPriority,
         status: "pending",
         project_id: project.id,
         org_id: project.org_id,
