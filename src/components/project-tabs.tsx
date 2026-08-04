@@ -7,6 +7,7 @@ import { priorityColor, priorityLabel, statusBadge, formatAge, formatDateShort, 
 import { shiftSelectRange } from "@/lib/selection";
 import type { Project, ActionItem, ActionItemSection, RaidEntry, Blocker, Person, Vendor, ProjectAgendaRow, PriorityLevel, ItemStatus, ProjectDocument } from "@/lib/types";
 import RaidLog from "@/components/raid-log";
+import RoadmapView from "@/components/roadmap-view";
 import { AgendaView } from "@/components/agenda-view";
 import OwnerPicker from "@/components/owner-picker";
 import { useUndo, UndoToast } from "@/components/undo-toast";
@@ -229,6 +230,7 @@ export default function ProjectTabs({
   const setActionCount = useCallback((n: number) => setTabCounts((p) => ({ ...p, actions: n })), []);
   const setRaidCount = useCallback((n: number) => setTabCounts((p) => ({ ...p, raid: n })), []);
   const setAgendaCount = useCallback((n: number) => setTabCounts((p) => ({ ...p, agenda: n })), []);
+  const setRoadmapCount = useCallback((n: number) => setTabCounts((p) => ({ ...p, roadmap: n })), []);
 
   function onTabDragStart(e: React.DragEvent, tab: Tab, index: number) {
     setDragTab(tab);
@@ -398,12 +400,15 @@ export default function ProjectTabs({
 
         {enabledModules.has("roadmap") && (
           <div style={{ display: active === "roadmap" ? "block" : "none" }}>
-            <div className="border border-gray-300 rounded-lg overflow-hidden">
-              <div className="bg-gray-800 px-4 py-2.5">
-                <h3 className="text-xs font-semibold text-white uppercase tracking-wide">Roadmap</h3>
-              </div>
-              <p className="px-4 py-6 text-sm text-gray-400">Nothing here yet.</p>
-            </div>
+            <RoadmapView
+              actions={actions}
+              raidEntries={raidEntries}
+              onCountChange={setRoadmapCount}
+              onFieldSynced={(entity, id, field, value) => {
+                if (entity === "action") itemAddersRef.current.updateAction?.(id, field, value);
+                else itemAddersRef.current.updateRaid?.(id, field, value);
+              }}
+            />
           </div>
         )}
 
