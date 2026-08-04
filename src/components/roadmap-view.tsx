@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRole } from "@/components/role-context";
 import { priorityDot, priorityLabel, statusBadge, formatDateNumeric, formatDate } from "@/lib/utils";
-import type { RaidEntry, JiraTicket, Person, Vendor, PriorityLevel } from "@/lib/types";
+import type { RaidEntry, JiraTicket, Person, Vendor, PriorityLevel, ItemStatus, RaidType } from "@/lib/types";
 
-type Entity = "decision" | "jira";
+type Entity = "decision" | "issue" | "jira";
 type Scale = "week" | "month" | "quarter" | "year";
 
 interface RoadmapItem {
@@ -19,6 +19,11 @@ interface RoadmapItem {
   due_date: string | null;
   ownerName: string | null;
   description: string | null;
+  /** Tracker project the item belongs to (jira items use the host project). */
+  projectId: string;
+  /** Set only for items pulled in from other projects. */
+  projectName?: string;
+  projectSlug?: string;
   jiraKey?: string;
   jiraUrl?: string | null;
   issueType?: string | null;
@@ -47,6 +52,7 @@ const BUCKET_COUNT: Record<Scale, number> = { week: 8, month: 6, quarter: 4, yea
 
 const TYPE_META: Record<Entity, { label: string; cls: string }> = {
   decision: { label: "Decision", cls: "bg-purple-100 text-purple-700" },
+  issue: { label: "Issue", cls: "bg-orange-100 text-orange-700" },
   jira: { label: "Jira", cls: "bg-sky-100 text-sky-700" },
 };
 
@@ -59,6 +65,8 @@ const JIRA_PRIORITY_MAP: Record<string, PriorityLevel> = {
   Low: "low",
   Lowest: "low",
 };
+
+const CLOSED_STATUSES = new Set<ItemStatus>(["complete", "closed", "rejected", "migrated_to_jira"]);
 
 function jiraStatusClass(category: string | null): string {
   switch (category) {
@@ -134,22 +142,30 @@ function makeBuckets(scale: Scale): Bucket[] {
   return buckets;
 }
 
-function decisionToItem(r: RaidEntry & { owner: Person | null }): RoadmapItem {
+function raidToItem(
+  r: Pick<RaidEntry, "id" | "title" | "priority" | "status" | "due_date" | "description" | "raid_type">,
+  ownerName: string | null,
+  projectId: string,
+  project?: { name: string; slug: string }
+): RoadmapItem {
   const badge = statusBadge(r.status);
   return {
     id: r.id,
-    entity: "decision",
+    entity: r.raid_type === "decision" ? "decision" : "issue",
     title: r.title,
     priority: r.priority,
-    statusLabel: r.status === "complete" ? "Final" : badge.label,
+    statusLabel: r.raid_type === "decision" && r.status === "complete" ? "Final" : badge.label,
     statusClass: badge.className,
     due_date: r.due_date,
-    ownerName: r.owner?.full_name || null,
+    ownerName,
     description: r.description,
+    projectId,
+    projectName: project?.name,
+    projectSlug: project?.slug,
   };
 }
 
-function jiraToItem(t: JiraTicket): RoadmapItem {
+function jiraToItem(t: JiraTicket, hostProjectId: string): RoadmapItem {
   return {
     id: t.id,
     entity: "jira",
@@ -160,6 +176,7 @@ function jiraToItem(t: JiraTicket): RoadmapItem {
     due_date: t.due_date,
     ownerName: t.assignee_name,
     description: null,
+    projectId: hostProjectId,
     jiraKey: t.jira_key,
     jiraUrl: t.jira_url,
     issueType: t.issue_type,
@@ -169,28 +186,29 @@ function jiraToItem(t: JiraTicket): RoadmapItem {
   };
 }
 
-const CLOSED_DECISION = new Set(["complete", "closed", "rejected", "migrated_to_jira"]);
-
 export default function RoadmapView({
   projectId,
   orgId,
   raidEntries,
+  searchFilter = "",
   onFieldSynced,
   onCountChange,
 }: {
   projectId: string;
   orgId: string;
   raidEntries: (RaidEntry & { owner: Person | null; reporter: Person | null; vendor: Vendor | null })[];
+  searchFilter?: string;
   /** Push a saved field back to the RAID tab so its local state stays in sync. */
   onFieldSynced?: (entity: "raid", id: string, field: string, value: string) => void;
   onCountChange?: (n: number) => void;
 }) {
   const supabase = createClient();
   const { profileId } = useRole();
+  const storageKey = `roadmap-included-${projectId}`;
   const [items, setItems] = useState<RoadmapItem[]>(() =>
     raidEntries
-      .filter((r) => r.raid_type === "decision" && !r.resolved_at && !CLOSED_DECISION.has(r.status))
-      .map(decisionToItem)
+      .filter((r) => r.raid_type === "decision" && !r.resolved_at && !CLOSED_STATUSES.has(r.status))
+      .map((r) => raidToItem(r, r.owner?.full_name || null, projectId))
   );
   const [scale, setScale] = useState<Scale>("week");
   const [dragId, setDragId] = useState<string | null>(null);
@@ -198,8 +216,15 @@ export default function RoadmapView({
   const [viewItem, setViewItem] = useState<RoadmapItem | null>(null);
   // entityKey -> {up, down, mine}
   const [votes, setVotes] = useState<Record<string, { up: number; down: number; mine: number | null }>>({});
+  const [allProjects, setAllProjects] = useState<{ id: string; name: string; slug: string }[]>([]);
+  const [includedProjects, setIncludedProjects] = useState<string[]>(() => {
+    if (typeof window === "undefined") return [];
+    try { return JSON.parse(localStorage.getItem(storageKey) || "[]") as string[]; } catch { return []; }
+  });
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const pickerRef = useRef<HTMLDivElement>(null);
 
-  // Load imported Jira tickets + existing votes
+  // Load imported Jira tickets + existing votes + project list for the picker
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -208,34 +233,91 @@ export default function RoadmapView({
         .select("*")
         .eq("project_id", projectId)
         .order("jira_key");
-      if (error) { console.error("jira_tickets load failed:", error.message); return; }
-      if (cancelled || !tickets) return;
-      const open = (tickets as JiraTicket[]).filter((t) => t.status_category !== "done");
-      setItems((prev) => [...prev.filter((i) => i.entity !== "jira"), ...open.map(jiraToItem)]);
+      if (error) console.error("jira_tickets load failed:", error.message);
+      if (cancelled) return;
+      if (tickets) {
+        const open = (tickets as JiraTicket[]).filter((t) => t.status_category !== "done");
+        setItems((prev) => [...prev.filter((i) => i.entity !== "jira"), ...open.map((t) => jiraToItem(t, projectId))]);
+      }
 
       const { data: voteRows } = await supabase.from("roadmap_votes").select("entity_type, entity_id, vote, profile_id");
-      if (cancelled || !voteRows) return;
-      const map: Record<string, { up: number; down: number; mine: number | null }> = {};
-      for (const v of voteRows as { entity_type: string; entity_id: string; vote: number; profile_id: string }[]) {
-        const k = `${v.entity_type}:${v.entity_id}`;
-        map[k] = map[k] || { up: 0, down: 0, mine: null };
-        if (v.vote > 0) map[k].up++; else map[k].down++;
-        if (v.profile_id === profileId) map[k].mine = v.vote;
+      if (cancelled) return;
+      if (voteRows) {
+        const map: Record<string, { up: number; down: number; mine: number | null }> = {};
+        for (const v of voteRows as { entity_type: string; entity_id: string; vote: number; profile_id: string }[]) {
+          const k = `${v.entity_type}:${v.entity_id}`;
+          map[k] = map[k] || { up: 0, down: 0, mine: null };
+          if (v.vote > 0) map[k].up++; else map[k].down++;
+          if (v.profile_id === profileId) map[k].mine = v.vote;
+        }
+        setVotes(map);
       }
-      setVotes(map);
+
+      const { data: projs } = await supabase.from("projects").select("id, name, slug").order("name");
+      if (!cancelled && projs) setAllProjects(projs as { id: string; name: string; slug: string }[]);
     })();
     return () => { cancelled = true; };
   }, [projectId, profileId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Load open Decisions + Issues from the included projects (consolidated view)
+  useEffect(() => {
+    let cancelled = false;
+    if (typeof window !== "undefined") {
+      try { localStorage.setItem(storageKey, JSON.stringify(includedProjects)); } catch {}
+    }
+    (async () => {
+      const foreign = includedProjects.filter((id) => id !== projectId);
+      let next: RoadmapItem[] = [];
+      if (foreign.length > 0) {
+        const { data, error } = await supabase
+          .from("raid_entries")
+          .select("id, title, priority, status, due_date, description, raid_type, project_id, resolved_at, owner:people!raid_entries_owner_id_fkey(id, full_name)")
+          .in("project_id", foreign)
+          .in("raid_type", ["issue", "decision"])
+          .is("resolved_at", null);
+        if (error) { console.error("cross-project load failed:", error.message); return; }
+        const projMap = new Map(allProjects.map((p) => [p.id, p]));
+        next = ((data || []) as unknown as (Pick<RaidEntry, "id" | "title" | "priority" | "status" | "due_date" | "description" | "project_id"> & { raid_type: RaidType; owner: { full_name: string } | null })[])
+          .filter((r) => !CLOSED_STATUSES.has(r.status))
+          .map((r) => raidToItem(r, r.owner?.full_name || null, r.project_id!, projMap.get(r.project_id!)));
+      }
+      if (!cancelled) {
+        setItems((prev) => [...prev.filter((i) => i.projectId === projectId), ...next]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [includedProjects, allProjects, projectId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Close the project picker on outside click
+  useEffect(() => {
+    if (!pickerOpen) return;
+    function onDocClick(e: MouseEvent) {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) setPickerOpen(false);
+    }
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [pickerOpen]);
 
   useEffect(() => { onCountChange?.(items.length); }, [items.length, onCountChange]);
 
   const buckets = useMemo(() => makeBuckets(scale), [scale]);
   const today = useMemo(() => { const t = new Date(); t.setHours(0, 0, 0, 0); return t; }, []);
 
+  // Tab-bar Filter box applies here just like the other panels
+  const visibleItems = useMemo(() => {
+    const q = searchFilter.trim().toLowerCase();
+    if (!q) return items;
+    return items.filter((i) =>
+      [i.title, i.jiraKey, i.ownerName, i.projectName, i.statusLabel, ...(i.labels || [])]
+        .filter(Boolean)
+        .some((s) => (s as string).toLowerCase().includes(q))
+    );
+  }, [items, searchFilter]);
+
   const columns = useMemo(() => {
     const map: Record<string, RoadmapItem[]> = { unscheduled: [], overdue: [], later: [] };
     for (const b of buckets) map[b.key] = [];
-    for (const it of items) {
+    for (const it of visibleItems) {
       if (!it.due_date) { map.unscheduled.push(it); continue; }
       const d = parseLocal(it.due_date);
       if (d < today) { map.overdue.push(it); continue; }
@@ -247,31 +329,31 @@ export default function RoadmapView({
       map[key].sort((a, b) => rank(a) - rank(b) || (a.due_date || "9999").localeCompare(b.due_date || "9999") || a.title.localeCompare(b.title));
     }
     return map;
-  }, [items, buckets, today]);
+  }, [visibleItems, buckets, today]);
 
   function entityKey(it: RoadmapItem) {
-    return `${it.entity === "decision" ? "raid_entry" : "jira_ticket"}:${it.id}`;
+    return `${it.entity === "jira" ? "jira_ticket" : "raid_entry"}:${it.id}`;
   }
 
   async function schedule(itemId: string, newDate: string | null) {
     const item = items.find((i) => i.id === itemId);
     if (!item || item.due_date === newDate) return;
     setItems((prev) => prev.map((i) => (i.id === itemId ? { ...i, due_date: newDate } : i)));
-    const table = item.entity === "decision" ? "raid_entries" : "jira_tickets";
+    const table = item.entity === "jira" ? "jira_tickets" : "raid_entries";
     const { data, error } = await supabase.from(table).update({ due_date: newDate }).eq("id", itemId).select("id");
     if (error || !data?.length) {
       setItems((prev) => prev.map((i) => (i.id === itemId ? { ...i, due_date: item.due_date } : i)));
       alert(error ? `Could not reschedule: ${error.message}` : "Could not reschedule — you may not have permission.");
       return;
     }
-    if (item.entity === "decision") onFieldSynced?.("raid", itemId, "due_date", newDate || "");
+    if (item.entity !== "jira" && item.projectId === projectId) onFieldSynced?.("raid", itemId, "due_date", newDate || "");
   }
 
   async function castVote(item: RoadmapItem, dir: 1 | -1) {
     if (!profileId) return;
     const k = entityKey(item);
     const cur = votes[k] || { up: 0, down: 0, mine: null };
-    const entityType = item.entity === "decision" ? "raid_entry" : "jira_ticket";
+    const entityType = item.entity === "jira" ? "jira_ticket" : "raid_entry";
     if (cur.mine === dir) {
       setVotes((prev) => ({ ...prev, [k]: { up: cur.up - (dir > 0 ? 1 : 0), down: cur.down - (dir < 0 ? 1 : 0), mine: null } }));
       supabase.from("roadmap_votes").delete().eq("profile_id", profileId).eq("entity_type", entityType).eq("entity_id", item.id).then(({ error }) => { if (error) console.error("vote delete failed:", error.message); });
@@ -337,6 +419,7 @@ export default function RoadmapView({
           </button>
         </div>
         <div className="text-sm font-semibold text-gray-900 leading-snug">{it.title}</div>
+        {it.projectName && <div className="text-[10px] font-medium text-indigo-500">{it.projectName}</div>}
         <div className="flex items-center gap-1.5">
           {it.ownerName ? (
             <>
@@ -379,11 +462,42 @@ export default function RoadmapView({
   }
 
   const viewVotes = viewItem ? votes[entityKey(viewItem)] || { up: 0, down: 0, mine: null } : null;
+  const otherProjects = allProjects.filter((p) => p.id !== projectId);
+  const includedCount = includedProjects.filter((id) => id !== projectId).length;
 
   return (
     <div className="border border-gray-300 rounded-lg overflow-hidden">
       <div className="bg-gray-800 px-4 py-2.5 flex items-center justify-between">
-        <h3 className="text-xs font-semibold text-white uppercase tracking-wide">Release Roadmap</h3>
+        <div className="flex items-center gap-3">
+          <h3 className="text-xs font-semibold text-white uppercase tracking-wide">Release Roadmap</h3>
+          <div className="relative" ref={pickerRef}>
+            <button
+              onClick={() => setPickerOpen((o) => !o)}
+              className={`px-2.5 py-1 text-xs rounded border transition-colors ${includedCount > 0 ? "border-blue-400 text-blue-300" : "border-gray-600 text-gray-300 hover:text-white hover:bg-gray-700"}`}
+            >
+              + Projects{includedCount > 0 ? ` (${includedCount})` : ""}
+            </button>
+            {pickerOpen && (
+              <div className="absolute left-0 top-full mt-1 z-40 w-64 max-h-72 overflow-y-auto bg-white border border-gray-300 rounded-md shadow-lg py-1">
+                <p className="px-3 py-1.5 text-[11px] text-gray-400 border-b border-gray-200">Include open Decisions &amp; Issues from:</p>
+                {otherProjects.map((p) => (
+                  <label key={p.id} className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={includedProjects.includes(p.id)}
+                      onChange={(e) =>
+                        setIncludedProjects((prev) => (e.target.checked ? [...prev, p.id] : prev.filter((id) => id !== p.id)))
+                      }
+                      className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="truncate">{p.name}</span>
+                  </label>
+                ))}
+                {otherProjects.length === 0 && <p className="px-3 py-2 text-xs text-gray-400">No other projects.</p>}
+              </div>
+            )}
+          </div>
+        </div>
         <div className="flex items-center gap-1">
           {SCALES.map((s) => (
             <button
@@ -396,8 +510,10 @@ export default function RoadmapView({
           ))}
         </div>
       </div>
-      {items.length === 0 ? (
-        <p className="px-4 py-6 text-sm text-gray-400">No open decisions or Jira tickets in the queue.</p>
+      {visibleItems.length === 0 ? (
+        <p className="px-4 py-6 text-sm text-gray-400">
+          {searchFilter.trim() ? "No roadmap items match the filter." : "No open decisions or Jira tickets in the queue."}
+        </p>
       ) : (
         <div className="p-3 overflow-x-auto">
           <div className="flex gap-3 items-stretch">
@@ -439,6 +555,12 @@ export default function RoadmapView({
             <div className="px-5 py-4 overflow-y-auto space-y-4">
               <h3 className="text-sm font-semibold text-gray-900">{viewItem.title}</h3>
               <div className="grid grid-cols-[120px_1fr] gap-y-2 text-sm">
+                {viewItem.projectName && (
+                  <>
+                    <span className="text-gray-500">Project</span>
+                    <span>{viewItem.projectName}</span>
+                  </>
+                )}
                 <span className="text-gray-500">Priority</span>
                 <span className="flex items-center gap-1.5">
                   <span className={`h-2 w-2 rounded-full ${priorityDot(viewItem.priority)}`} />
@@ -478,6 +600,12 @@ export default function RoadmapView({
               {viewItem.jiraUrl && (
                 <a href={viewItem.jiraUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-800">
                   Open in Jira
+                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
+                </a>
+              )}
+              {viewItem.projectSlug && (
+                <a href={`/projects/${viewItem.projectSlug}?tab=raid&item=${viewItem.id}`} className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-800">
+                  Open in {viewItem.projectName}
                   <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
                 </a>
               )}

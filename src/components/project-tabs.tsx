@@ -404,6 +404,7 @@ export default function ProjectTabs({
               projectId={project.id}
               orgId={project.org_id}
               raidEntries={raidEntries}
+              searchFilter={searchFilter}
               onCountChange={setRoadmapCount}
               onFieldSynced={(_entity, id, field, value) => {
                 itemAddersRef.current.updateRaid?.(id, field, value);
