@@ -535,6 +535,30 @@ export interface ProjectDepartmentStatus {
   rep?: Person;
 }
 
+export interface JiraTicket {
+  id: string;
+  org_id: string;
+  project_id: string | null;
+  jira_key: string;
+  summary: string;
+  status: string | null;
+  status_category: string | null;
+  issue_type: string | null;
+  jira_priority: string | null;
+  assignee_name: string | null;
+  /** Local roadmap scheduling date — not synced back to Jira. */
+  due_date: string | null;
+  release_target: string | null;
+  epic: string | null;
+  labels: string[];
+  jira_url: string | null;
+  jira_created_at: string | null;
+  jira_updated_at: string | null;
+  imported_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export const STEERING_DEPARTMENTS = [
   "Marketing",
   "Content/Education",

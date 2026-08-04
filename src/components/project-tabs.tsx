@@ -401,12 +401,12 @@ export default function ProjectTabs({
         {enabledModules.has("roadmap") && (
           <div style={{ display: active === "roadmap" ? "block" : "none" }}>
             <RoadmapView
-              actions={actions}
+              projectId={project.id}
+              orgId={project.org_id}
               raidEntries={raidEntries}
               onCountChange={setRoadmapCount}
-              onFieldSynced={(entity, id, field, value) => {
-                if (entity === "action") itemAddersRef.current.updateAction?.(id, field, value);
-                else itemAddersRef.current.updateRaid?.(id, field, value);
+              onFieldSynced={(_entity, id, field, value) => {
+                itemAddersRef.current.updateRaid?.(id, field, value);
               }}
             />
           </div>
