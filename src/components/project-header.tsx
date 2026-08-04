@@ -30,6 +30,7 @@ export default function ProjectHeader({ project, vendors, people: initialPeople 
     target_completion: p.target_completion || "",
     start_date: p.start_date || "",
     notes: p.notes || "",
+    initiative_id: p.initiative_id || "",
   });
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -39,9 +40,23 @@ export default function ProjectHeader({ project, vendors, people: initialPeople 
   const [vendorOwners, setVendorOwners] = useState<Record<string, string>>({}); // vendor_id -> person_id
   const [healthOverride, setHealthOverride] = useState<ProjectHealth | null>(null);
   const [allInitiatives, setAllInitiatives] = useState<Initiative[]>([]);
-  const { role, profileId } = useRole();
+  const { role, profileId, userPersonId } = useRole();
   const displayHealth = healthOverride ?? p.health;
   const canDeleteProject = role === "super_admin" || (!!profileId && p.created_by === profileId);
+  const [ownedInitiativeIds, setOwnedInitiativeIds] = useState<Set<string>>(new Set());
+  // Admins can move the project to any initiative; others only to ones they own
+  // (junction table or legacy owner_id). The current initiative is always listed
+  // so the select can render its present value.
+  const selectableInitiatives = isAdmin(role)
+    ? allInitiatives
+    : allInitiatives.filter((i) => i.id === p.initiative_id || (userPersonId && (i.owner_id === userPersonId || ownedInitiativeIds.has(i.id))));
+
+  useEffect(() => {
+    if (isAdmin(role) || !userPersonId) return;
+    supabase.from("initiative_owners").select("initiative_id").eq("person_id", userPersonId).then(({ data }) => {
+      setOwnedInitiativeIds(new Set(((data || []) as { initiative_id: string }[]).map((r) => r.initiative_id)));
+    });
+  }, [role, userPersonId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load initiatives for reassignment dropdown
   useEffect(() => {
@@ -70,6 +85,7 @@ export default function ProjectHeader({ project, vendors, people: initialPeople 
       target_completion: p.target_completion || "",
       start_date: p.start_date || "",
       notes: p.notes || "",
+      initiative_id: p.initiative_id || "",
     });
     setEditing(true);
   }
@@ -97,6 +113,7 @@ export default function ProjectHeader({ project, vendors, people: initialPeople 
       target_completion: form.target_completion || null,
       start_date: form.start_date || null,
       notes: form.notes.trim() || null,
+      initiative_id: form.initiative_id || null,
       ...(nameChanged ? { slug: newSlug } : {}),
     };
 
@@ -174,6 +191,20 @@ export default function ProjectHeader({ project, vendors, people: initialPeople 
               rows={2}
               className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
             />
+          </div>
+
+          <div className="md:col-span-2">
+            <label className="block text-xs font-medium text-gray-500 mb-1">Initiative</label>
+            <select
+              value={form.initiative_id}
+              onChange={(e) => setForm({ ...form, initiative_id: e.target.value })}
+              className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            >
+              <option value="">— None —</option>
+              {selectableInitiatives.map((i) => (
+                <option key={i.id} value={i.id}>{i.name}</option>
+              ))}
+            </select>
           </div>
 
           <div>
