@@ -19,6 +19,8 @@ interface RoadmapItem {
   due_date: string | null;
   ownerName: string | null;
   description: string | null;
+  /** Actively being worked — shown in the In Progress column, not the time buckets. */
+  inProgress: boolean;
   /** Tracker project the item belongs to (jira items use the host project). */
   projectId: string;
   /** Set only for items pulled in from other projects. */
@@ -30,7 +32,11 @@ interface RoadmapItem {
   releaseTarget?: string | null;
   epic?: string | null;
   labels?: string[];
+  hasPr?: boolean;
+  prNumbers?: number[];
 }
+
+const GITHUB_PR_BASE = "https://github.com/ed-cet/unified/pull/";
 
 interface Bucket {
   key: string;
@@ -159,6 +165,7 @@ function raidToItem(
     due_date: r.due_date,
     ownerName,
     description: r.description,
+    inProgress: r.status === "in_progress" || r.status === "assessing",
     projectId,
     projectName: project?.name,
     projectSlug: project?.slug,
@@ -176,6 +183,9 @@ function jiraToItem(t: JiraTicket, hostProjectId: string): RoadmapItem {
     due_date: t.due_date,
     ownerName: t.assignee_name,
     description: null,
+    // A ticket with an associated PR counts as in progress even if its Jira
+    // status hasn't moved yet (the Jira<->GitHub integration isn't connected).
+    inProgress: t.status_category === "indeterminate" || t.has_pr,
     projectId: hostProjectId,
     jiraKey: t.jira_key,
     jiraUrl: t.jira_url,
@@ -183,6 +193,8 @@ function jiraToItem(t: JiraTicket, hostProjectId: string): RoadmapItem {
     releaseTarget: t.release_target,
     epic: t.epic,
     labels: t.labels,
+    hasPr: t.has_pr,
+    prNumbers: t.pr_numbers,
   };
 }
 
@@ -223,6 +235,17 @@ export default function RoadmapView({
   });
   const [pickerOpen, setPickerOpen] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
+  const [ipCollapsed, setIpCollapsed] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem(`roadmap-ip-collapsed-${projectId}`) === "1";
+  });
+
+  function toggleIpCollapsed() {
+    setIpCollapsed((prev) => {
+      try { localStorage.setItem(`roadmap-ip-collapsed-${projectId}`, prev ? "0" : "1"); } catch {}
+      return !prev;
+    });
+  }
 
   // Load imported Jira tickets + existing votes + project list for the picker
   useEffect(() => {
@@ -315,9 +338,10 @@ export default function RoadmapView({
   }, [items, searchFilter]);
 
   const columns = useMemo(() => {
-    const map: Record<string, RoadmapItem[]> = { unscheduled: [], overdue: [], later: [] };
+    const map: Record<string, RoadmapItem[]> = { inprogress: [], unscheduled: [], overdue: [], later: [] };
     for (const b of buckets) map[b.key] = [];
     for (const it of visibleItems) {
+      if (it.inProgress) { map.inprogress.push(it); continue; }
       if (!it.due_date) { map.unscheduled.push(it); continue; }
       const d = parseLocal(it.due_date);
       if (d < today) { map.overdue.push(it); continue; }
@@ -408,6 +432,9 @@ export default function RoadmapView({
             {it.entity === "jira" ? it.jiraKey : meta.label}
           </span>
           <span className={`h-2 w-2 rounded-full flex-shrink-0 ${priorityDot(it.priority)}`} title={priorityLabel(it.priority)} />
+          {it.hasPr && (
+            <span className="inline-flex px-1 py-0.5 text-[10px] font-medium rounded bg-emerald-100 text-emerald-700" title={`PR ${(it.prNumbers || []).map((n) => `#${n}`).join(", ")}`}>PR</span>
+          )}
           {it.due_date && <span className="text-[11px] text-gray-400">{formatDateNumeric(it.due_date)}</span>}
           <button
             draggable={false}
@@ -438,8 +465,8 @@ export default function RoadmapView({
     );
   }
 
-  function renderColumn(opts: { key: string; label: string; headerCls: string; items: RoadmapItem[]; newDate?: string | null; droppable: boolean; isCurrent?: boolean }) {
-    const { key, label, headerCls, items: colItems, newDate, droppable, isCurrent } = opts;
+  function renderColumn(opts: { key: string; label: string; headerCls: string; items: RoadmapItem[]; newDate?: string | null; droppable: boolean; isCurrent?: boolean; onCollapse?: () => void }) {
+    const { key, label, headerCls, items: colItems, newDate, droppable, isCurrent, onCollapse } = opts;
     const isOver = dropCol === key && droppable;
     return (
       <div
@@ -449,7 +476,14 @@ export default function RoadmapView({
       >
         <div className={`px-3 py-2 rounded-t-lg flex items-center justify-between ${headerCls} ${isCurrent ? "ring-2 ring-inset ring-blue-400" : ""}`}>
           <span className="text-xs font-semibold text-white uppercase tracking-wide truncate">{label}</span>
-          <span className="text-xs text-gray-300 ml-2 flex-shrink-0">{colItems.length}</span>
+          <span className="text-xs text-gray-300 ml-2 flex-shrink-0 flex items-center gap-1.5">
+            {colItems.length}
+            {onCollapse && (
+              <button onClick={onCollapse} className="text-gray-300 hover:text-white" title="Collapse">
+                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+              </button>
+            )}
+          </span>
         </div>
         <div className="p-2 space-y-2 flex-1 min-h-[140px]">
           {colItems.map(renderCard)}
@@ -517,6 +551,20 @@ export default function RoadmapView({
       ) : (
         <div className="p-3 overflow-x-auto">
           <div className="flex gap-3 items-stretch">
+            {ipCollapsed ? (
+              <button
+                onClick={toggleIpCollapsed}
+                className="flex-shrink-0 w-9 rounded-lg border border-gray-300 bg-gray-50/60 hover:border-blue-400 flex flex-col items-center gap-2 py-2.5 transition-colors"
+                title="Expand In Progress"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400"><path d="m9 18 6-6-6-6"/></svg>
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-500" style={{ writingMode: "vertical-rl" }}>
+                  In Progress ({columns.inprogress.length})
+                </span>
+              </button>
+            ) : (
+              renderColumn({ key: "inprogress", label: "In Progress", headerCls: "bg-blue-800", items: columns.inprogress, droppable: false, onCollapse: toggleIpCollapsed })
+            )}
             {renderColumn({ key: "unscheduled", label: "Unscheduled", headerCls: "bg-gray-700", items: columns.unscheduled, newDate: null, droppable: true })}
             {columns.overdue.length > 0 &&
               renderColumn({ key: "overdue", label: "Overdue", headerCls: "bg-red-800", items: columns.overdue, droppable: false })}
@@ -578,6 +626,16 @@ export default function RoadmapView({
                     <span>{viewItem.releaseTarget || "—"}</span>
                     <span className="text-gray-500">Epic</span>
                     <span>{viewItem.epic || "—"}</span>
+                    {viewItem.prNumbers && viewItem.prNumbers.length > 0 && (
+                      <>
+                        <span className="text-gray-500">Pull Requests</span>
+                        <span className="flex flex-wrap gap-2">
+                          {viewItem.prNumbers.map((n) => (
+                            <a key={n} href={`${GITHUB_PR_BASE}${n}`} target="_blank" rel="noreferrer" className="text-blue-600 hover:text-blue-800">#{n}</a>
+                          ))}
+                        </span>
+                      </>
+                    )}
                     {viewItem.labels && viewItem.labels.length > 0 && (
                       <>
                         <span className="text-gray-500">Labels</span>

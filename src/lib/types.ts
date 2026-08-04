@@ -551,6 +551,9 @@ export interface JiraTicket {
   release_target: string | null;
   epic: string | null;
   labels: string[];
+  /** True when a PR in ed-cet/unified references this ticket. */
+  has_pr: boolean;
+  pr_numbers: number[];
   jira_url: string | null;
   jira_created_at: string | null;
   jira_updated_at: string | null;
