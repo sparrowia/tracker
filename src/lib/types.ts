@@ -185,7 +185,8 @@ export interface Project {
   notes: string | null;
   initiative_id: string | null;
   public_issue_form: boolean;
-  roadmap_enabled: boolean;
+  /** Enabled tabs: actions | blockers | raid | agenda | docs | roadmap. "actions" is always on. */
+  modules: string[];
   lead_qa_id: string | null;
   project_manager_id: string | null;
   project_owner_id: string | null;

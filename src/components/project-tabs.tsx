@@ -118,24 +118,29 @@ export default function ProjectTabs({
     docs: 0,
     roadmap: 0,
   });
-  const [roadmapEnabled, setRoadmapEnabled] = useState<boolean>(project.roadmap_enabled ?? false);
+  const [enabledModules, setEnabledModules] = useState<Set<string>>(
+    () => new Set(project.modules ?? ["actions", "raid", "docs"])
+  );
+  // "actions" is the required module — always on regardless of the stored array
+  const isModuleEnabled = useCallback((t: Tab) => t === "actions" || enabledModules.has(t), [enabledModules]);
+  const visibleTabs = tabOrder.filter(isModuleEnabled);
 
-  // The edit form (ProjectHeader) is a sibling component — it announces Roadmap
-  // toggles via this event so the tab appears/disappears without a page reload.
+  // The edit form (ProjectHeader) is a sibling component — it announces module
+  // changes via this event so tabs appear/disappear without a page reload.
   useEffect(() => {
     const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail as { projectId?: string; enabled?: boolean } | undefined;
-      if (detail?.projectId === project.id) setRoadmapEnabled(!!detail.enabled);
+      const detail = (e as CustomEvent).detail as { projectId?: string; modules?: string[] } | undefined;
+      if (detail?.projectId === project.id && detail.modules) setEnabledModules(new Set(detail.modules));
     };
-    window.addEventListener("project:roadmap-toggle", handler);
-    return () => window.removeEventListener("project:roadmap-toggle", handler);
+    window.addEventListener("project:modules-change", handler);
+    return () => window.removeEventListener("project:modules-change", handler);
   }, [project.id]);
 
   useEffect(() => {
-    if (!roadmapEnabled && active === "roadmap") {
-      setActive(tabOrder.filter((t) => t !== "roadmap")[0] ?? "actions");
+    if (!isModuleEnabled(active)) {
+      setActive(tabOrder.filter(isModuleEnabled)[0] ?? "actions");
     }
-  }, [roadmapEnabled, active, tabOrder]);
+  }, [isModuleEnabled, active, tabOrder]);
 
   const addPerson = useCallback((person: Person) => {
     setPeopleList((prev) => {
@@ -270,7 +275,7 @@ export default function ProjectTabs({
     <div>
       {/* Tab bar */}
       <div className="flex items-center border-b border-gray-300">
-        {tabOrder.filter((t) => t !== "roadmap" || roadmapEnabled).map((tabKey, idx) => {
+        {visibleTabs.map((tabKey, idx) => {
           const count = countForTab(tabKey);
           const isBlockers = tabKey === "blockers";
           const isDragging = dragTab === tabKey;
@@ -391,7 +396,7 @@ export default function ProjectTabs({
           />
         </div>
 
-        {roadmapEnabled && (
+        {enabledModules.has("roadmap") && (
           <div style={{ display: active === "roadmap" ? "block" : "none" }}>
             <div className="border border-gray-300 rounded-lg overflow-hidden">
               <div className="bg-gray-800 px-4 py-2.5">

@@ -12,6 +12,17 @@ import Link from "next/link";
 
 const healthOptions: ProjectHealth[] = ["on_track", "in_progress", "at_risk", "blocked", "paused", "complete"];
 
+const MODULE_OPTIONS: { key: string; label: string; required?: boolean }[] = [
+  { key: "actions", label: "Action Items", required: true },
+  { key: "blockers", label: "Blockers" },
+  { key: "raid", label: "RAID Log" },
+  { key: "agenda", label: "Meeting Agenda" },
+  { key: "docs", label: "Docs" },
+  { key: "roadmap", label: "Roadmap" },
+];
+
+const DEFAULT_MODULES = ["actions", "raid", "docs"];
+
 interface ProjectHeaderProps {
   project: Project;
   vendors: Vendor[];
@@ -31,7 +42,7 @@ export default function ProjectHeader({ project, vendors, people: initialPeople 
     start_date: p.start_date || "",
     notes: p.notes || "",
     initiative_id: p.initiative_id || "",
-    roadmap_enabled: p.roadmap_enabled ?? false,
+    modules: p.modules ?? DEFAULT_MODULES,
   });
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -87,7 +98,7 @@ export default function ProjectHeader({ project, vendors, people: initialPeople 
       start_date: p.start_date || "",
       notes: p.notes || "",
       initiative_id: p.initiative_id || "",
-      roadmap_enabled: p.roadmap_enabled ?? false,
+      modules: p.modules ?? DEFAULT_MODULES,
     });
     setEditing(true);
   }
@@ -116,7 +127,8 @@ export default function ProjectHeader({ project, vendors, people: initialPeople 
       start_date: form.start_date || null,
       notes: form.notes.trim() || null,
       initiative_id: form.initiative_id || null,
-      roadmap_enabled: form.roadmap_enabled,
+      // Canonical order, with the required module always present
+      modules: MODULE_OPTIONS.filter((m) => m.required || form.modules.includes(m.key)).map((m) => m.key),
       ...(nameChanged ? { slug: newSlug } : {}),
     };
 
@@ -125,9 +137,7 @@ export default function ProjectHeader({ project, vendors, people: initialPeople 
       setP({ ...p, ...updates, slug: newSlug } as Project);
       setEditing(false);
       window.dispatchEvent(new CustomEvent("sidebar:refresh"));
-      if (form.roadmap_enabled !== (p.roadmap_enabled ?? false)) {
-        window.dispatchEvent(new CustomEvent("project:roadmap-toggle", { detail: { projectId: p.id, enabled: form.roadmap_enabled } }));
-      }
+      window.dispatchEvent(new CustomEvent("project:modules-change", { detail: { projectId: p.id, modules: updates.modules } }));
       // If slug changed, redirect to new URL
       if (nameChanged && newSlug !== p.slug) {
         window.location.href = `/projects/${newSlug}`;
@@ -267,15 +277,29 @@ export default function ProjectHeader({ project, vendors, people: initialPeople 
             />
           </div>
 
-          <div className="md:col-span-2 flex items-center gap-2">
-            <input
-              type="checkbox"
-              id="roadmap-enabled"
-              checked={form.roadmap_enabled}
-              onChange={(e) => setForm({ ...form, roadmap_enabled: e.target.checked })}
-              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-            />
-            <label htmlFor="roadmap-enabled" className="text-sm text-gray-700">Roadmap</label>
+          <div className="md:col-span-2">
+            <label className="block text-xs font-medium text-gray-500 mb-1">Modules</label>
+            <div className="flex flex-wrap gap-x-5 gap-y-2">
+              {MODULE_OPTIONS.map((m) => (
+                <label key={m.key} className={`flex items-center gap-2 text-sm ${m.required ? "text-gray-400" : "text-gray-700"}`}>
+                  <input
+                    type="checkbox"
+                    checked={m.required || form.modules.includes(m.key)}
+                    disabled={m.required}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        modules: e.target.checked
+                          ? [...form.modules, m.key]
+                          : form.modules.filter((k) => k !== m.key),
+                      })
+                    }
+                    className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-60"
+                  />
+                  {m.label}
+                </label>
+              ))}
+            </div>
           </div>
 
           <div>
