@@ -57,11 +57,14 @@ export default function AddInitiativeButton({ onSaved, defaultValues, onCreated,
     setSaving(false);
     if (!error) {
       close();
+      window.dispatchEvent(new CustomEvent("sidebar:refresh"));
       if (onCreated && data) {
         onCreated(data.id);
       } else {
         onSaved?.();
       }
+    } else {
+      alert(`Could not add initiative: ${error.message}`);
     }
   }
 
