@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { priorityColor, priorityLabel, statusBadge, formatAge, formatDateShort, formatDateNumeric, syncUrlParams } from "@/lib/utils";
 import { shiftSelectRange } from "@/lib/selection";
-import type { Project, ActionItem, ActionItemSection, RaidEntry, Blocker, Person, Vendor, ProjectAgendaRow, PriorityLevel, ItemStatus, Intake, IntakeSource, ProjectDocument } from "@/lib/types";
+import type { Project, ActionItem, ActionItemSection, RaidEntry, Blocker, Person, Vendor, ProjectAgendaRow, PriorityLevel, ItemStatus, ProjectDocument } from "@/lib/types";
 import RaidLog from "@/components/raid-log";
 import { AgendaView } from "@/components/agenda-view";
 import OwnerPicker from "@/components/owner-picker";
@@ -20,7 +20,7 @@ import type { DocsEditorHandle } from "@/components/docs-editor";
 
 const DocsEditorLazy = dynamic(() => import("@/components/docs-editor").then((m) => ({ default: m.DocsEditor })), { ssr: false });
 
-type Tab = "actions" | "blockers" | "raid" | "agenda" | "intake" | "docs";
+type Tab = "actions" | "blockers" | "raid" | "agenda" | "docs" | "roadmap";
 
 type SuggestedItem = {
   id: string;
@@ -47,11 +47,11 @@ const TAB_LABELS: Record<Tab, string> = {
   blockers: "Blockers",
   raid: "RAID Log",
   agenda: "Meeting Agenda",
-  intake: "Intake",
   docs: "Docs",
+  roadmap: "Roadmap",
 };
 
-const DEFAULT_ORDER: Tab[] = ["actions", "blockers", "raid", "agenda", "intake", "docs"];
+const DEFAULT_ORDER: Tab[] = ["actions", "blockers", "raid", "agenda", "docs", "roadmap"];
 const STORAGE_KEY = "project-tab-order";
 
 function loadTabOrder(): Tab[] {
@@ -77,7 +77,6 @@ export default function ProjectTabs({
   people,
   vendors,
   agendaRows,
-  intakes,
   intakeSourceMap = {},
 }: {
   project: Project;
@@ -87,7 +86,6 @@ export default function ProjectTabs({
   people: Person[];
   vendors: Vendor[];
   agendaRows: ProjectAgendaRow[];
-  intakes: Intake[];
   intakeSourceMap?: Record<string, string>;
 }) {
   const router = useRouter();
@@ -117,9 +115,27 @@ export default function ProjectTabs({
     blockers: blockers.length,
     raid: raidEntries.length,
     agenda: agendaRows.length,
-    intake: intakes.length,
     docs: 0,
+    roadmap: 0,
   });
+  const [roadmapEnabled, setRoadmapEnabled] = useState<boolean>(project.roadmap_enabled ?? false);
+
+  // The edit form (ProjectHeader) is a sibling component — it announces Roadmap
+  // toggles via this event so the tab appears/disappears without a page reload.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { projectId?: string; enabled?: boolean } | undefined;
+      if (detail?.projectId === project.id) setRoadmapEnabled(!!detail.enabled);
+    };
+    window.addEventListener("project:roadmap-toggle", handler);
+    return () => window.removeEventListener("project:roadmap-toggle", handler);
+  }, [project.id]);
+
+  useEffect(() => {
+    if (!roadmapEnabled && active === "roadmap") {
+      setActive(tabOrder.filter((t) => t !== "roadmap")[0] ?? "actions");
+    }
+  }, [roadmapEnabled, active, tabOrder]);
 
   const addPerson = useCallback((person: Person) => {
     setPeopleList((prev) => {
@@ -208,7 +224,6 @@ export default function ProjectTabs({
   const setActionCount = useCallback((n: number) => setTabCounts((p) => ({ ...p, actions: n })), []);
   const setRaidCount = useCallback((n: number) => setTabCounts((p) => ({ ...p, raid: n })), []);
   const setAgendaCount = useCallback((n: number) => setTabCounts((p) => ({ ...p, agenda: n })), []);
-  const setIntakeCount = useCallback((n: number) => setTabCounts((p) => ({ ...p, intake: n })), []);
 
   function onTabDragStart(e: React.DragEvent, tab: Tab, index: number) {
     setDragTab(tab);
@@ -255,7 +270,7 @@ export default function ProjectTabs({
     <div>
       {/* Tab bar */}
       <div className="flex items-center border-b border-gray-300">
-        {tabOrder.map((tabKey, idx) => {
+        {tabOrder.filter((t) => t !== "roadmap" || roadmapEnabled).map((tabKey, idx) => {
           const count = countForTab(tabKey);
           const isBlockers = tabKey === "blockers";
           const isDragging = dragTab === tabKey;
@@ -376,9 +391,16 @@ export default function ProjectTabs({
           />
         </div>
 
-        <div style={{ display: active === "intake" ? "block" : "none" }}>
-          <IntakePanel project={project} initialIntakes={intakes} vendors={vendorsList} onCountChange={setIntakeCount} />
-        </div>
+        {roadmapEnabled && (
+          <div style={{ display: active === "roadmap" ? "block" : "none" }}>
+            <div className="border border-gray-300 rounded-lg overflow-hidden">
+              <div className="bg-gray-800 px-4 py-2.5">
+                <h3 className="text-xs font-semibold text-white uppercase tracking-wide">Roadmap</h3>
+              </div>
+              <p className="px-4 py-6 text-sm text-gray-400">Nothing here yet.</p>
+            </div>
+          </div>
+        )}
 
         <div style={{ display: active === "docs" ? "block" : "none" }}>
           <DocsPanel projectId={project.id} projectCreatedBy={project.created_by} projectOwnerId={project.project_owner_id} orgId={project.org_id} projectSlug={project.slug} people={peopleList} />
@@ -2837,530 +2859,6 @@ function ActionChangelogPanel({ itemId, orgId, people }: { itemId: string; orgId
     </div>
   );
 }
-
-/* ─── Intake Panel ─── */
-
-const SOURCE_LABELS: Record<IntakeSource, string> = {
-  slack: "Slack",
-  email: "Email",
-  meeting_notes: "Meeting Notes",
-  fathom_transcript: "Meeting Notes",
-  manual: "Manual",
-  spreadsheet: "Spreadsheet",
-  asana: "Asana",
-};
-
-const SOURCE_COLORS: Record<IntakeSource, string> = {
-  slack: "bg-purple-100 text-purple-700",
-  email: "bg-blue-100 text-blue-700",
-  meeting_notes: "bg-green-100 text-green-700",
-  fathom_transcript: "bg-green-100 text-green-700",
-  manual: "bg-gray-100 text-gray-600",
-  spreadsheet: "bg-orange-100 text-orange-700",
-  asana: "bg-pink-100 text-pink-700",
-};
-
-const EXTRACTION_STATUS_LABELS: Record<string, { label: string; className: string }> = {
-  pending: { label: "Pending", className: "bg-gray-100 text-gray-600" },
-  processing: { label: "Processing", className: "bg-blue-100 text-blue-700" },
-  complete: { label: "Extracted", className: "bg-green-100 text-green-700" },
-  failed: { label: "Failed", className: "bg-red-100 text-red-700" },
-};
-
-const intakeSourceOptions: { value: IntakeSource; label: string }[] = [
-  { value: "asana", label: "Asana Export" },
-  { value: "email", label: "Email" },
-  { value: "manual", label: "Manual Entry" },
-  { value: "meeting_notes", label: "Meeting Notes" },
-  { value: "slack", label: "Slack Message" },
-];
-
-function IntakePanel({
-  project,
-  initialIntakes,
-  vendors,
-  onCountChange,
-}: {
-  project: Project;
-  initialIntakes: Intake[];
-  vendors: Vendor[];
-  onCountChange?: (count: number) => void;
-}) {
-  interface PastedImage { id: string; dataUrl: string; file: File; }
-
-  const [intakes, setIntakes] = useState<Intake[]>(initialIntakes);
-  const [showForm, setShowForm] = useState(false);
-  const [rawText, setRawText] = useState("");
-  const [pastedImages, setPastedImages] = useState<PastedImage[]>([]);
-  const [source, setSource] = useState<IntakeSource>("manual");
-  const [vendorId, setVendorId] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [progressStep, setProgressStep] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [isDraggingPdf, setIsDraggingPdf] = useState(false);
-  const pdfInputRef = useRef<HTMLInputElement>(null);
-  const router = useRouter();
-  const supabase = createClient();
-
-  async function handlePdfDrop(file: File) {
-    const ext = file.name.split(".").pop()?.toLowerCase();
-    if (ext !== "pdf") {
-      setError("Please drop a PDF file.");
-      return;
-    }
-    try {
-      const { extractPdfText } = await import("@/lib/pdf");
-      const text = await extractPdfText(file);
-      if (!text.trim()) {
-        setError("Could not extract any text from this PDF.");
-        return;
-      }
-      setRawText((prev) => (prev.trim() ? prev + "\n\n" + text : text));
-      setError(null);
-    } catch {
-      setError("Failed to read the PDF file.");
-    }
-  }
-
-  useEffect(() => { onCountChange?.(intakes.length); }, [intakes.length, onCountChange]);
-
-  const addImageFile = useCallback((file: File) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
-      setPastedImages((prev) => [...prev, { id: crypto.randomUUID(), dataUrl, file }]);
-    };
-    reader.readAsDataURL(file);
-  }, []);
-
-  function onTextareaPaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
-    const cd = e.clipboardData;
-    if (!cd) return;
-    if (cd.items) {
-      for (let i = 0; i < cd.items.length; i++) {
-        if (cd.items[i].type.startsWith("image/")) {
-          e.preventDefault();
-          const file = cd.items[i].getAsFile();
-          if (file) addImageFile(file);
-          return;
-        }
-      }
-    }
-    if (cd.files && cd.files.length > 0) {
-      for (let i = 0; i < cd.files.length; i++) {
-        if (cd.files[i].type.startsWith("image/")) {
-          e.preventDefault();
-          addImageFile(cd.files[i]);
-          return;
-        }
-      }
-    }
-  }
-
-  async function ocrImages(images: PastedImage[]): Promise<string> {
-    const { createWorker } = await import("tesseract.js");
-    const worker = await createWorker("eng");
-    const texts: string[] = [];
-    for (let i = 0; i < images.length; i++) {
-      setProgressStep(`Reading image ${i + 1} of ${images.length}...`);
-      const { data } = await worker.recognize(images[i].dataUrl);
-      if (data.text.trim()) texts.push(data.text.trim());
-    }
-    await worker.terminate();
-    return texts.join("\n\n");
-  }
-
-  const hasContent = rawText.trim().length > 0 || pastedImages.length > 0;
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!hasContent) return;
-
-    setLoading(true);
-    setError(null);
-    setProgressStep("");
-    let intake: { id: string } | null = null;
-
-    try {
-      let combinedText = rawText.trim();
-      if (pastedImages.length > 0) {
-        setProgressStep("Running OCR on images...");
-        const ocrText = await ocrImages(pastedImages);
-        if (ocrText) {
-          combinedText = combinedText
-            ? `${combinedText}\n\n--- Text from pasted image ---\n${ocrText}`
-            : ocrText;
-        } else if (!combinedText) {
-          throw new Error("Could not extract any text from the pasted images.");
-        }
-      }
-
-      setProgressStep("Extracting items...");
-
-      const { data: user } = await supabase.auth.getUser();
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("org_id")
-        .eq("id", user.user?.id)
-        .single();
-
-      const { data: insertedIntake, error: insertError } = await supabase
-        .from("intakes")
-        .insert({
-          raw_text: combinedText,
-          source,
-          vendor_id: vendorId && vendorId !== "none" ? vendorId : null,
-          project_id: project.id,
-          submitted_by: user.user?.id || null,
-          org_id: profile?.org_id,
-          extraction_status: "processing",
-        })
-        .select()
-        .single();
-
-      if (insertError) throw insertError;
-      intake = insertedIntake;
-
-      const resolvedVendorId = vendorId && vendorId !== "none" ? vendorId : null;
-      setProgressStep("Extracting items...");
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 290_000);
-      let response: Response;
-      try {
-        response = await fetch("/api/extract", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            intake_id: intake!.id,
-            raw_text: combinedText,
-            vendor_id: resolvedVendorId,
-            project_id: project.id,
-          }),
-          signal: controller.signal,
-        });
-      } catch (fetchErr) {
-        clearTimeout(timeout);
-        throw fetchErr;
-      }
-      clearTimeout(timeout);
-      if (!response.ok) {
-        let errorMsg = "Extraction failed";
-        try {
-          const ct = response.headers.get("content-type") || "";
-          if (ct.includes("application/json")) {
-            const err = await response.json();
-            errorMsg = err.error || errorMsg;
-          } else {
-            const text = await response.text().catch(() => "");
-            if (response.status === 504 || text.includes("FUNCTION_INVOCATION_TIMEOUT")) {
-              errorMsg = "Extraction timed out. Try with shorter text.";
-            } else {
-              errorMsg = `Server error (${response.status}).`;
-            }
-          }
-        } catch { errorMsg = `Server error (${response.status}).`; }
-        throw new Error(errorMsg);
-      }
-
-      const updatedIntake = { ...intake!, extraction_status: "complete" } as Intake;
-      setIntakes((prev) => [updatedIntake, ...prev]);
-      setRawText("");
-      setPastedImages([]);
-      setSource("manual");
-      setVendorId("");
-      setShowForm(false);
-
-      router.push(`/intake/${intake!.id}/review`);
-    } catch (err) {
-      // Mark intake as failed so it doesn't stay "processing"
-      if (intake?.id) {
-        try { await supabase.from("intakes").update({ extraction_status: "failed" }).eq("id", intake.id); } catch { /* best-effort */ }
-      }
-      const message = err instanceof Error && err.name === "AbortError"
-        ? "Extraction timed out. Please try again."
-        : err instanceof Error ? err.message : "Something went wrong";
-      setError(message);
-    } finally {
-      setLoading(false);
-      setProgressStep("");
-    }
-  }
-
-  return (
-    <div className="space-y-4">
-      {showForm ? (
-        <form onSubmit={handleSubmit} className="bg-white rounded-lg border border-gray-300 p-4 space-y-3">
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded text-sm">{error}</div>
-          )}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Source</label>
-              <select
-                value={source}
-                onChange={(e) => setSource(e.target.value as IntakeSource)}
-                className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              >
-                {intakeSourceOptions.map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Vendor (optional)</label>
-              <select
-                value={vendorId}
-                onChange={(e) => setVendorId(e.target.value)}
-                className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              >
-                <option value="">Any / Auto-detect</option>
-                <option value="none">None</option>
-                {vendors.map((v) => (
-                  <option key={v.id} value={v.id}>{v.name}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-          {/* PDF Drop Zone */}
-          <div
-            onDragOver={(e) => { e.preventDefault(); setIsDraggingPdf(true); }}
-            onDragLeave={() => setIsDraggingPdf(false)}
-            onDrop={(e) => {
-              e.preventDefault();
-              setIsDraggingPdf(false);
-              const file = e.dataTransfer.files[0];
-              if (file) handlePdfDrop(file);
-            }}
-            onClick={() => pdfInputRef.current?.click()}
-            className={`flex items-center justify-center gap-2 rounded-md border-2 border-dashed px-3 py-3 cursor-pointer transition-colors ${
-              isDraggingPdf
-                ? "border-blue-400 bg-blue-50"
-                : "border-gray-300 hover:border-gray-400 hover:bg-gray-50"
-            }`}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400 flex-shrink-0">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-              <polyline points="14 2 14 8 20 8"/>
-            </svg>
-            <p className="text-xs text-gray-500">
-              Drop a PDF here to extract text, or <span className="text-blue-600 font-medium">browse</span>
-            </p>
-            <input
-              ref={pdfInputRef}
-              type="file"
-              accept=".pdf"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) handlePdfDrop(file);
-                e.target.value = "";
-              }}
-            />
-          </div>
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="block text-xs font-medium text-gray-500">Raw Text</label>
-              <label className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 cursor-pointer">
-                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-                  <circle cx="8.5" cy="8.5" r="1.5"/>
-                  <polyline points="21 15 16 10 5 21"/>
-                </svg>
-                Add Image
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  className="hidden"
-                  onChange={(e) => {
-                    const files = e.target.files;
-                    if (files) { for (let i = 0; i < files.length; i++) addImageFile(files[i]); }
-                    e.target.value = "";
-                  }}
-                />
-              </label>
-            </div>
-            <textarea
-              value={rawText}
-              onChange={(e) => setRawText(e.target.value)}
-              onPaste={onTextareaPaste}
-              rows={6}
-              required={pastedImages.length === 0}
-              placeholder="Paste text here, drop a PDF above, or paste screenshots (Cmd+V)."
-              className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm font-mono focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
-            {pastedImages.length > 0 && (
-              <div className="mt-2 space-y-2">
-                {pastedImages.map((img) => (
-                  <div key={img.id} className="relative inline-block border border-gray-200 rounded-lg overflow-hidden">
-                    <img src={img.dataUrl} alt="Pasted screenshot" className="max-w-full max-h-48 object-contain" />
-                    <button
-                      type="button"
-                      onClick={() => setPastedImages((prev) => prev.filter((i) => i.id !== img.id))}
-                      className="absolute top-1.5 right-1.5 bg-white/90 hover:bg-red-50 text-gray-500 hover:text-red-600 rounded-full p-0.5 shadow transition-colors"
-                      title="Remove image"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                      </svg>
-                    </button>
-                    <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-[10px] px-2 py-0.5">
-                      Screenshot — will be OCR&apos;d on extract
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => { setShowForm(false); setError(null); setPastedImages([]); }}
-              className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded hover:bg-gray-50"
-            >
-              Cancel
-            </button>
-            <div className="flex-1" />
-            <button
-              type="submit"
-              disabled={loading || !hasContent}
-              className="px-4 py-1.5 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5"
-            >
-              {loading && (
-                <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-                </svg>
-              )}
-              {loading ? (progressStep || "Extracting...") : pastedImages.length > 0 ? `Extract (${pastedImages.length} image${pastedImages.length > 1 ? "s" : ""} will be OCR'd)` : "Extract"}
-            </button>
-          </div>
-        </form>
-      ) : (
-        <button
-          onClick={() => setShowForm(true)}
-          className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
-        >
-          + New Intake
-        </button>
-      )}
-
-      {intakes.length === 0 && !showForm ? (
-        <p className="text-sm text-gray-500">No intakes for this project yet.</p>
-      ) : intakes.length > 0 && (
-        <div className="bg-white rounded-lg border border-gray-300 overflow-hidden">
-          <div className="bg-gray-800 px-4 py-2.5">
-            <h2 className="text-xs font-semibold text-white uppercase tracking-wide">Past Intakes ({intakes.length})</h2>
-          </div>
-          <div>
-            {intakes.map((intake) => {
-              const isExpanded = expandedId === intake.id;
-              const statusInfo = EXTRACTION_STATUS_LABELS[intake.extraction_status] || EXTRACTION_STATUS_LABELS.pending;
-              const preview = intake.raw_text.split("\n")[0].slice(0, 120);
-
-              return (
-                <Fragment key={intake.id}>
-                  <div
-                    className="bg-white p-3 border-b border-gray-200 last:border-b-0 cursor-pointer hover:bg-gray-50"
-                    onClick={() => setExpandedId(isExpanded ? null : intake.id)}
-                  >
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="12"
-                        height="12"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        className={`text-gray-400 transition-transform flex-shrink-0 ${isExpanded ? "rotate-90" : ""}`}
-                      >
-                        <polyline points="9 18 15 12 9 6" />
-                      </svg>
-                      <span className={`inline-flex px-1.5 py-0.5 text-xs rounded ${SOURCE_COLORS[intake.source]}`}>
-                        {SOURCE_LABELS[intake.source]}
-                      </span>
-                      <span className={`inline-flex px-1.5 py-0.5 text-xs rounded ${statusInfo.className}`}>
-                        {statusInfo.label}
-                      </span>
-                      <span className="text-xs text-gray-400">
-                        {new Date(intake.created_at).toLocaleDateString()}
-                      </span>
-                    </div>
-                    <p className="text-sm text-gray-900 font-semibold mt-1 ml-5 truncate">
-                      {preview || "(empty)"}
-                    </p>
-                  </div>
-
-                  {isExpanded && (
-                    <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
-                      <div className="space-y-2">
-                        <div>
-                          <span className="text-xs font-medium text-gray-500 uppercase">Raw Text</span>
-                          <pre className="text-sm text-gray-900 mt-1 whitespace-pre-wrap font-mono bg-white rounded border border-gray-200 p-2 max-h-48 overflow-y-auto">
-                            {intake.raw_text}
-                          </pre>
-                        </div>
-                        <div className="grid grid-cols-2 gap-3 text-sm">
-                          <div>
-                            <span className="text-xs font-medium text-gray-500 uppercase">Source</span>
-                            <p className="text-gray-900 mt-0.5">{SOURCE_LABELS[intake.source]}</p>
-                          </div>
-                          <div>
-                            <span className="text-xs font-medium text-gray-500 uppercase">Status</span>
-                            <p className="text-gray-900 mt-0.5">{statusInfo.label}</p>
-                          </div>
-                          <div>
-                            <span className="text-xs font-medium text-gray-500 uppercase">Submitted</span>
-                            <p className="text-gray-900 mt-0.5">{new Date(intake.created_at).toLocaleString()}</p>
-                          </div>
-                        </div>
-                        <div className="flex justify-end items-center gap-3 pt-2 border-t border-gray-300 mt-2">
-                          {intake.extraction_status === "complete" && (
-                            <button
-                              onClick={(e) => { e.stopPropagation(); router.push(`/intake/${intake.id}/review`); }}
-                              className="text-gray-400 hover:text-blue-600 transition-colors"
-                              title="Review extracted items"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
-                              </svg>
-                            </button>
-                          )}
-                          <button
-                            onClick={async (e) => {
-                              e.stopPropagation();
-                              if (!confirm("Delete this intake? This cannot be undone.")) return;
-                              await supabase.from("intake_entities").delete().eq("intake_id", intake.id);
-                              await supabase.from("intakes").delete().eq("id", intake.id);
-                              setIntakes((prev) => prev.filter((i) => i.id !== intake.id));
-                              if (expandedId === intake.id) setExpandedId(null);
-                            }}
-                            className="text-gray-400 hover:text-red-600 transition-colors"
-                            title="Delete intake"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                            </svg>
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </Fragment>
-              );
-            })}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ─── Docs Panel ─── */
 
 const DOC_TEMPLATE_SECTIONS = [
   { key: "key_dates", title: "Key Dates" },

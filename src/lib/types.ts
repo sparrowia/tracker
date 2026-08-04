@@ -185,6 +185,7 @@ export interface Project {
   notes: string | null;
   initiative_id: string | null;
   public_issue_form: boolean;
+  roadmap_enabled: boolean;
   lead_qa_id: string | null;
   project_manager_id: string | null;
   project_owner_id: string | null;

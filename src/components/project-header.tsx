@@ -31,6 +31,7 @@ export default function ProjectHeader({ project, vendors, people: initialPeople 
     start_date: p.start_date || "",
     notes: p.notes || "",
     initiative_id: p.initiative_id || "",
+    roadmap_enabled: p.roadmap_enabled ?? false,
   });
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -86,6 +87,7 @@ export default function ProjectHeader({ project, vendors, people: initialPeople 
       start_date: p.start_date || "",
       notes: p.notes || "",
       initiative_id: p.initiative_id || "",
+      roadmap_enabled: p.roadmap_enabled ?? false,
     });
     setEditing(true);
   }
@@ -114,6 +116,7 @@ export default function ProjectHeader({ project, vendors, people: initialPeople 
       start_date: form.start_date || null,
       notes: form.notes.trim() || null,
       initiative_id: form.initiative_id || null,
+      roadmap_enabled: form.roadmap_enabled,
       ...(nameChanged ? { slug: newSlug } : {}),
     };
 
@@ -122,6 +125,9 @@ export default function ProjectHeader({ project, vendors, people: initialPeople 
       setP({ ...p, ...updates, slug: newSlug } as Project);
       setEditing(false);
       window.dispatchEvent(new CustomEvent("sidebar:refresh"));
+      if (form.roadmap_enabled !== (p.roadmap_enabled ?? false)) {
+        window.dispatchEvent(new CustomEvent("project:roadmap-toggle", { detail: { projectId: p.id, enabled: form.roadmap_enabled } }));
+      }
       // If slug changed, redirect to new URL
       if (nameChanged && newSlug !== p.slug) {
         window.location.href = `/projects/${newSlug}`;
@@ -259,6 +265,17 @@ export default function ProjectHeader({ project, vendors, people: initialPeople 
               rows={2}
               className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
             />
+          </div>
+
+          <div className="md:col-span-2 flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="roadmap-enabled"
+              checked={form.roadmap_enabled}
+              onChange={(e) => setForm({ ...form, roadmap_enabled: e.target.checked })}
+              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            <label htmlFor="roadmap-enabled" className="text-sm text-gray-700">Roadmap</label>
           </div>
 
           <div>
@@ -401,26 +418,6 @@ export default function ProjectHeader({ project, vendors, people: initialPeople 
         {p.platform_status && <span>Platform: {p.platform_status}</span>}
         {p.start_date && <span>Start: {formatDateShort(p.start_date)}</span>}
         {p.target_completion && <span>Target: {formatDateShort(p.target_completion)}</span>}
-        {allInitiatives.length > 0 && (
-          <span className="flex items-center gap-1.5">
-            <span className="font-medium text-gray-700">Initiative:</span>
-            <select
-              value={p.initiative_id || ""}
-              onChange={(e) => {
-                const newId = e.target.value || null;
-                supabase.from("projects").update({ initiative_id: newId }).eq("id", p.id).then(() => {});
-                setP((prev) => ({ ...prev, initiative_id: newId } as Project));
-                window.dispatchEvent(new CustomEvent("sidebar:refresh"));
-              }}
-              className="rounded border border-gray-300 bg-white px-2 py-0.5 text-sm text-gray-700 focus:border-blue-500 focus:outline-none cursor-pointer"
-            >
-              <option value="">— None —</option>
-              {allInitiatives.map((i) => (
-                <option key={i.id} value={i.id}>{i.name}</option>
-              ))}
-            </select>
-          </span>
-        )}
       </div>
       {(p.project_owner_id || p.project_manager_id || p.lead_qa_id || Object.values(vendorOwners).some(Boolean)) && (
         <div className="flex gap-6 mt-2 text-sm text-gray-500 flex-wrap">

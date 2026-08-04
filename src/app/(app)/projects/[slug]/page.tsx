@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import type { Project, ActionItem, RaidEntry, Blocker, Person, Vendor, Initiative, Intake } from "@/lib/types";
+import type { Project, ActionItem, RaidEntry, Blocker, Person, Vendor, Initiative } from "@/lib/types";
 import ProjectTabs from "@/components/project-tabs";
 import ProjectHeader from "@/components/project-header";
 
@@ -70,7 +70,7 @@ export default async function ProjectDetailPage({
       : Promise.resolve({ data: null }),
     supabase
       .from("intakes")
-      .select("*")
+      .select("id")
       .eq("project_id", p.id)
       .order("created_at", { ascending: false }),
     supabase
@@ -96,10 +96,8 @@ export default async function ProjectDetailPage({
   const allProjectVendorIds = new Set([...projectVendorIds, ...itemVendorIds]);
   const allProjectVendors = typedVendors.filter((v) => allProjectVendorIds.has(v.id));
   const typedPeople = (allPeople || []) as Person[];
-  const typedIntakes = (intakeData || []) as Intake[];
-
-  // Build entity → intake source map
-  const intakeIds = typedIntakes.map((i) => i.id);
+  // Build entity → intake source map (links items back to their intake review page)
+  const intakeIds = ((intakeData || []) as { id: string }[]).map((i) => i.id);
   let intakeSourceMap: Record<string, string> = {};
   if (intakeIds.length > 0) {
     const { data: intakeEntities } = await supabase
@@ -135,7 +133,6 @@ export default async function ProjectDetailPage({
         people={typedPeople}
         vendors={typedVendors}
         agendaRows={[]}
-        intakes={typedIntakes}
         intakeSourceMap={intakeSourceMap}
       />
     </div>
