@@ -80,7 +80,8 @@ src/
 ├── components/
 │   ├── agenda-view.tsx           # Project meeting agenda — RAID-style layout with resolve, undo, detail panels
 │   ├── vendor-agenda-view.tsx    # Vendor meeting agenda — same layout as agenda-view for vendor detail pages
-│   ├── project-tabs.tsx          # Project detail tabs (actions, blockers, RAID, agenda, intake, docs) with cross-tab state sync
+│   ├── project-tabs.tsx          # Project detail tabs (actions, blockers, RAID, agenda, docs, roadmap) with cross-tab state sync; tabs shown per project.modules
+│   ├── roadmap-view.tsx          # Release Roadmap board — time-bucketed drag-and-drop (decisions + imported Jira tickets), votes, detail modal
 │   ├── project-header.tsx        # Project header with edit form, public issue form toggle, health badge
 │   ├── raid-log.tsx              # RAID log with columns, filters, archived view, subtasks, drag-and-drop, multi-select
 │   ├── wiki-editor.tsx           # TipTap rich text editor for documentation wiki
@@ -156,6 +157,7 @@ Defined in `src/lib/types.ts`:
 - **Blocker** — blocking issues with impact description
 - **AgendaItem** — vendor meeting topics with severity/context/ask
 - **RaidEntry** — risks, assumptions, issues, decisions (with owner, reporter, parent_id for subtasks, sort_order for drag-and-drop, due_date, sf_case_id/sf_case_number/sf_case_url for Salesforce integration)
+- **JiraTicket** — imported Jira tickets (`jira_tickets` table): jira_key, summary, status + status_category, jira_priority, assignee_name, release_target, epic, labels, has_pr + pr_numbers (mined from ed-cet/unified PRs), local due_date for roadmap scheduling (NOT synced back to Jira)
 - **ProjectDepartmentStatus** — department status cards for steering committee (department, rep_person_id, status green/yellow/red, roadblocks, decisions)
 - **Comment** — threaded comments on RAID entries, action items, blockers (polymorphic parent)
 - **CommentAttachment** — file attachments on comments (Supabase Storage, public bucket). Filenames sanitized (spaces/special chars → underscores) for storage path, original name kept for display.
@@ -179,7 +181,9 @@ Four roles defined as `user_role` enum in Supabase, stored on `profiles.role`:
 | Role | Data Access | Create | Edit | Delete | Invite | Admin Pages |
 |------|------------|--------|------|--------|--------|-------------|
 | **super_admin** | All org data | Yes | All items | Yes | Yes | Yes |
-| **admin** | All org data | Yes | All items | Yes | Yes (not super_admin) | Yes |
+| **admin** | All org data | Yes | All items | Yes* | Yes (not super_admin) | Yes |
+
+\* **Exception — deleting projects:** `projects_delete` allows only the project's creator or a super_admin (migration `20260804000001_project_creator_delete.sql`). Admins can no longer delete projects they didn't create. The Delete Project button lives in the Edit Project form and is gated the same way client-side.
 | **user** | All org data | Yes | Items they created/own + items in projects they own, are QA lead on, or whose initiative they own | Items in projects they own/QA-lead/initiative-own | No | No |
 | **vendor** | Only their vendor's items | No | Status only | No | No | No |
 
@@ -290,7 +294,8 @@ Client component (`/initiatives/[slug]`) with inline editing:
 - Editing gated to admins (`super_admin`/`admin`) and any initiative owner (checked via junction table)
 - **Project visibility** — non-admin users only see projects they have access to (via `user_visible_project_ids` RPC)
 - `+ Add Project` button also hidden for non-editors
-- **Initiative dropdown** on project header allows reassigning projects between initiatives (triggers sidebar refresh)
+- **Initiative dropdown** lives in the Edit Project form (NOT inline on the header — the inline version was removed as confusing). Admins can move a project to any initiative; other users only to initiatives they own (`initiative_owners` junction or legacy `owner_id`), plus the current one so the select renders. Saving triggers sidebar refresh.
+- **Sidebar Initiatives label** navigates to `/initiatives` (all initiatives + Add Initiative button); only the chevron toggles the tree open/closed. Adding an initiative dispatches `sidebar:refresh` and surfaces insert errors via alert.
 
 ## Company Timeline
 
@@ -436,7 +441,8 @@ Each project has a Docs tab with:
 Public-facing issue submission form per project at `/issues/[slug]`:
 - No auth required (middleware excludes `/issues` and `/api/issues` paths)
 - Toggle on/off per project via `public_issue_form` boolean in project header (admin only)
-- Fields: Name, Issue Name, Description, Issue Type (13 options), URL, OS, Browser, up to 5 attachments
+- Fields: Name, Issue Name, Description, Issue Type, Priority (required), URL, OS, Browser, up to 5 attachments
+- **Critical priority gate**: selecting Critical shows an amber notice (reserved for issues blocking a customer from a necessary action — purchases, taking courses) plus a required acknowledgement checkbox. The API rejects Critical without `critical_confirmed: true`, so a direct POST can't bypass it. Missing/invalid priority defaults to medium (old cached bundles).
 - "Submit & New" keeps reporter name pre-filled
 - Creates RAID entry (type: issue) via service-role client
 - Slack notification when submitted (project-channel mapped)
@@ -558,6 +564,7 @@ Action items, blockers, and RAID entries support multi-select:
 - Click left edge of row to select (blue checkmark appears)
 - Shift+click for range selection
 - Selecting a RAID parent auto-selects children
+- The RAID floating toolbar has a grab strip (pill handle) along its top — drag to reposition anywhere on screen (clamped to viewport); returns to bottom-center dock on remount
 - Floating dark toolbar appears at bottom with bulk operations:
   - Priority, Status, Owner, Due Date dropdowns (bulk update)
   - RAID log: "Nest under..." dropdown + "Group" button
@@ -631,6 +638,40 @@ The vendor detail page (`/settings/vendors/[id]`) is the hub for vendor meeting 
 ## Two-Flag Meeting Toggle
 
 Items have separate `include_in_project_meeting` and `include_in_vendor_meeting` flags. The project agenda uses the project flag; the vendor agenda uses the vendor flag. Toggling one doesn't affect the other.
+
+## Project Modules
+
+Each project's visible tabs are controlled by a `projects.modules text[]` column (migration `20260804000003_project_modules.sql`, which replaced the short-lived `roadmap_enabled` boolean):
+
+- Valid values: `actions`, `blockers`, `raid`, `agenda`, `docs`, `roadmap`. **`actions` is required** — the UI treats it as always-on regardless of the array.
+- **Default (new AND backfilled projects): `{actions,raid,docs}`** — Blockers and Meeting Agenda tabs are hidden until enabled per project. Data is untouched when a module is off; the tab just disappears.
+- Toggled via the **Modules** checkbox row in the Edit Project form (`MODULE_OPTIONS` in `project-header.tsx`). Saving dispatches a `project:modules-change` CustomEvent that `ProjectTabs` (a sibling component) listens for, so tabs appear/disappear without a reload. If the active tab's module is turned off, the view snaps to the first visible tab.
+- **The Intake tab was removed from project pages entirely** (the standalone `/intake` page remains). The project page still fetches intake ids only to build the item→intake source-link map.
+- Hidden modules' panels stay mounted (`display:none`) so cross-tab sync (registerUpdater/registerAdder) keeps working.
+
+## Release Roadmap (Roadmap module)
+
+`roadmap-view.tsx` — a time-bucketed drag-and-drop board, enabled per project via the `roadmap` module (currently on Unified 2 only). Feeds from:
+
+- **Pending Decisions** from the host project's RAID log (purple badge). NOT action items or issues — deliberately excluded as too spammy.
+- **Imported Jira tickets** (`jira_tickets` table, sky-blue badge showing the key). Tickets with `status_category = 'done'` are imported but hidden from the board.
+- **Cross-project Decisions + Issues** via the "+ Projects" picker in the header — pulls open decisions/issues from selected other projects (indigo project tag on cards, "Open in <project>" deep link in the modal). Selection persisted per project in localStorage (`roadmap-included-<projectId>`).
+
+Layout: **In Progress** (collapsible, blue header) | Unscheduled | Overdue (red, past-due) | time buckets | Later (beyond horizon). Scale switcher: Week (default, 8 buckets, Monday start, current week ringed blue) / Month (6) / Quarter (4) / Year (3).
+
+- **In Progress** collects items actively worked: Jira `status_category = 'indeterminate'`, tracker `in_progress`/`assessing`, or **any ticket with an associated PR** (`has_pr`). Collapses to a slim vertical strip; state persisted per project (`roadmap-ip-collapsed-<projectId>`). These items never appear in time buckets.
+- **Drag to schedule**: dropping a card on a bucket writes `due_date` = end of period (Friday for weeks, last day otherwise). Unscheduled drop clears the date. Jira dates are LOCAL to the tracker — never written back to Jira. Decision date changes sync to the RAID tab via the updater refs. Optimistic with revert + alert on RLS denial.
+- **Detail modal** (eye icon on each card): properties, description (decisions), Jira release/epic/labels, PR links, Open in Jira, and 👍/👎 voting.
+- **Voting**: `roadmap_votes` table (migration `20260804000004`), one vote per person per item (PK profile_id + entity_type + entity_id, entity_type `raid_entry` | `jira_ticket`), click again to retract. Counts shown on cards and in the modal; org-wide SELECT, own-row writes.
+- The tab-bar Filter box applies to roadmap cards (title, Jira key, owner, project name, status, labels).
+
+### Jira import (U2 board)
+
+- Site: `xprepls.atlassian.net`; project key **U2** ("Unified V2", developed by Syslogic in the **ed-cet/unified** GitHub repo).
+- Releases are tracked via the **"Release Target" custom field (`customfield_11220`)**, NOT fixVersions/sprints (both empty). "R2 or later" = values `DCHours R2` + `Future (Deferred)`.
+- One-time snapshot imported 2026-08-04 via the logged-in browser session (no API token exists). Re-import: `scripts/_import-jira-r2.mjs` (upserts by jira_key).
+- **PR association**: Jira's dev-panel has ZERO links (the Jira↔GitHub integration is unconnected — ticket U2-87), so `has_pr`/`pr_numbers` are mined from ed-cet/unified PR titles + branch names (`gh pr list` → `scripts/_set-jira-pr-refs.mjs`, migration `20260804000005`). Snapshot-based; re-run to refresh.
+- A proper live sync needs a `JIRA_API_TOKEN` env var — not set up yet.
 
 ## Project Roles
 

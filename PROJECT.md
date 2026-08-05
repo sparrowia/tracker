@@ -65,6 +65,7 @@ src/
 │   ├── vendor-agenda-view.tsx # Vendor-specific agenda (same layout as agenda-view)
 │   ├── project-tabs.tsx      # Tab nav + staging area for AI suggestions
 │   ├── raid-log.tsx          # RAID quadrants with subtasks, drag-and-drop, archived view
+│   ├── roadmap-view.tsx      # Release Roadmap board (decisions + Jira tickets, votes, modal)
 │   ├── comment-thread.tsx    # Reusable comment thread with file attachments
 │   ├── vendor-picker.tsx     # Vendor selection dropdown with inline creation
 │   ├── steering-committee-section.tsx # Shared steering committee UI (projects + initiatives)
@@ -105,7 +106,7 @@ src/
 | `vendors` | External companies (Silk, BenchPrep, etc.) |
 | `people` | Internal team + vendor contacts (includes `slack_member_id` for DM links) |
 | `initiatives` | High-level strategic initiatives with steering committee fields |
-| `projects` | Tracked projects with health status, steering committee fields (sponsor, phase, priority, completion dates, product type, asana link) |
+| `projects` | Tracked projects with health status, steering committee fields (sponsor, phase, priority, completion dates, product type, asana link), and `modules text[]` controlling which tabs are visible (default `{actions,raid,docs}`; `actions` required) |
 | `action_items` | Tasks with owner (person **or** vendor via `owner_vendor_id`), priority, `start_date` + due date, `section_id`, `parent_id` nesting (≤5 deep), meeting toggle |
 | `action_item_sections` | Named sections for grouping action items within a project (read = org; write = non-vendor roles) |
 | `blockers` | Blocking issues with impact description |
@@ -127,6 +128,8 @@ src/
 | `reminders` | Per-user alarm reminders on action/blocker/RAID items |
 | `item_reads` | Per-user read tracking for unread/updated indicators |
 | `comment_notifications` | Queued email-digest notifications (@mentions, owner comments, assignments, file shares, new-ticket alerts) |
+| `jira_tickets` | Imported Jira tickets from the U2 board (xprepls.atlassian.net) for the Release Roadmap — key, summary, status, release target, epic, labels, PR refs, local due_date (not synced back to Jira) |
+| `roadmap_votes` | Per-user 👍/👎 votes on roadmap cards (PK: profile + entity_type + entity_id; entity_type `raid_entry` \| `jira_ticket`) |
 
 ### Junction Tables
 `project_vendors`, `project_vendor_owners`, `project_members`, `initiative_owners`, `meeting_projects`, `meeting_attendees`, `intake_entities`, `correction_log`
@@ -168,7 +171,7 @@ All tables have row-level security policies scoped to `org_id` via the `user_org
 5. **Meeting Agenda** — toggle items for meeting inclusion via bell icon; auto-ranked by priority/severity/age/escalation score
 6. **AI Call Notes** — paste meeting notes on any item; DeepSeek updates fields + suggests new items in a staging area
 7. **AI Intake** — paste raw text, upload images (OCR), drop PDFs, or import spreadsheets; DeepSeek extracts structured items with 90s timeout and error recovery
-8. **PDF Intake** — drag-and-drop PDF files on both standalone intake and project intake panel; client-side text extraction via pdfjs-dist with position-based spacing
+8. **PDF Intake** — drag-and-drop PDF files on the standalone intake page; client-side text extraction via pdfjs-dist with position-based spacing (the per-project Intake tab was removed — see feature 46)
 9. **Asana Parser** — deterministic parser for Asana PDF exports; bypasses AI entirely for structured text extraction (separator-based block splitting, field parsing, person matching)
 10. **Intelligent Scoring** — RPC-based agenda ranking: `priority_score + severity_score + escalation_count*10 + min(age,30)*2`
 11. **Comments & Attachments** — threaded comments on RAID entries, action items, and blockers with file attachment support (Supabase Storage). Author auto-detected from logged-in user. Newest-first display with Cmd+Enter posting.
@@ -206,6 +209,13 @@ All tables have row-level security policies scoped to `org_id` via the `user_org
 43. **Task Start + End Dates** — `start_date` alongside `due_date`, both editable in the detail panel. The action-items list column is labeled **Dates** and shows a numeric range (`MM/DD/YY - MM/DD/YY`) when both are set, the single date otherwise, or a parent's child-due span.
 44. **Vendor as Owner** — an action item's owner can be a person **or** a vendor (`owner_vendor_id`, mutually exclusive with `owner_id`). The Owner picker shows a "Vendors" group; the Owner column renders a purple vendor chip. Distinct from the `vendor_id` "associated vendor" field.
 45. **Project Link in Header** — the project's `asana_link` is surfaced top-right of the project header (opposite the title); admins set/edit it inline.
+46. **Project Modules** — per-project tab visibility via `projects.modules` (Action Items required; Blockers, RAID Log, Meeting Agenda, Docs, Roadmap optional). Toggled in the Edit Project form; tabs update live via a `project:modules-change` event. Default set: Action Items + RAID Log + Docs. The project Intake tab was removed entirely.
+47. **Delete Project** — red button in the Edit Project form, restricted to the project's creator or a super_admin (RLS `projects_delete` matches). Child items are detached (`ON DELETE SET NULL`), not deleted.
+48. **Edit-Form Initiative Dropdown** — reassign a project's initiative from the Edit Project form; admins see all initiatives, other users only ones they own. The old inline header dropdown was removed.
+49. **Release Roadmap** — time-bucketed drag-and-drop board (Week/Month/Quarter/Year) fed by pending Decisions, imported U2 Jira tickets, and opt-in cross-project Decisions/Issues ("+ Projects" picker). Columns: collapsible In Progress (status- and PR-driven), Unscheduled, Overdue, time buckets, Later. Dropping a card sets `due_date` to the end of the period; card modal has details, PR/Jira links, and per-user 👍/👎 voting (`roadmap_votes`).
+50. **Jira Import (U2)** — one-off snapshot of R2-or-later tickets (Release Target field) into `jira_tickets` via `scripts/_import-jira-r2.mjs`; PR association mined from ed-cet/unified PR titles/branches via `scripts/_set-jira-pr-refs.mjs` (Jira's GitHub integration is unconnected). Live sync pending a `JIRA_API_TOKEN`.
+51. **Public Form Priority Gate** — required Priority field on the public issue form; Critical shows a warning (reserved for customer-blocking issues) with a mandatory confirmation checkbox, enforced again server-side.
+52. **Draggable Bulk Toolbar** — the RAID multi-select toolbar has a top grab strip to drag it anywhere on screen.
 
 ## UI Design System
 
@@ -317,6 +327,11 @@ All in `supabase/migrations/`:
 | `20260610000006_action_item_owner_vendor.sql` | `owner_vendor_id` (vendor as owner) on action_items, exposed via `action_item_ages` |
 | `20260615000001_scope_vendor_project_visibility.sql` | Scope `projects_select` for vendors to `vendor_visible_project_ids()` (no more org-wide project leak) |
 | `20260701000001_vendor_project_member_item_visibility.sql` | Vendor `project_members` see ALL items in their projects; `user_project_member_ids()` helper added to vendor SELECT policies on action_items/raid_entries/blockers |
+| `20260804000001_project_creator_delete.sql` | `projects_delete` policy: only the creator or a super_admin (admins lose blanket delete) |
+| `20260804000002_project_roadmap.sql` | `roadmap_enabled` boolean on projects (superseded same day by modules) |
+| `20260804000003_project_modules.sql` | `modules text[]` on projects (default `{actions,raid,docs}`), backfill + drop `roadmap_enabled` |
+| `20260804000004_jira_tickets_and_votes.sql` | `jira_tickets` table (imported U2 board tickets) + `roadmap_votes` table with RLS |
+| `20260804000005_jira_pr_refs.sql` | `has_pr` + `pr_numbers` on jira_tickets (mined from ed-cet/unified PRs) |
 
 ## Deployment
 
@@ -336,6 +351,6 @@ All docs live in this repo: [github.com/sparrowia/tracker](https://github.com/sp
 | [`CLAUDE.md`](https://github.com/sparrowia/tracker/blob/main/CLAUDE.md) | AI assistant instructions, conventions, and guardrails |
 | [`src/lib/types.ts`](https://github.com/sparrowia/tracker/blob/main/src/lib/types.ts) | All TypeScript interfaces and enums |
 | [`src/lib/utils.ts`](https://github.com/sparrowia/tracker/blob/main/src/lib/utils.ts) | Formatting helpers (priority colors, status badges, dates) |
-| [`supabase/migrations/`](https://github.com/sparrowia/tracker/tree/main/supabase/migrations) | Full database schema history (80 migrations) |
+| [`supabase/migrations/`](https://github.com/sparrowia/tracker/tree/main/supabase/migrations) | Full database schema history (85 migrations) |
 | [`.env.local.example`](https://github.com/sparrowia/tracker/blob/main/.env.local.example) | Required environment variables |
 | [`PROMPT.md`](https://github.com/sparrowia/tracker/blob/main/PROMPT.md) | Bootstrap prompt for AI assistants |
