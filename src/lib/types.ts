@@ -54,10 +54,11 @@ export type IssueType =
  */
 export type BusinessUnit =
   | "compliance"
+  | "development"
   | "la_team"
   | "marketing"
   | "operations"
-  | "product_development"
+  | "product"
   | "sales";
 
 export type MilestoneType = "project" | "initiative" | "proposed_project" | "proposed_initiative";

@@ -359,8 +359,9 @@ RAID entries have a `due_date` column (migration: `20260327000002_raid_due_date.
 ## RAID Log — Business Unit (Issues only)
 
 RAID entries have a `business_unit` column (migration `20260806000001_raid_business_unit.sql`):
-- Values: `compliance` | `la_team` | `marketing` | `operations` | `product_development` | `sales`. Nullable. CHECK constraint, not an enum, so the list is a one-line swap here plus one in `src/lib/business-units.ts` — keep those two in sync.
-- Options render **alphabetically by label** (Compliance, LA Team, Marketing, Operations, Product Development, Sales). No pinned catch-all, unlike `ISSUE_TYPE_OPTIONS` where Other sits last.
+- Values: `compliance` | `development` | `la_team` | `marketing` | `operations` | `product` | `sales`. Nullable. CHECK constraint, not an enum, so the list is a one-line swap here plus one in `src/lib/business-units.ts` — keep those two in sync.
+- Options render **alphabetically by label** (Compliance, Development, LA Team, Marketing, Operations, Product, Sales). No pinned catch-all, unlike `ISSUE_TYPE_OPTIONS` where Other sits last.
+- Product and Development are **separate** units. They shipped as one combined `product_development` option in `20260806000001` and were split the same day in `20260806000002_business_unit_split_product_development.sql`, before any row had a value — so the split needed no real backfill.
 - **Replaced Impact in the Issues detail panel.** Impact was a low/medium/high `<select>` that in practice collected free text: 194 rows hold values, 135 of them issues, many of them long written impact analyses (plus a few stray issue-type strings like `UI/UX` from an older form).
 - **`impact` is NOT dropped.** It stays editable on Risks and Decisions, where severity is the point, and the read-only Impact block still renders on any entry that has text — so no historical analysis is orphaned. Only the Issues editor lost the field.
 - No backfill: 1312 existing rows stay `NULL` rather than being guessed into a team, and a bulk UPDATE would trip `set_updated_at` and flag every item unread for every user.

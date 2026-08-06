@@ -14,19 +14,21 @@ import type { BusinessUnit } from "./types";
  */
 export const BUSINESS_UNIT_OPTIONS: BusinessUnit[] = [
   "compliance",
+  "development",
   "la_team",
   "marketing",
   "operations",
-  "product_development",
+  "product",
   "sales",
 ];
 
 export const BUSINESS_UNIT_LABEL: Record<BusinessUnit, string> = {
   compliance: "Compliance",
+  development: "Development",
   la_team: "LA Team",
   marketing: "Marketing",
   operations: "Operations",
-  product_development: "Product Development",
+  product: "Product",
   sales: "Sales",
 };
 
