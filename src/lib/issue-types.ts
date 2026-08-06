@@ -39,7 +39,7 @@ export const ISSUE_TYPE_LABEL: Record<IssueType, string> = {
   content: "Content",
   error: "Error",
   ext_system: "Ext System",
-  feature_request: "Feature Request",
+  feature_request: "Feature",
   functionality: "Functionality",
   media: "Media",
   navigation: "Navigation",
@@ -79,5 +79,8 @@ export function resolveIssueType(value: unknown): IssueType | null {
   // Pre-rename labels from earlier form lists.
   if (legacy === "performance - load or lag times") return "performance";
   if (legacy === "responsive issue") return "responsive";
+  // "Feature Request" was shortened to "Feature" so the Type column badge stops
+  // wrapping; a form still open in a tab posts the old label.
+  if (legacy === "feature request") return "feature_request";
   return null;
 }
