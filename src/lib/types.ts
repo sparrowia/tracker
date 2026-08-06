@@ -48,6 +48,18 @@ export type IssueType =
   | "ui_ux"
   | "other";
 
+/**
+ * Business Unit — which internal team owns an issue. Option list and labels
+ * live in lib/business-units.ts. Replaced the Impact field on Issues.
+ */
+export type BusinessUnit =
+  | "compliance"
+  | "la_team"
+  | "marketing"
+  | "operations"
+  | "product_development"
+  | "sales";
+
 export type MilestoneType = "project" | "initiative" | "proposed_project" | "proposed_initiative";
 
 export type MilestoneStatus = "pending" | "in_progress" | "complete";
@@ -267,7 +279,12 @@ export interface RaidEntry {
   description: string | null;
   notes: string | null;
   next_steps: string | null;
+  /** Retired on Issues (replaced by business_unit) but still edited on Risks
+   *  and Decisions, and still rendered read-only wherever it holds text —
+   *  194 rows carry written impact analyses. Column is not dropped. */
   impact: string | null;
+  /** Issues only — owning internal team. Null until set. */
+  business_unit: BusinessUnit | null;
   priority: PriorityLevel;
   status: ItemStatus;
   owner_id: string | null;

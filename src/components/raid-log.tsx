@@ -7,6 +7,7 @@ import { priorityColor, priorityLabel, statusBadge, formatAge, formatDateShort, 
 import { shiftSelectRange } from "@/lib/selection";
 import type { RaidEntry, RaidType, IssueType, PriorityLevel, ItemStatus, Person, Vendor, Project } from "@/lib/types";
 import { ISSUE_TYPE_OPTIONS, ISSUE_TYPE_LABEL } from "@/lib/issue-types";
+import { BUSINESS_UNIT_OPTIONS, BUSINESS_UNIT_LABEL } from "@/lib/business-units";
 import OwnerPicker from "@/components/owner-picker";
 import CommentThread from "@/components/comment-thread";
 import VendorPicker from "@/components/vendor-picker";
@@ -227,7 +228,7 @@ function InlineDate({ value, onSave }: { value: string | null; onSave: (v: strin
 
 const FIELD_LABELS: Record<string, string> = {
   status: "Status", priority: "Priority", owner_id: "Owner", reporter_id: "Reporter",
-  vendor_id: "Vendor", raid_type: "Type", issue_type: "Issue Type", impact: "Impact", due_date: "Due Date",
+  vendor_id: "Vendor", raid_type: "Type", issue_type: "Issue Type", impact: "Impact", business_unit: "Business Unit", due_date: "Due Date",
   decision_date: "Decision Date", title: "Title", description: "Description",
   notes: "Notes", next_steps: "Next Steps", parent_id: "Parent", comment: "Comment",
   include_in_project_meeting: "Project Meeting", include_in_vendor_meeting: "Vendor Meeting", resolved_at: "Resolved",
@@ -476,7 +477,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
     if (searchFilter) {
       const lower = searchFilter.toLowerCase();
       filtered = filtered.filter((e) => {
-        const text = [e.title, e.description, e.impact, e.owner?.full_name, e.vendor?.name].filter(Boolean).join(" ").toLowerCase();
+        const text = [e.title, e.description, e.impact, e.business_unit ? BUSINESS_UNIT_LABEL[e.business_unit] : null, e.owner?.full_name, e.vendor?.name].filter(Boolean).join(" ").toLowerCase();
         return text.includes(lower);
       });
     }
@@ -1082,6 +1083,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
       owner_id: null,
       vendor_id: null,
       impact: null,
+      business_unit: null,
       description: null,
       decision_date: null,
       sort_order: maxSort + 1000,
@@ -1696,20 +1698,44 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                             />
                           </div>
 
-                          {/* Row: Impact / (empty) */}
-                          <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-200">Impact</span>
-                          <div className="px-3 py-2.5 border-b border-gray-200">
-                            <select
-                              value={entry.impact || ""}
-                              onChange={(e) => saveField(entry.id, "impact", e.target.value)}
-                              className="text-sm rounded border border-transparent hover:border-gray-300 bg-transparent py-0 focus:border-blue-500 focus:outline-none cursor-pointer -ml-0.5"
-                            >
-                              <option value="">None</option>
-                              <option value="low">Low</option>
-                              <option value="medium">Medium</option>
-                              <option value="high">High</option>
-                            </select>
-                          </div>
+                          {/* Row: Business Unit (issues) or Impact (risks/decisions) / Issue Type.
+                              Issues trade Impact for Business Unit — Impact was a low/medium/high
+                              select that in practice collected free text, and the owning team is
+                              what the board is actually triaged by. Risks and Decisions keep
+                              Impact, where severity is the point. */}
+                          {hasIssueType(entry.raid_type) ? (
+                            <>
+                              <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-200">Business Unit</span>
+                              <div className="px-3 py-2.5 border-b border-gray-200">
+                                <select
+                                  value={entry.business_unit || ""}
+                                  onChange={(e) => saveField(entry.id, "business_unit", e.target.value)}
+                                  className="text-sm rounded border border-transparent hover:border-gray-300 bg-transparent py-0 focus:border-blue-500 focus:outline-none cursor-pointer -ml-0.5"
+                                >
+                                  <option value="">None</option>
+                                  {BUSINESS_UNIT_OPTIONS.map((u) => (
+                                    <option key={u} value={u}>{BUSINESS_UNIT_LABEL[u]}</option>
+                                  ))}
+                                </select>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-200">Impact</span>
+                              <div className="px-3 py-2.5 border-b border-gray-200">
+                                <select
+                                  value={entry.impact || ""}
+                                  onChange={(e) => saveField(entry.id, "impact", e.target.value)}
+                                  className="text-sm rounded border border-transparent hover:border-gray-300 bg-transparent py-0 focus:border-blue-500 focus:outline-none cursor-pointer -ml-0.5"
+                                >
+                                  <option value="">None</option>
+                                  <option value="low">Low</option>
+                                  <option value="medium">Medium</option>
+                                  <option value="high">High</option>
+                                </select>
+                              </div>
+                            </>
+                          )}
                           {hasIssueType(entry.raid_type) ? (
                             <>
                               {/* Labeled "Issue Type" here so it isn't confused with the RAID Type selector above. */}
