@@ -1563,6 +1563,30 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                         {entry.raid_type === "decision" ? (
                           /* Simplified decision detail panel */
                           <div className="grid grid-cols-[120px_1fr_120px_1fr] items-stretch">
+                            {/* Row: Type — same move-between-sections dropdown as the full panel */}
+                            <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-200">Type</span>
+                            <div className="px-3 py-2.5 border-b border-gray-200">
+                              <select
+                                value={entry.raid_type}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  if (val === "__action_item") { convertToActionItem(entry.id); return; }
+                                  if (val === "__blocker") { convertToBlocker(entry.id); return; }
+                                  saveField(entry.id, "raid_type", val);
+                                }}
+                                className="text-sm rounded border border-transparent hover:border-gray-300 bg-transparent py-0 focus:border-blue-500 focus:outline-none cursor-pointer -ml-0.5"
+                              >
+                                {raidTypes.map((t) => (
+                                  <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
+                                ))}
+                                <option disabled className="text-gray-300">────────────</option>
+                                <option value="__action_item">Action Item</option>
+                                <option value="__blocker">Blocker</option>
+                              </select>
+                            </div>
+                            <span className="px-5 py-2.5 bg-gray-50/50 border-b border-l border-gray-200" />
+                            <div className="px-3 py-2.5 border-b border-gray-200" />
+
                             {/* Row: Status / Owner */}
                             <span className="px-5 py-2.5 text-xs font-medium text-gray-400 bg-gray-50/50 border-b border-gray-200">Status</span>
                             <div className="px-3 py-2.5 border-b border-gray-200">
