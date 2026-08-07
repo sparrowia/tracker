@@ -567,6 +567,9 @@ export interface JiraTicket {
   description: string | null;
   /** False = plain_summary was hand-written and the sync must not replace it. */
   auto_summary: boolean;
+  /** Owning internal team, set from the roadmap detail view. Local only —
+   *  never synced to Jira, and preserved across re-syncs. */
+  business_unit: BusinessUnit | null;
   status: string | null;
   status_category: string | null;
   issue_type: string | null;

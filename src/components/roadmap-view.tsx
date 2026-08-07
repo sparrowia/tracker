@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { BUSINESS_UNIT_OPTIONS, BUSINESS_UNIT_LABEL } from "@/lib/business-units";
 import { useRole } from "@/components/role-context";
 import { priorityDot, priorityLabel, statusBadge, formatDateNumeric, formatDate } from "@/lib/utils";
-import type { RaidEntry, JiraTicket, Person, Vendor, PriorityLevel, ItemStatus, RaidType } from "@/lib/types";
+import type { RaidEntry, JiraTicket, Person, Vendor, PriorityLevel, ItemStatus, RaidType, BusinessUnit } from "@/lib/types";
 
 type Entity = "decision" | "issue" | "jira";
 type Scale = "week" | "month" | "quarter" | "year";
@@ -38,6 +39,7 @@ interface RoadmapItem {
   labels?: string[];
   hasPr?: boolean;
   prNumbers?: number[];
+  businessUnit?: BusinessUnit | null;
 }
 
 const GITHUB_PR_BASE = "https://github.com/ed-cet/unified/pull/";
@@ -153,7 +155,7 @@ function makeBuckets(scale: Scale): Bucket[] {
 }
 
 function raidToItem(
-  r: Pick<RaidEntry, "id" | "title" | "priority" | "status" | "due_date" | "description" | "raid_type">,
+  r: Pick<RaidEntry, "id" | "title" | "priority" | "status" | "due_date" | "description" | "raid_type" | "business_unit">,
   ownerName: string | null,
   projectId: string,
   project?: { name: string; slug: string }
@@ -173,6 +175,7 @@ function raidToItem(
     projectId,
     projectName: project?.name,
     projectSlug: project?.slug,
+    businessUnit: r.business_unit,
   };
 }
 
@@ -203,6 +206,7 @@ function jiraToItem(t: JiraTicket, hostProjectId: string): RoadmapItem {
     labels: t.labels,
     hasPr: t.has_pr,
     prNumbers: t.pr_numbers,
+    businessUnit: t.business_unit,
   };
 }
 
@@ -234,6 +238,9 @@ export default function RoadmapView({
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropCol, setDropCol] = useState<string | null>(null);
   const [viewItem, setViewItem] = useState<RoadmapItem | null>(null);
+  // Set on dragstart and cleared by the click that follows a drag, so a
+  // reschedule never also opens the modal.
+  const draggedRef = useRef(false);
   // Source filter: tracker items (Issues + Decisions) vs Jira tickets. Persisted
   // so a chosen view survives a reload, like the scale and project pickers.
   const [source, setSource] = useState<"all" | "raid" | "jira">("all");
@@ -246,6 +253,23 @@ export default function RoadmapView({
   function chooseSource(next: "all" | "raid" | "jira") {
     setSource(next);
     try { localStorage.setItem("roadmap-source-filter", next); } catch { /* ignore */ }
+  }
+
+  // Owning-team filter. A dropdown rather than checkboxes — looking at more than
+  // one unit at a time is rare. "unassigned" is offered explicitly because most
+  // rows start null and finding them is the point of triage.
+  const [unit, setUnit] = useState<"all" | "unassigned" | BusinessUnit>("all");
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("roadmap-unit-filter");
+      if (saved && (saved === "all" || saved === "unassigned" || (BUSINESS_UNIT_OPTIONS as string[]).includes(saved))) {
+        setUnit(saved as "all" | "unassigned" | BusinessUnit);
+      }
+    } catch { /* storage unavailable — default to all */ }
+  }, []);
+  function chooseUnit(next: "all" | "unassigned" | BusinessUnit) {
+    setUnit(next);
+    try { localStorage.setItem("roadmap-unit-filter", next); } catch { /* ignore */ }
   }
   // entityKey -> {up, down, mine}
   const [votes, setVotes] = useState<Record<string, { up: number; down: number; mine: number | null }>>({});
@@ -315,13 +339,13 @@ export default function RoadmapView({
       if (foreign.length > 0) {
         const { data, error } = await supabase
           .from("raid_entries")
-          .select("id, title, priority, status, due_date, description, raid_type, project_id, resolved_at, owner:people!raid_entries_owner_id_fkey(id, full_name)")
+          .select("id, title, priority, status, due_date, description, raid_type, business_unit, project_id, resolved_at, owner:people!raid_entries_owner_id_fkey(id, full_name)")
           .in("project_id", foreign)
           .in("raid_type", ["issue", "decision"])
           .is("resolved_at", null);
         if (error) { console.error("cross-project load failed:", error.message); return; }
         const projMap = new Map(allProjects.map((p) => [p.id, p]));
-        next = ((data || []) as unknown as (Pick<RaidEntry, "id" | "title" | "priority" | "status" | "due_date" | "description" | "project_id"> & { raid_type: RaidType; owner: { full_name: string } | null })[])
+        next = ((data || []) as unknown as (Pick<RaidEntry, "id" | "title" | "priority" | "status" | "due_date" | "description" | "project_id" | "business_unit"> & { raid_type: RaidType; owner: { full_name: string } | null })[])
           .filter((r) => !CLOSED_STATUSES.has(r.status))
           .map((r) => raidToItem(r, r.owner?.full_name || null, r.project_id!, projMap.get(r.project_id!)));
       }
@@ -351,16 +375,20 @@ export default function RoadmapView({
   const visibleItems = useMemo(() => {
     const bySource =
       source === "all" ? items : items.filter((i) => (source === "jira" ? i.entity === "jira" : i.entity !== "jira"));
+    const byUnit =
+      unit === "all"
+        ? bySource
+        : bySource.filter((i) => (unit === "unassigned" ? !i.businessUnit : i.businessUnit === unit));
     const q = searchFilter.trim().toLowerCase();
-    if (!q) return bySource;
+    if (!q) return byUnit;
     // Search the full engineering summary too, so a Jira key or technical term
     // still finds a card whose visible label is the plain-language one.
-    return bySource.filter((i) =>
+    return byUnit.filter((i) =>
       [i.title, i.fullTitle, i.jiraKey, i.ownerName, i.projectName, i.statusLabel, ...(i.labels || [])]
         .filter(Boolean)
         .some((s) => (s as string).toLowerCase().includes(q))
     );
-  }, [items, searchFilter, source]);
+  }, [items, searchFilter, source, unit]);
 
   const sourceCounts = useMemo(
     () => ({
@@ -405,6 +433,25 @@ export default function RoadmapView({
       return;
     }
     if (item.entity !== "jira" && item.projectId === projectId) onFieldSynced?.("raid", itemId, "due_date", newDate || "");
+  }
+
+  // Owning team is the roadmap's OWN classification for Jira tickets (never
+  // pushed to Jira) and a straight passthrough to the RAID column for tracker
+  // items, so the Issues board and this view stay one value.
+  async function saveBusinessUnit(item: RoadmapItem, next: BusinessUnit | null) {
+    if ((item.businessUnit ?? null) === next) return;
+    const prev = item.businessUnit ?? null;
+    setItems((list) => list.map((i) => (i.id === item.id ? { ...i, businessUnit: next } : i)));
+    setViewItem((v) => (v && v.id === item.id ? { ...v, businessUnit: next } : v));
+    const table = item.entity === "jira" ? "jira_tickets" : "raid_entries";
+    const { data, error } = await supabase.from(table).update({ business_unit: next }).eq("id", item.id).select("id");
+    if (error || !data?.length) {
+      setItems((list) => list.map((i) => (i.id === item.id ? { ...i, businessUnit: prev } : i)));
+      setViewItem((v) => (v && v.id === item.id ? { ...v, businessUnit: prev } : v));
+      alert(error ? `Could not set business unit: ${error.message}` : "Could not set business unit — you may not have permission.");
+      return;
+    }
+    if (item.entity !== "jira" && item.projectId === projectId) onFieldSynced?.("raid", item.id, "business_unit", next || "");
   }
 
   async function castVote(item: RoadmapItem, dir: 1 | -1) {
@@ -457,8 +504,18 @@ export default function RoadmapView({
       <div
         key={it.id}
         draggable
-        onDragStart={(e) => { setDragId(it.id); e.dataTransfer.effectAllowed = "move"; }}
+        onDragStart={(e) => { draggedRef.current = true; setDragId(it.id); e.dataTransfer.effectAllowed = "move"; }}
         onDragEnd={() => { setDragId(null); setDropCol(null); }}
+        // Whole card is the hit target now that the eye icon is gone: a click
+        // that starts and ends without a drag opens the detail modal, while
+        // holding and moving grabs the card to reschedule. Most browsers
+        // suppress click after a drag, but not all — draggedRef makes that
+        // explicit rather than relying on it.
+        onClick={() => {
+          if (draggedRef.current) { draggedRef.current = false; return; }
+          setViewItem(it);
+        }}
+        title="Click for details, or drag to reschedule"
         className={`bg-white border border-gray-300 rounded-md p-2.5 shadow-sm cursor-grab active:cursor-grabbing hover:border-blue-400 space-y-1.5 ${dragId === it.id ? "opacity-40" : ""}`}
       >
         <div className="flex items-center gap-1.5">
@@ -469,15 +526,8 @@ export default function RoadmapView({
           {it.hasPr && (
             <span className="inline-flex px-1 py-0.5 text-[10px] font-medium rounded bg-emerald-100 text-emerald-700" title={`PR ${(it.prNumbers || []).map((n) => `#${n}`).join(", ")}`}>PR</span>
           )}
-          {it.due_date && <span className="text-[11px] text-gray-400">{formatDateNumeric(it.due_date)}</span>}
-          <button
-            draggable={false}
-            onClick={(e) => { e.stopPropagation(); setViewItem(it); }}
-            className="ml-auto text-gray-300 hover:text-blue-600 transition-colors"
-            title="View details"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-          </button>
+          {it.due_date && <span className="ml-auto text-[11px] text-gray-400">{formatDateNumeric(it.due_date)}</span>}
+
         </div>
         <div className="text-sm font-semibold text-gray-900 leading-snug">{it.title}</div>
         {it.projectName && <div className="text-[10px] font-medium text-indigo-500">{it.projectName}</div>}
@@ -587,6 +637,18 @@ export default function RoadmapView({
               </button>
             ))}
           </div>
+          <select
+            value={unit}
+            onChange={(e) => chooseUnit(e.target.value as "all" | "unassigned" | BusinessUnit)}
+            title="Filter by owning business unit"
+            className={`mr-2 px-2 py-1 text-xs rounded border bg-gray-800 cursor-pointer focus:outline-none ${unit === "all" ? "border-gray-600 text-gray-300" : "border-blue-400 text-blue-300"}`}
+          >
+            <option value="all">All units</option>
+            <option value="unassigned">Unassigned</option>
+            {BUSINESS_UNIT_OPTIONS.map((u) => (
+              <option key={u} value={u}>{BUSINESS_UNIT_LABEL[u]}</option>
+            ))}
+          </select>
           {SCALES.map((s) => (
             <button
               key={s.key}
@@ -675,6 +737,25 @@ export default function RoadmapView({
                 <span>{viewItem.ownerName || <span className="text-gray-400 italic">Unassigned</span>}</span>
                 <span className="text-gray-500">Due Date</span>
                 <span>{viewItem.due_date ? formatDate(viewItem.due_date) : "—"}</span>
+                {/* Editable in the popup for BOTH sources, so the unit can be set
+                    here without going back to the Issues board. */}
+                <span className="text-gray-500">Business Unit</span>
+                <span>
+                  {/* No client-side permission gate, matching schedule() above:
+                      RLS is the authority and saveBusinessUnit rolls the
+                      optimistic update back if the write is refused. Vendors
+                      never reach here — RLS excludes them from SELECT. */}
+                  <select
+                    value={viewItem.businessUnit || ""}
+                    onChange={(e) => saveBusinessUnit(viewItem, (e.target.value || null) as BusinessUnit | null)}
+                    className="text-sm rounded border border-gray-300 bg-white py-0.5 px-1 cursor-pointer focus:border-blue-500 focus:outline-none"
+                  >
+                    <option value="">Unassigned</option>
+                    {BUSINESS_UNIT_OPTIONS.map((u) => (
+                      <option key={u} value={u}>{BUSINESS_UNIT_LABEL[u]}</option>
+                    ))}
+                  </select>
+                </span>
                 {viewItem.entity === "jira" && (
                   <>
                     <span className="text-gray-500">Jira Type</span>

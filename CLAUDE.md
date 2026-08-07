@@ -378,6 +378,15 @@ node scripts/sync-jira.mjs --apply
 - Watch the plural trap when editing the regexes: `\bsecret\b` does **not** match "secrets". Use `secrets?`.
 - To pin a hand-written label: set `plain_summary` and `auto_summary = false` on that row. The sync leaves it alone from then on.
 
+**Business Unit on the roadmap.** `jira_tickets` also has a `business_unit` column (migration `20260806000004_jira_business_unit.sql`), same six-value CHECK as `raid_entries` — three places to keep in sync with `BUSINESS_UNIT_OPTIONS`: both CHECKs and the lib.
+
+- **Local only for Jira.** It is the roadmap's own classification, never pushed to Jira, and `scripts/sync-jira.mjs` preserves it by simply not listing it in `toRecord()` — PostgREST's upsert only UPDATEs columns present in the payload. Verified: a hand-set value survives a full 546-ticket re-sync. Do not add it to the payload.
+- **Editable from the detail popup for both sources** — Jira tickets and tracker Issues alike, so the unit can be set without going back to the Issues board. Writes straight to `business_unit` on `jira_tickets` or `raid_entries`, so the Issues board and the roadmap show one value.
+- No client-side permission gate, matching `schedule()`: RLS is the authority and the optimistic update rolls back with an alert if refused. Vendors never see these cards (RLS excludes them from SELECT).
+- Header filter is a **dropdown**, not checkboxes — viewing more than one unit at once is rare. Includes an explicit **Unassigned** option, since most rows start null and finding them is the point of triage. Persisted under `roadmap-unit-filter`.
+
+**Card interaction.** The eye icon is gone. The whole card is the hit target: a click that starts and ends without moving opens the detail modal, holding and dragging reschedules. Most browsers suppress `click` after a drag but not all, so `draggedRef` swallows the trailing click explicitly rather than relying on that.
+
 **Source filter.** The roadmap header has an All / Issues / Jira segmented control with counts, persisted in `localStorage` under `roadmap-source-filter`. "Issues" means tracker RAID entries (Issues **and** Decisions); "Jira" means imported tickets. The tab-bar Filter box searches the full engineering summary as well as the visible label, so a Jira key or technical term still finds a plain-labelled card.
 
 ## RAID Log — Business Unit (Issues only)

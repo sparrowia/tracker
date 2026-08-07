@@ -17,6 +17,10 @@
 //   due_date     — roadmap drag-scheduling. Only set on INSERT; never updated.
 //   plain_summary — only regenerated while auto_summary is true, so a
 //                   hand-written label stays put.
+//   business_unit — the roadmap's own owning-team classification. Deliberately
+//                   absent from toRecord() below: PostgREST's upsert only
+//                   UPDATEs the columns present in the payload, so leaving it
+//                   out is what preserves it. Do not "helpfully" add it.
 
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'fs';
