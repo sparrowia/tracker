@@ -559,6 +559,14 @@ export interface JiraTicket {
   project_id: string | null;
   jira_key: string;
   summary: string;
+  /** Non-technical card label ("Security work - Hardening"). Generated on sync
+   *  by scripts/jira-plain-summary.mjs; the roadmap card shows this instead of
+   *  the engineering summary, which moves to the detail view. */
+  plain_summary: string | null;
+  /** Jira description, ADF flattened to text. Read-only mirror. */
+  description: string | null;
+  /** False = plain_summary was hand-written and the sync must not replace it. */
+  auto_summary: boolean;
   status: string | null;
   status_category: string | null;
   issue_type: string | null;

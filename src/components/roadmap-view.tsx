@@ -12,7 +12,11 @@ type Scale = "week" | "month" | "quarter" | "year";
 interface RoadmapItem {
   id: string;
   entity: Entity;
+  /** What the CARD shows. For Jira this is the plain-language label. */
   title: string;
+  /** The full engineering summary, shown in the detail view. Only differs from
+   *  `title` for Jira cards that have a plain-language label. */
+  fullTitle?: string;
   priority: PriorityLevel;
   statusLabel: string;
   statusClass: string;
@@ -176,13 +180,17 @@ function jiraToItem(t: JiraTicket, hostProjectId: string): RoadmapItem {
   return {
     id: t.id,
     entity: "jira",
-    title: t.summary,
+    // Cards read in plain language for a non-technical audience; the raw Jira
+    // summary is still one click away in the detail modal. Falls back to the
+    // Jira summary when a ticket has not been through the sync yet.
+    title: t.plain_summary || t.summary,
+    fullTitle: t.summary,
     priority: JIRA_PRIORITY_MAP[t.jira_priority || ""] || "medium",
     statusLabel: t.status || "—",
     statusClass: jiraStatusClass(t.status_category),
     due_date: t.due_date,
     ownerName: t.assignee_name,
-    description: null,
+    description: t.description,
     // A ticket with an associated PR counts as in progress even if its Jira
     // status hasn't moved yet (the Jira<->GitHub integration isn't connected).
     inProgress: t.status_category === "indeterminate" || t.has_pr,
@@ -226,6 +234,19 @@ export default function RoadmapView({
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropCol, setDropCol] = useState<string | null>(null);
   const [viewItem, setViewItem] = useState<RoadmapItem | null>(null);
+  // Source filter: tracker items (Issues + Decisions) vs Jira tickets. Persisted
+  // so a chosen view survives a reload, like the scale and project pickers.
+  const [source, setSource] = useState<"all" | "raid" | "jira">("all");
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("roadmap-source-filter");
+      if (saved === "all" || saved === "raid" || saved === "jira") setSource(saved);
+    } catch { /* storage unavailable — default to all */ }
+  }, []);
+  function chooseSource(next: "all" | "raid" | "jira") {
+    setSource(next);
+    try { localStorage.setItem("roadmap-source-filter", next); } catch { /* ignore */ }
+  }
   // entityKey -> {up, down, mine}
   const [votes, setVotes] = useState<Record<string, { up: number; down: number; mine: number | null }>>({});
   const [allProjects, setAllProjects] = useState<{ id: string; name: string; slug: string }[]>([]);
@@ -328,14 +349,27 @@ export default function RoadmapView({
 
   // Tab-bar Filter box applies here just like the other panels
   const visibleItems = useMemo(() => {
+    const bySource =
+      source === "all" ? items : items.filter((i) => (source === "jira" ? i.entity === "jira" : i.entity !== "jira"));
     const q = searchFilter.trim().toLowerCase();
-    if (!q) return items;
-    return items.filter((i) =>
-      [i.title, i.jiraKey, i.ownerName, i.projectName, i.statusLabel, ...(i.labels || [])]
+    if (!q) return bySource;
+    // Search the full engineering summary too, so a Jira key or technical term
+    // still finds a card whose visible label is the plain-language one.
+    return bySource.filter((i) =>
+      [i.title, i.fullTitle, i.jiraKey, i.ownerName, i.projectName, i.statusLabel, ...(i.labels || [])]
         .filter(Boolean)
         .some((s) => (s as string).toLowerCase().includes(q))
     );
-  }, [items, searchFilter]);
+  }, [items, searchFilter, source]);
+
+  const sourceCounts = useMemo(
+    () => ({
+      all: items.length,
+      raid: items.filter((i) => i.entity !== "jira").length,
+      jira: items.filter((i) => i.entity === "jira").length,
+    }),
+    [items]
+  );
 
   const columns = useMemo(() => {
     const map: Record<string, RoadmapItem[]> = { inprogress: [], unscheduled: [], overdue: [], later: [] };
@@ -533,6 +567,23 @@ export default function RoadmapView({
           </div>
         </div>
         <div className="flex items-center gap-1">
+          <div className="flex items-center rounded border border-gray-600 overflow-hidden mr-2">
+            {([
+              ["all", "All"],
+              ["raid", "Issues"],
+              ["jira", "Jira"],
+            ] as const).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => chooseSource(key)}
+                title={key === "raid" ? "Tracker Issues and Decisions only" : key === "jira" ? "Jira tickets only" : "Everything"}
+                className={`px-2.5 py-1 text-xs transition-colors ${source === key ? "bg-white text-gray-900 font-medium" : "text-gray-300 hover:text-white hover:bg-gray-700"}`}
+              >
+                {label}
+                <span className={`ml-1 ${source === key ? "text-gray-500" : "text-gray-500"}`}>{sourceCounts[key]}</span>
+              </button>
+            ))}
+          </div>
           {SCALES.map((s) => (
             <button
               key={s.key}
@@ -601,7 +652,10 @@ export default function RoadmapView({
               </button>
             </div>
             <div className="px-5 py-4 overflow-y-auto space-y-4">
-              <h3 className="text-sm font-semibold text-gray-900">{viewItem.title}</h3>
+              {viewItem.fullTitle && viewItem.fullTitle !== viewItem.title && (
+                <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wide -mb-2">{viewItem.title}</p>
+              )}
+              <h3 className="text-sm font-semibold text-gray-900">{viewItem.fullTitle || viewItem.title}</h3>
               <div className="grid grid-cols-[120px_1fr] gap-y-2 text-sm">
                 {viewItem.projectName && (
                   <>
