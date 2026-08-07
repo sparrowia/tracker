@@ -580,7 +580,10 @@ export default function RoadmapView({
                 className={`px-2.5 py-1 text-xs transition-colors ${source === key ? "bg-white text-gray-900 font-medium" : "text-gray-300 hover:text-white hover:bg-gray-700"}`}
               >
                 {label}
-                <span className={`ml-1 ${source === key ? "text-gray-500" : "text-gray-500"}`}>{sourceCounts[key]}</span>
+                {/* Count needs a different tone per state: gray-500 reads on the
+                    selected button's white fill, but on the dark gray-800 header
+                    it is ~2.6:1 and effectively invisible. */}
+                <span className={`ml-1 ${source === key ? "text-gray-500" : "text-gray-400"}`}>{sourceCounts[key]}</span>
               </button>
             ))}
           </div>
