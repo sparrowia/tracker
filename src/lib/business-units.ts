@@ -5,9 +5,11 @@ import type { BusinessUnit } from "./types";
  * field in the Issues editor (Impact stayed a free-text/low-medium-high muddle
  * and was never used consistently; see the note on `raid_entries.impact`).
  *
- * Slugs are stored; labels are displayed. The DB CHECK constraint on
- * `raid_entries.business_unit` must list exactly these slugs (see
- * 20260806000001_raid_business_unit.sql).
+ * Slugs are stored; labels are displayed. The DB CHECK constraints on
+ * `raid_entries.business_unit` AND `jira_tickets.business_unit` must both list
+ * exactly these slugs (see 20260806000001_raid_business_unit.sql,
+ * 20260806000004_jira_business_unit.sql, and 20260807000001 for Finance).
+ * Adding an option here without the matching migration fails at write time.
  *
  * Ordered alphabetically by label — no pinned catch-all here, unlike
  * ISSUE_TYPE_OPTIONS where "Other" sits last.
@@ -15,6 +17,7 @@ import type { BusinessUnit } from "./types";
 export const BUSINESS_UNIT_OPTIONS: BusinessUnit[] = [
   "compliance",
   "development",
+  "finance",
   "la_team",
   "marketing",
   "operations",
@@ -25,6 +28,7 @@ export const BUSINESS_UNIT_OPTIONS: BusinessUnit[] = [
 export const BUSINESS_UNIT_LABEL: Record<BusinessUnit, string> = {
   compliance: "Compliance",
   development: "Development",
+  finance: "Finance",
   la_team: "LA Team",
   marketing: "Marketing",
   operations: "Operations",

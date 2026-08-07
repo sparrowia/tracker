@@ -55,6 +55,7 @@ export type IssueType =
 export type BusinessUnit =
   | "compliance"
   | "development"
+  | "finance"
   | "la_team"
   | "marketing"
   | "operations"
