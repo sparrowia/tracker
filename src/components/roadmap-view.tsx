@@ -271,6 +271,21 @@ export default function RoadmapView({
     setUnit(next);
     try { localStorage.setItem("roadmap-unit-filter", next); } catch { /* ignore */ }
   }
+
+  // Assignee filter — same dropdown pattern as the unit filter. Values are the
+  // owner/assignee display names, since Jira tickets carry only assignee_name
+  // (no person id to join on).
+  const [assignee, setAssignee] = useState<"all" | "unassigned" | string>("all");
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("roadmap-assignee-filter");
+      if (saved) setAssignee(saved);
+    } catch { /* storage unavailable — default to all */ }
+  }, []);
+  function chooseAssignee(next: string) {
+    setAssignee(next);
+    try { localStorage.setItem("roadmap-assignee-filter", next); } catch { /* ignore */ }
+  }
   // entityKey -> {up, down, mine}
   const [votes, setVotes] = useState<Record<string, { up: number; down: number; mine: number | null }>>({});
   const [allProjects, setAllProjects] = useState<{ id: string; name: string; slug: string }[]>([]);
@@ -379,16 +394,27 @@ export default function RoadmapView({
       unit === "all"
         ? bySource
         : bySource.filter((i) => (unit === "unassigned" ? !i.businessUnit : i.businessUnit === unit));
+    const byAssignee =
+      assignee === "all"
+        ? byUnit
+        : byUnit.filter((i) => (assignee === "unassigned" ? !i.ownerName : i.ownerName === assignee));
     const q = searchFilter.trim().toLowerCase();
-    if (!q) return byUnit;
+    if (!q) return byAssignee;
     // Search the full engineering summary too, so a Jira key or technical term
     // still finds a card whose visible label is the plain-language one.
-    return byUnit.filter((i) =>
+    return byAssignee.filter((i) =>
       [i.title, i.fullTitle, i.jiraKey, i.ownerName, i.projectName, i.statusLabel, ...(i.labels || [])]
         .filter(Boolean)
         .some((s) => (s as string).toLowerCase().includes(q))
     );
-  }, [items, searchFilter, source, unit]);
+  }, [items, searchFilter, source, unit, assignee]);
+
+  // Names present on the loaded items, so the dropdown always matches the board.
+  const assigneeOptions = useMemo(() => {
+    const names = new Set<string>();
+    for (const i of items) if (i.ownerName) names.add(i.ownerName);
+    return [...names].sort((a, b) => a.localeCompare(b));
+  }, [items]);
 
   const sourceCounts = useMemo(
     () => ({
@@ -649,15 +675,34 @@ export default function RoadmapView({
               <option key={u} value={u}>{BUSINESS_UNIT_LABEL[u]}</option>
             ))}
           </select>
-          {SCALES.map((s) => (
-            <button
-              key={s.key}
-              onClick={() => setScale(s.key)}
-              className={`px-2.5 py-1 text-xs rounded transition-colors ${scale === s.key ? "bg-white text-gray-900 font-medium" : "text-gray-300 hover:text-white hover:bg-gray-700"}`}
-            >
-              {s.label}
-            </button>
-          ))}
+          <select
+            value={assignee}
+            onChange={(e) => chooseAssignee(e.target.value)}
+            title="Filter by assignee"
+            className={`mr-2 px-2 py-1 text-xs rounded border bg-gray-800 cursor-pointer focus:outline-none ${assignee === "all" ? "border-gray-600 text-gray-300" : "border-blue-400 text-blue-300"}`}
+          >
+            <option value="all">All assignees</option>
+            <option value="unassigned">Unassigned</option>
+            {/* Keep a saved name selectable even if no loaded item carries it,
+                so the control doesn't render blank on a stale filter. */}
+            {assignee !== "all" && assignee !== "unassigned" && !assigneeOptions.includes(assignee) && (
+              <option value={assignee}>{assignee}</option>
+            )}
+            {assigneeOptions.map((n) => (
+              <option key={n} value={n}>{n}</option>
+            ))}
+          </select>
+          {/* Dropdown rather than four buttons to keep the header compact. */}
+          <select
+            value={scale}
+            onChange={(e) => setScale(e.target.value as Scale)}
+            title="Time period"
+            className="px-2 py-1 text-xs rounded border border-gray-600 bg-gray-800 text-gray-300 cursor-pointer focus:outline-none"
+          >
+            {SCALES.map((s) => (
+              <option key={s.key} value={s.key}>{s.label}</option>
+            ))}
+          </select>
         </div>
       </div>
       {visibleItems.length === 0 ? (

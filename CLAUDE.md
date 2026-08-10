@@ -389,6 +389,10 @@ node scripts/sync-jira.mjs --apply
 
 **Source filter.** The roadmap header has an All / Issues / Jira segmented control with counts, persisted in `localStorage` under `roadmap-source-filter`. "Issues" means tracker RAID entries (Issues **and** Decisions); "Jira" means imported tickets. The tab-bar Filter box searches the full engineering summary as well as the visible label, so a Jira key or technical term still finds a plain-labelled card.
 
+**Assignee filter.** Dropdown next to the unit filter, persisted under `roadmap-assignee-filter`. Options are the distinct owner/assignee display names on the loaded items (Jira tickets only carry `assignee_name`, no person id to join on), plus All assignees / Unassigned. A saved name that no longer appears on any loaded item is still injected as an option so the control doesn't render blank.
+
+**Time period.** The Week / Month / Quarter / Year scale is a dropdown (was four buttons) to keep the header compact. Not persisted — always opens on Week.
+
 ## RAID Log — Business Unit (Issues only)
 
 RAID entries have a `business_unit` column (migration `20260806000001_raid_business_unit.sql`):
