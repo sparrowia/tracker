@@ -18,7 +18,7 @@ Matt has multiple projects across different directories and Vercel accounts. **A
 - **Project management docs:** `/Users/matthewlobel/Repositories/edcet/project-management` → markdown files, no deployment
 - **Other projects exist** (LivingTale, Avalon Adventures) — never assume. Always check `pwd` and `.vercel/project.json` before deploying.
 
-**Vercel CLI note:** The CLI is authenticated to the `avalon-adventures` team (`matt-7913`), which does NOT have access to `edcet-tracker`. That project lives under a different Vercel scope. Do not use `npx vercel` for this project — rely on git push auto-deploy instead.
+**Vercel CLI note:** The CLI login (`matt-8879` as of 2026-08-10) DOES reach this project under the `edcetera` team scope — `vercel env ls production` from the repo root works, and `--scope edcetera` selects the team explicitly (verified when adding the Jira cron env vars). Deploys still go through git push to `main`; use the CLI for env vars and `vercel redeploy`, not `vercel deploy`.
 
 ## Tech Stack
 
@@ -671,7 +671,7 @@ ALTER TABLE action_items ENABLE TRIGGER set_updated_at;
 
 - Commits to `main` auto-deploy to production via Vercel
 - For experimental UI changes, use a branch, then merge to main when approved
-- Do NOT use `npx vercel` — CLI is scoped to wrong team
+- Deploy via git push, not `vercel deploy`; the CLI (scope `edcetera`) is fine for env vars and `vercel redeploy`
 - Always `npm run build` before pushing to catch errors
 
 ## Vendor Detail Page
