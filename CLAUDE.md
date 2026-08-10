@@ -358,7 +358,9 @@ RAID entries have a `due_date` column (migration: `20260327000002_raid_due_date.
 
 ## Roadmap — Jira sync + plain-language cards
 
-`scripts/sync-jira.mjs` is the full refresh of the Unified 2 roadmap from the live U2 board. Replaces the one-off `_import-jira-r2.mjs`, which read a hand-made JSON export.
+The sync core lives in **`src/lib/jira-sync.mjs`** (plain ESM so both consumers share one implementation — edit sync rules THERE):
+- **Vercel cron `/api/jira/sync` runs it every 15 minutes** (`vercel.json`, guarded by `CRON_SECRET` like the digest cron; `/api/jira` is excluded from the auth-redirect middleware). Requires `JIRA_EMAIL` + `JIRA_API_TOKEN` env vars on the Vercel project (same values as the platform repo's `.env.local`; token expires 8/28/26).
+- `scripts/sync-jira.mjs` is the thin manual CLI (reads creds from the two local `.env.local` files). Replaces the one-off `_import-jira-r2.mjs`, which read a hand-made JSON export.
 
 ```bash
 node scripts/sync-jira.mjs           # dry run: prints the plan, writes nothing
@@ -393,6 +395,8 @@ node scripts/sync-jira.mjs --apply
 **Source filter.** The roadmap header has an All / Issues / Jira segmented control with counts, persisted in `localStorage` under `roadmap-source-filter`. "Issues" means tracker RAID entries (Issues **and** Decisions); "Jira" means imported tickets. The tab-bar Filter box searches the full engineering summary as well as the visible label, so a Jira key or technical term still finds a plain-labelled card.
 
 **Assignee filter.** Dropdown next to the unit filter, persisted under `roadmap-assignee-filter`. Options are the distinct owner/assignee display names on the loaded items (Jira tickets only carry `assignee_name`, no person id to join on), plus All assignees / Unassigned. A saved name that no longer appears on any loaded item is still injected as an option so the control doesn't render blank.
+
+**Status filter.** Same dropdown pattern, persisted under `roadmap-status-filter`, default All. Options are the distinct `statusLabel` values on the loaded items — Jira workflow statuses (To Do, In Progress, In QA, REOPENED…) and tracker statuses alike. Matches on the display label, since that's the one value both sources share.
 
 **Time period.** The Week / Month / Quarter / Year scale is a dropdown (was four buttons) to keep the header compact. Not persisted — always opens on Week.
 

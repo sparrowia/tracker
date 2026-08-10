@@ -286,6 +286,20 @@ export default function RoadmapView({
     setAssignee(next);
     try { localStorage.setItem("roadmap-assignee-filter", next); } catch { /* ignore */ }
   }
+
+  // Status filter — dropdown over the status labels present on the loaded
+  // items (Jira workflow statuses and tracker statuses alike).
+  const [status, setStatus] = useState<"all" | string>("all");
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("roadmap-status-filter");
+      if (saved) setStatus(saved);
+    } catch { /* storage unavailable — default to all */ }
+  }, []);
+  function chooseStatus(next: string) {
+    setStatus(next);
+    try { localStorage.setItem("roadmap-status-filter", next); } catch { /* ignore */ }
+  }
   // entityKey -> {up, down, mine}
   const [votes, setVotes] = useState<Record<string, { up: number; down: number; mine: number | null }>>({});
   const [allProjects, setAllProjects] = useState<{ id: string; name: string; slug: string }[]>([]);
@@ -424,22 +438,29 @@ export default function RoadmapView({
       assignee === "all"
         ? byUnit
         : byUnit.filter((i) => (assignee === "unassigned" ? !i.ownerName : i.ownerName === assignee));
+    const byStatus = status === "all" ? byAssignee : byAssignee.filter((i) => i.statusLabel === status);
     const q = searchFilter.trim().toLowerCase();
-    if (!q) return byAssignee;
+    if (!q) return byStatus;
     // Search the full engineering summary too, so a Jira key or technical term
     // still finds a card whose visible label is the plain-language one.
-    return byAssignee.filter((i) =>
+    return byStatus.filter((i) =>
       [i.title, i.fullTitle, i.jiraKey, i.ownerName, i.projectName, i.statusLabel, ...(i.labels || [])]
         .filter(Boolean)
         .some((s) => (s as string).toLowerCase().includes(q))
     );
-  }, [items, searchFilter, source, unit, assignee]);
+  }, [items, searchFilter, source, unit, assignee, status]);
 
   // Names present on the loaded items, so the dropdown always matches the board.
   const assigneeOptions = useMemo(() => {
     const names = new Set<string>();
     for (const i of items) if (i.ownerName) names.add(i.ownerName);
     return [...names].sort((a, b) => a.localeCompare(b));
+  }, [items]);
+
+  const statusOptions = useMemo(() => {
+    const labels = new Set<string>();
+    for (const i of items) if (i.statusLabel && i.statusLabel !== "—") labels.add(i.statusLabel);
+    return [...labels].sort((a, b) => a.localeCompare(b));
   }, [items]);
 
   const sourceCounts = useMemo(
@@ -716,6 +737,22 @@ export default function RoadmapView({
             )}
             {assigneeOptions.map((n) => (
               <option key={n} value={n}>{n}</option>
+            ))}
+          </select>
+          <select
+            value={status}
+            onChange={(e) => chooseStatus(e.target.value)}
+            title="Filter by status"
+            className={`mr-2 px-2 py-1 text-xs rounded border bg-gray-800 cursor-pointer focus:outline-none ${status === "all" ? "border-gray-600 text-gray-300" : "border-blue-400 text-blue-300"}`}
+          >
+            <option value="all">All statuses</option>
+            {/* Keep a saved status selectable even if no loaded item carries it,
+                so the control doesn't render blank on a stale filter. */}
+            {status !== "all" && !statusOptions.includes(status) && (
+              <option value={status}>{status}</option>
+            )}
+            {statusOptions.map((s) => (
+              <option key={s} value={s}>{s}</option>
             ))}
           </select>
           {/* Dropdown rather than four buttons to keep the header compact. */}
