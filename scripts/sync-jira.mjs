@@ -13,8 +13,12 @@
 //
 // NEVER writes to Jira. Jira owns summary/description; this is a one-way mirror.
 //
-// Two local-only fields are protected from being clobbered on re-sync:
-//   due_date     — roadmap drag-scheduling. Only set on INSERT; never updated.
+// Local fields protected from being clobbered on re-sync:
+//   due_date     — for a ticket whose Release Target has a date in
+//                  RELEASE_DATES below, the release date OWNS due_date and a
+//                  re-sync moves the card whenever the target (or a date here)
+//                  changes. Roadmap drag-scheduling only sticks for tickets
+//                  with no mapped target.
 //   plain_summary — only regenerated while auto_summary is true, so a
 //                   hand-written label stays put.
 //   business_unit — the roadmap's own owning-team classification. Deliberately
@@ -46,6 +50,15 @@ const sb = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_
 
 const ORG_ID = 'caaa4383-47d2-4e08-8369-b55865b5e1a5';
 const UNIFIED_2_PROJECT_ID = '210245ad-88c2-4914-83bd-cad75bf757fd';
+
+// Release Target -> ship date. Jira itself carries no dates (no due dates, no
+// versions), so this map is the schedule. When a release date slips, change it
+// here and re-run with --apply — every card on that release moves in one pass.
+// Targets not listed (Untargeted, Future, or a brand-new release) leave their
+// cards drag-schedulable on the roadmap.
+const RELEASE_DATES = {
+  'DCHours R1': '2026-08-05',
+};
 const JIRA_HOST = 'https://xprepls.atlassian.net';
 const JIRA_BASE = `${JIRA_HOST}/browse/`;
 const RELEASE_TARGET_FIELD = 'customfield_11220';
@@ -115,16 +128,21 @@ if (readErr) { console.error('read existing failed:', readErr.message); process.
 const existing = new Map((existingRows || []).map((r) => [r.jira_key, r]));
 
 const records = issues.map(toRecord);
-let inserts = 0, updates = 0, pinned = 0;
+let inserts = 0, updates = 0, pinned = 0, moved = 0;
 for (const r of records) {
+  // A mapped release target owns the schedule; otherwise local drag-scheduling
+  // wins. due_date is set on EVERY record so the bulk upsert has uniform keys.
+  const releaseDate = RELEASE_DATES[r.release_target] ?? null;
   const prev = existing.get(r.jira_key);
-  if (!prev) { inserts++; continue; }
+  if (!prev) { r.due_date = releaseDate; inserts++; continue; }
   updates++;
-  // Local scheduling wins — the roadmap owns due_date, not Jira.
-  r.due_date = prev.due_date;
+  r.due_date = releaseDate ?? prev.due_date;
+  if (r.due_date !== prev.due_date) moved++;
   // A human-pinned label is never overwritten.
   if (prev.auto_summary === false) { r.plain_summary = prev.plain_summary; pinned++; }
 }
+
+const unmappedTargets = [...new Set(records.map((r) => r.release_target).filter((t) => t && !RELEASE_DATES[t]))];
 
 // Tickets we hold that Jira no longer returns (deleted, or moved out of U2).
 const seen = new Set(records.map((r) => r.jira_key));
@@ -133,8 +151,9 @@ const orphans = (existingRows || []).filter((r) => !seen.has(r.jira_key)).map((r
 const byLabel = {};
 for (const r of records) byLabel[r.plain_summary] = (byLabel[r.plain_summary] || 0) + 1;
 
-console.log(`plan: ${inserts} new, ${updates} updated (${pinned} with a pinned label kept), ${orphans.length} in our table but not on the board`);
+console.log(`plan: ${inserts} new, ${updates} updated (${pinned} with a pinned label kept, ${moved} rescheduled by release date), ${orphans.length} in our table but not on the board`);
 if (orphans.length) console.log('  not on board:', orphans.join(', '));
+console.log('release targets without a date in RELEASE_DATES (cards stay drag-schedulable):', unmappedTargets.join(', ') || 'none');
 console.log(`distinct plain-language labels: ${Object.keys(byLabel).length}`);
 console.log('top labels:', Object.entries(byLabel).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([l, c]) => `${l} (${c})`).join(', '));
 console.log('no description:', records.filter((r) => !r.description).map((r) => r.jira_key).join(', ') || 'none');

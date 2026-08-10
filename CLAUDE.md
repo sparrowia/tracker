@@ -367,7 +367,8 @@ node scripts/sync-jira.mjs --apply
 
 - Reads Jira REST directly (`/rest/api/3/search/jql`, token-paginated — the new endpoint returns `nextPageToken`/`isLast` and **no** total). Jira credentials are read from the platform repo's `.env.local` rather than duplicated here.
 - **One-way mirror. Never writes to Jira.** Jira owns summary/description.
-- Two local-only fields are protected on re-sync: `due_date` (roadmap drag-scheduling, only set on insert) and `plain_summary` when `auto_summary = false`.
+- **Release dates drive card placement.** Jira itself carries no dates (zero tickets with a due date, no fix versions, no project versions — verified 2026-08-10), so the `RELEASE_DATES` map at the top of the script is the schedule: Release Target name → ship date. A ticket whose target is mapped gets `due_date = release date` on EVERY sync — changing a ticket's Release Target in Jira (or editing a slipped date in the map) moves its card on the next `--apply`. Drag-scheduling on the roadmap only sticks for tickets with an unmapped target (Untargeted, Future, or a release with no date yet); a drag on a mapped ticket is reverted by the next sync. Unmapped targets are printed on every run.
+- `plain_summary` stays protected when `auto_summary = false`.
 - Tickets in our table that the board no longer returns are reported, not deleted.
 
 **Plain-language card labels.** Roadmap cards show `jira_tickets.plain_summary` ("Security work - Hardening") instead of the engineering summary, so a non-technical reader can scan the board. The eye icon opens the detail modal, which shows the plain label as an eyebrow, the **full Jira summary** as the heading, and the original Jira **description** underneath.
@@ -386,6 +387,8 @@ node scripts/sync-jira.mjs --apply
 - Header filter is a **dropdown**, not checkboxes — viewing more than one unit at once is rare. Includes an explicit **Unassigned** option, since most rows start null and finding them is the point of triage. Persisted under `roadmap-unit-filter`.
 
 **Card interaction.** The eye icon is gone. The whole card is the hit target: a click that starts and ends without moving opens the detail modal, holding and dragging reschedules. Most browsers suppress `click` after a drag but not all, so `draggedRef` swallows the trailing click explicitly rather than relying on that.
+
+**Grab-and-slide panning.** Pressing on board chrome (column headers, empty column space, gaps) and dragging scrolls the timeline horizontally. Presses on cards (`[draggable="true"]`) and interactive controls are excluded so card rescheduling and clicks keep working. Move/up listeners go on `document` so the pan survives leaving the container.
 
 **Source filter.** The roadmap header has an All / Issues / Jira segmented control with counts, persisted in `localStorage` under `roadmap-source-filter`. "Issues" means tracker RAID entries (Issues **and** Decisions); "Jira" means imported tickets. The tab-bar Filter box searches the full engineering summary as well as the visible label, so a Jira key or technical term still finds a plain-labelled card.
 

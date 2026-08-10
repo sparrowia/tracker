@@ -307,6 +307,32 @@ export default function RoadmapView({
     });
   }
 
+  // Grab-and-slide: press on board chrome (column headers, empty column space,
+  // gaps) and drag to scroll the timeline horizontally. Presses on cards are
+  // excluded so card drag-rescheduling keeps working, as are the interactive
+  // controls.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [panning, setPanning] = useState(false);
+  function onBoardMouseDown(e: React.MouseEvent) {
+    if (e.button !== 0) return;
+    if ((e.target as HTMLElement).closest('[draggable="true"], button, select, input, a')) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    const startX = e.clientX;
+    const startLeft = el.scrollLeft;
+    setPanning(true);
+    const onMove = (ev: MouseEvent) => { el.scrollLeft = startLeft - (ev.clientX - startX); ev.preventDefault(); };
+    const onUp = () => {
+      setPanning(false);
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+    // Stop a text selection from starting, which would fight the pan.
+    e.preventDefault();
+  }
+
   // Load imported Jira tickets + existing votes + project list for the picker
   useEffect(() => {
     let cancelled = false;
@@ -710,7 +736,11 @@ export default function RoadmapView({
           {searchFilter.trim() ? "No roadmap items match the filter." : "No open decisions or Jira tickets in the queue."}
         </p>
       ) : (
-        <div className="p-3 overflow-x-auto">
+        <div
+          ref={scrollRef}
+          onMouseDown={onBoardMouseDown}
+          className={`p-3 overflow-x-auto ${panning ? "cursor-grabbing select-none" : "cursor-grab"}`}
+        >
           <div className="flex gap-3 items-stretch">
             {ipCollapsed ? (
               <button
