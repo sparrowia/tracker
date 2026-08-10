@@ -742,6 +742,7 @@ export default function RoadmapView({
           className={`p-3 overflow-x-auto ${panning ? "cursor-grabbing select-none" : "cursor-grab"}`}
         >
           <div className="flex gap-3 items-stretch">
+            {renderColumn({ key: "unscheduled", label: "Unscheduled", headerCls: "bg-gray-700", items: columns.unscheduled, newDate: null, droppable: true })}
             {ipCollapsed ? (
               <button
                 onClick={toggleIpCollapsed}
@@ -756,7 +757,6 @@ export default function RoadmapView({
             ) : (
               renderColumn({ key: "inprogress", label: "In Progress", headerCls: "bg-blue-800", items: columns.inprogress, droppable: false, onCollapse: toggleIpCollapsed })
             )}
-            {renderColumn({ key: "unscheduled", label: "Unscheduled", headerCls: "bg-gray-700", items: columns.unscheduled, newDate: null, droppable: true })}
             {columns.overdue.length > 0 &&
               renderColumn({ key: "overdue", label: "Overdue", headerCls: "bg-red-800", items: columns.overdue, droppable: false })}
             {buckets.map((b) =>
