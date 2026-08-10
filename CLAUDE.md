@@ -381,12 +381,13 @@ node scripts/sync-jira.mjs --apply
 - Watch the plural trap when editing the regexes: `\bsecret\b` does **not** match "secrets". Use `secrets?`.
 - To pin a hand-written label: set `plain_summary` and `auto_summary = false` on that row. The sync leaves it alone from then on.
 
-**Business Unit on the roadmap.** `jira_tickets` also has a `business_unit` column (migration `20260806000004_jira_business_unit.sql`), same six-value CHECK as `raid_entries` — three places to keep in sync with `BUSINESS_UNIT_OPTIONS`: both CHECKs and the lib.
+**Business Unit on the roadmap.** `jira_tickets` also has a `business_unit` column (migration `20260806000004_jira_business_unit.sql`, widened by `20260807000001_business_unit_add_finance.sql`), same eight-value CHECK as `raid_entries` — three places to keep in sync with `BUSINESS_UNIT_OPTIONS`: both CHECKs and the lib.
 
 - **Local only for Jira.** It is the roadmap's own classification, never pushed to Jira, and `scripts/sync-jira.mjs` preserves it by simply not listing it in `toRecord()` — PostgREST's upsert only UPDATEs columns present in the payload. Verified: a hand-set value survives a full 546-ticket re-sync. Do not add it to the payload.
 - **Editable from the detail popup for both sources** — Jira tickets and tracker Issues alike, so the unit can be set without going back to the Issues board. Writes straight to `business_unit` on `jira_tickets` or `raid_entries`, so the Issues board and the roadmap show one value.
 - No client-side permission gate, matching `schedule()`: RLS is the authority and the optimistic update rolls back with an alert if refused. Vendors never see these cards (RLS excludes them from SELECT).
 - Header filter is a **dropdown**, not checkboxes — viewing more than one unit at once is rare. Includes an explicit **Unassigned** option, since most rows start null and finding them is the point of triage. Persisted under `roadmap-unit-filter`.
+- 2026-08-10 cleanup: all 325 open imported U2 Jira cards were given pinned, plain-language `plain_summary` labels (`auto_summary = false`) and a best-effort `business_unit` so the roadmap can be triaged by team.
 
 **Card interaction.** The eye icon is gone. The whole card is the hit target: a click that starts and ends without moving opens the detail modal, holding and dragging reschedules. Most browsers suppress `click` after a drag but not all, so `draggedRef` swallows the trailing click explicitly rather than relying on that.
 
@@ -712,7 +713,7 @@ Each project's visible tabs are controlled by a `projects.modules text[]` column
 - **Imported Jira tickets** (`jira_tickets` table, sky-blue badge showing the key). Tickets with `status_category = 'done'` are imported but hidden from the board.
 - **Cross-project Decisions + Issues** via the "+ Projects" picker in the header — pulls open decisions/issues from selected other projects (indigo project tag on cards, "Open in <project>" deep link in the modal). Selection persisted per project in localStorage (`roadmap-included-<projectId>`).
 
-Layout: **In Progress** (collapsible, blue header) | Unscheduled | Overdue (red, past-due) | time buckets | Later (beyond horizon). Scale switcher: Week (default, 8 buckets, Monday start, current week ringed blue) / Month (6) / Quarter (4) / Year (3).
+Layout: Unscheduled | **In Progress** (collapsible, blue header) | Overdue (red, past-due) | time buckets | Later (beyond horizon). Scale switcher: Week (default, 8 buckets, Monday start, current week ringed blue) / Month (6) / Quarter (4) / Year (3).
 
 - **In Progress** collects items actively worked: Jira `status_category = 'indeterminate'`, tracker `in_progress`/`assessing`, or **any ticket with an associated PR** (`has_pr`). Collapses to a slim vertical strip; state persisted per project (`roadmap-ip-collapsed-<projectId>`). These items never appear in time buckets.
 - **Drag to schedule**: dropping a card on a bucket writes `due_date` = end of period (Friday for weeks, last day otherwise). Unscheduled drop clears the date. Jira dates are LOCAL to the tracker — never written back to Jira. Decision date changes sync to the RAID tab via the updater refs. Optimistic with revert + alert on RLS denial.
