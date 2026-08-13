@@ -194,7 +194,7 @@ All access control is enforced at the Supabase RLS layer via helper functions:
 - `user_vendor_id()` — returns vendor_id for vendor-role users
 - `user_is_active()` — checks deactivated_at is null
 - `user_can_edit(created_by, owner_id)` — admin+ always true; user if creator or owner
-- `user_is_project_admin(project_id)` — true when auth user is the project's `project_owner_id`, `project_manager_id`, `lead_qa_id`, listed in `initiative_owners` for the project's initiative, or set as the legacy `initiatives.owner_id`. Grants UPDATE + DELETE on `action_items`, `blockers`, `raid_entries`, and `agenda_items` linked to that project.
+- `user_is_project_admin(project_id)` — true when the auth user is the project's `project_owner_id`, a **team member** (`project_members` row), listed in `initiative_owners` for the project's initiative, or set as the legacy `initiatives.owner_id`. Grants UPDATE + DELETE on `action_items`, `blockers`, `raid_entries`, and `agenda_items` linked to that project. (2026-08-13, migration `20260813000001_team_members.sql`: the earlier `project_manager_id`/`lead_qa_id` branches are gone — former role holders were backfilled into `project_members` with a `role_label`, so their rights carry through membership.)
 - `vendor_visible_project_ids(p_vendor_id, p_person_id)` — SECURITY DEFINER set of project ids a vendor user is allowed to read: any project containing an action item / RAID entry / blocker assigned to their vendor or owned by them, an agenda item for their vendor, a `project_vendor_owners` row, or a `project_members` row. Used by `projects_select`.
 
 Separate SELECT/INSERT/UPDATE/DELETE policies on every data table. Vendor-scoped reads filter by `vendor_id`. Migrations: `20260310000001_rbac_and_invitations.sql` (initial), `20260507000001_project_owner_admin.sql` + `20260507000002_pm_is_project_admin.sql` + `20260507000003_qa_lead_is_project_admin.sql` (project-admin scope: owner, PM, QA lead).
@@ -729,13 +729,15 @@ Layout: Unscheduled | **In Progress** (collapsible, blue header) | Overdue (red,
 - **PR association**: Jira's dev-panel has ZERO links (the Jira↔GitHub integration is unconnected — ticket U2-87), so `has_pr`/`pr_numbers` are mined from ed-cet/unified PR titles + branch names (`gh pr list` → `scripts/_set-jira-pr-refs.mjs`, migration `20260804000005`). Snapshot-based; re-run to refresh.
 - A proper live sync needs a `JIRA_API_TOKEN` env var — not set up yet.
 
-## Project Roles
+## Project Owner + Team Members (replaced per-project roles, 2026-08-13)
 
-Projects have three person-reference fields: `project_owner_id`, `project_manager_id`, `lead_qa_id` — set via OwnerPicker in the edit form, displayed below project metadata. Plus `project_vendor_owners` junction table for one vendor owner per vendor-project relationship.
+Projects have ONE role field: `project_owner_id` (OwnerPicker in the Edit Project form). Everything else is a flat **Team Members** list backed by `project_members`, managed in the Edit Project form (add via dropdown, remove via X, free-text `role_label` per member saved on blur). Members and the owner all have full project-admin rights via `user_is_project_admin` — there is deliberately no per-role permission difference for now.
+
+The old role fields — `project_manager_id`, `lead_qa_id` (on `projects`) and the `project_vendor_owners` junction — still exist in the DB with their historical data and still drive notification routing (new-ticket alerts read `project_manager_id`; Verify/Rejected notifications read `lead_qa_id`/`project_vendor_owners`), but the UI no longer displays or writes them. Former role holders were backfilled into `project_members` with their role as `role_label` ("Project Manager", "Lead QA", "Vendor Owner - <vendor>"). Migration: `20260813000001_team_members.sql`.
 
 ## Project Members
 
-`project_members` junction table controls project visibility. People added via the "People" section in the Docs tab can see and interact with the project even without assigned tasks. `user_visible_project_ids` RPC includes project_members. For **vendor**-role members this also grants item-level visibility to every item in the project via `user_project_member_ids()` — see "Vendor RLS — Personal Items".
+`project_members` junction table controls project visibility AND grants full project-admin rights (see `user_is_project_admin`). Managed as **Team Members** in the Edit Project form — the "People" section in the Docs tab was removed 2026-08-13. Rows carry an optional `role_label` (display-only, no permission effect). `user_visible_project_ids` RPC includes project_members. For **vendor**-role members this also grants item-level visibility to every item in the project via `user_project_member_ids()` — see "Vendor RLS — Personal Items" — and, since the team-members change, membership gives vendor users the same full edit/delete rights as everyone else, so only add a vendor person to the team when that's intended.
 
 ## Status Change Notifications
 
@@ -765,7 +767,7 @@ Password reset uses the same flow via `/api/auth/reset-password`.
 
 ## Docs Template Sections
 
-Project Docs tab has a hardcoded template index: Key Dates, Key Resources, Project Details, Core Audiences, Value Props, Marketing, Questions. Content stored in `project_documents` table. WYSIWYG editor (TipTap) with table support for editing. People, Files, and Notes sections below the HR separator.
+Project Docs tab has a hardcoded template index: Key Dates, Key Resources, Project Details, Core Audiences, Value Props, Marketing, Questions. Content stored in `project_documents` table. WYSIWYG editor (TipTap) with table support for editing. Files and Notes sections below the HR separator (the People section moved to Team Members in the Edit Project form, 2026-08-13).
 
 ## Steering Committee
 

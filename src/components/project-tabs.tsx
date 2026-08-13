@@ -2913,10 +2913,6 @@ function DocsPanel({ projectId, projectCreatedBy, projectOwnerId, orgId, project
   const [saving, setSaving] = useState(false);
   const editorRef = useRef<DocsEditorHandle>(null);
 
-  // People state
-  const [projectMembers, setProjectMembers] = useState<{ id: string; full_name: string; vendor_id: string | null; vendor?: { name: string } | null }[]>([]);
-  const [allPeople, setAllPeople] = useState<{ id: string; full_name: string; vendor_id: string | null; vendor?: { name: string } | null }[]>([]);
-
   // Ask feature state
   const [question, setQuestion] = useState("");
   const [asking, setAsking] = useState(false);
@@ -2953,15 +2949,6 @@ function DocsPanel({ projectId, projectCreatedBy, projectOwnerId, orgId, project
     // Load linked documents
     supabase.from("project_links").select("id, title, url, link_type, created_by").eq("project_id", projectId).order("created_at").then(({ data }) => {
       if (data) setLinks(data);
-    });
-    // Load project members
-    supabase.from("project_members").select("person_id, person:people(id, full_name, vendor_id, vendor:vendors(name))").eq("project_id", projectId).then(({ data }) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      setProjectMembers((data || []).map((d: any) => d.person).filter(Boolean));
-    });
-    // Load all people for the add dropdown
-    supabase.from("people").select("id, full_name, vendor_id, vendor:vendors(name)").eq("org_id", orgId).order("full_name").then(({ data }) => {
-      setAllPeople((data || []) as unknown as { id: string; full_name: string; vendor_id: string | null; vendor?: { name: string } | null }[]);
     });
   }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -3139,17 +3126,7 @@ function DocsPanel({ projectId, projectCreatedBy, projectOwnerId, orgId, project
                 ))}
                 {/* Separator */}
                 <div className="border-t border-gray-200 my-1" />
-                {/* People, Files & Notes */}
-                <button
-                  onClick={() => { setActiveSection("__people__"); setEditing(false); }}
-                  className={`w-full text-left px-3 py-1.5 text-sm transition-colors ${
-                    activeSection === "__people__"
-                      ? "bg-blue-50 text-blue-700 font-medium border-l-2 border-blue-600"
-                      : "text-gray-600 hover:bg-gray-100 border-l-2 border-transparent"
-                  }`}
-                >
-                  People {projectMembers.length > 0 ? `(${projectMembers.length})` : ""}
-                </button>
+                {/* Files & Notes (team members moved to the Edit Project form) */}
                 <button
                   onClick={() => { setActiveSection("__files__"); setEditing(false); }}
                   className={`w-full text-left px-3 py-1.5 text-sm transition-colors ${
@@ -3213,67 +3190,6 @@ function DocsPanel({ projectId, projectCreatedBy, projectOwnerId, orgId, project
                     </div>
                   );
                 })()
-              ) : activeSection === "__people__" ? (
-                <div className="flex-1 px-6 py-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-sm font-semibold text-gray-700">Project Members</h3>
-                  </div>
-                  {canEditDocs && (
-                    <div className="flex items-center gap-2 mb-4">
-                      <select
-                        className="flex-1 text-sm rounded border border-gray-300 px-3 py-1.5 focus:border-blue-500 focus:outline-none"
-                        defaultValue=""
-                        onChange={async (e) => {
-                          const personId = e.target.value;
-                          if (!personId) return;
-                          e.target.value = "";
-                          if (projectMembers.some((m) => m.id === personId)) return;
-                          const { error } = await supabase.from("project_members").insert({ project_id: projectId, person_id: personId });
-                          if (!error) {
-                            const person = allPeople.find((p) => p.id === personId);
-                            if (person) setProjectMembers((prev) => [...prev, person].sort((a, b) => a.full_name.localeCompare(b.full_name)));
-                            window.dispatchEvent(new Event("sidebar:refresh"));
-                          }
-                        }}
-                      >
-                        <option value="">+ Add person...</option>
-                        {allPeople.filter((p) => !projectMembers.some((m) => m.id === p.id)).map((p) => (
-                          <option key={p.id} value={p.id}>{p.full_name}{p.vendor_id ? ` - ${p.vendor?.name || "Vendor"}` : ""}</option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-                  {projectMembers.length === 0 ? (
-                    <p className="text-sm text-gray-400 italic">No members added. Add people to give them access to this project.</p>
-                  ) : (
-                    <div className="space-y-1">
-                      {projectMembers.map((m) => (
-                        <div key={m.id} className="flex items-center justify-between py-2 px-3 rounded hover:bg-gray-50 border-b border-gray-100 last:border-b-0">
-                          <div className="flex items-center gap-2">
-                            <span className="w-6 h-6 rounded-full bg-blue-100 text-[10px] font-medium text-blue-700 flex items-center justify-center flex-shrink-0">
-                              {m.full_name.split(" ").map((n) => n[0]).join("").slice(0, 2)}
-                            </span>
-                            <span className="text-sm text-gray-900">{m.full_name}</span>
-                            {m.vendor_id && <span className="text-xs text-gray-400"> - {m.vendor?.name || "Vendor"}</span>}
-                          </div>
-                          {canEditDocs && (
-                            <button
-                              onClick={async () => {
-                                await supabase.from("project_members").delete().eq("project_id", projectId).eq("person_id", m.id);
-                                setProjectMembers((prev) => prev.filter((p) => p.id !== m.id));
-                                window.dispatchEvent(new Event("sidebar:refresh"));
-                              }}
-                              className="text-gray-400 hover:text-red-500 transition-colors"
-                              title="Remove"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
               ) : activeSection === "__notes__" ? (
                 <div className="flex-1 px-6 py-4">
                   <h3 className="text-sm font-semibold text-gray-700 mb-2">Project Notes</h3>

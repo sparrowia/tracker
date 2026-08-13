@@ -23,6 +23,14 @@ const MODULE_OPTIONS: { key: string; label: string; required?: boolean }[] = [
 
 const DEFAULT_MODULES = ["actions", "raid", "docs"];
 
+// Team member row: membership + optional display label carried over from the
+// old role fields (Project Manager, Lead QA, Vendor Owner - <vendor>).
+type TeamMember = {
+  person_id: string;
+  role_label: string | null;
+  person: { id: string; full_name: string; vendor_id: string | null; vendor?: { name: string } | null } | null;
+};
+
 interface ProjectHeaderProps {
   project: Project;
   vendors: Vendor[];
@@ -49,7 +57,7 @@ export default function ProjectHeader({ project, vendors, people: initialPeople 
   const [publicIssueForm, setPublicIssueForm] = useState(project.public_issue_form ?? false);
   const [togglingForm, setTogglingForm] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [vendorOwners, setVendorOwners] = useState<Record<string, string>>({}); // vendor_id -> person_id
+  const [members, setMembers] = useState<TeamMember[]>([]);
   const [healthOverride, setHealthOverride] = useState<ProjectHealth | null>(null);
   const [allInitiatives, setAllInitiatives] = useState<Initiative[]>([]);
   const { role, profileId, userPersonId } = useRole();
@@ -77,16 +85,74 @@ export default function ProjectHeader({ project, vendors, people: initialPeople 
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Load vendor owners
+  // Load team members (with former-role labels)
   useEffect(() => {
-    if (vendors.length === 0) return;
-    supabase.from("project_vendor_owners").select("vendor_id, person_id").eq("project_id", p.id).then(({ data }) => {
-      const map: Record<string, string> = {};
-      for (const row of (data || []) as { vendor_id: string; person_id: string }[]) map[row.vendor_id] = row.person_id;
-      setVendorOwners(map);
-    });
+    supabase
+      .from("project_members")
+      .select("person_id, role_label, person:people(id, full_name, vendor_id, vendor:vendors(name))")
+      .eq("project_id", p.id)
+      .then(({ data }) => {
+        setMembers(sortMembers((data || []) as unknown as TeamMember[]));
+      });
   }, [p.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const supabase = createClient();
+
+  function sortMembers(list: TeamMember[]) {
+    return [...list].sort((a, b) => (a.person?.full_name || "").localeCompare(b.person?.full_name || ""));
+  }
+
+  async function addMember(personId: string) {
+    if (!personId || members.some((m) => m.person_id === personId)) return;
+    const { data, error } = await supabase
+      .from("project_members")
+      .insert({ project_id: p.id, person_id: personId })
+      .select("person_id, role_label, person:people(id, full_name, vendor_id, vendor:vendors(name))")
+      .single();
+    if (error || !data) {
+      alert(error ? `Could not add team member: ${error.message}` : "Could not add team member — you may not have permission.");
+      return;
+    }
+    setMembers((prev) => sortMembers([...prev, data as unknown as TeamMember]));
+    window.dispatchEvent(new Event("sidebar:refresh"));
+  }
+
+  async function removeMember(personId: string) {
+    setMembers((prev) => prev.filter((m) => m.person_id !== personId));
+    const { data, error } = await supabase
+      .from("project_members")
+      .delete()
+      .eq("project_id", p.id)
+      .eq("person_id", personId)
+      .select("person_id");
+    if (error || !data?.length) {
+      alert(error ? `Could not remove team member: ${error.message}` : "Could not remove team member — you may not have permission.");
+      const { data: rows } = await supabase
+        .from("project_members")
+        .select("person_id, role_label, person:people(id, full_name, vendor_id, vendor:vendors(name))")
+        .eq("project_id", p.id);
+      setMembers(sortMembers((rows || []) as unknown as TeamMember[]));
+      return;
+    }
+    window.dispatchEvent(new Event("sidebar:refresh"));
+  }
+
+  async function saveMemberLabel(personId: string, raw: string) {
+    const label = raw.trim() || null;
+    const prev = members.find((m) => m.person_id === personId)?.role_label ?? null;
+    if (label === prev) return;
+    setMembers((list) => list.map((m) => (m.person_id === personId ? { ...m, role_label: label } : m)));
+    const { data, error } = await supabase
+      .from("project_members")
+      .update({ role_label: label })
+      .eq("project_id", p.id)
+      .eq("person_id", personId)
+      .select("person_id")
+      .single();
+    if (error || !data) {
+      alert(error ? `Could not save label: ${error.message}` : "Could not save label — you may not have permission.");
+      setMembers((list) => list.map((m) => (m.person_id === personId ? { ...m, role_label: prev } : m)));
+    }
+  }
 
   function startEdit() {
     setForm({
@@ -314,48 +380,56 @@ export default function ProjectHeader({ project, vendors, people: initialPeople 
               onPersonAdded={(person) => setPeople((prev) => [...prev, person])}
             />
           </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">Project Manager</label>
-            <OwnerPicker
-              value={p.project_manager_id || ""}
-              onChange={(id) => {
-                supabase.from("projects").update({ project_manager_id: id || null }).eq("id", p.id).then(() => {});
-                setP((prev) => ({ ...prev, project_manager_id: id || null }));
-              }}
-              people={people}
-              onPersonAdded={(person) => setPeople((prev) => [...prev, person])}
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">Lead QA</label>
-            <OwnerPicker
-              value={p.lead_qa_id || ""}
-              onChange={(id) => {
-                supabase.from("projects").update({ lead_qa_id: id || null }).eq("id", p.id).then(() => {});
-                setP((prev) => ({ ...prev, lead_qa_id: id || null }));
-              }}
-              people={people}
-              onPersonAdded={(person) => setPeople((prev) => [...prev, person])}
-            />
-          </div>
-          {vendors.map((v) => (
-            <div key={v.id}>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Vendor Owner{vendors.length > 1 ? ` — ${v.name}` : ""}</label>
-              <OwnerPicker
-                value={vendorOwners[v.id] || ""}
-                onChange={(id) => {
-                  if (id) {
-                    supabase.from("project_vendor_owners").upsert({ project_id: p.id, vendor_id: v.id, person_id: id }, { onConflict: "project_id,vendor_id" }).then(() => {});
-                  } else {
-                    supabase.from("project_vendor_owners").delete().eq("project_id", p.id).eq("vendor_id", v.id).then(() => {});
-                  }
-                  setVendorOwners((prev) => ({ ...prev, [v.id]: id || "" }));
+          <div className="md:col-span-2">
+            <label className="block text-xs font-medium text-gray-500 mb-1">Team Members</label>
+            <div className="space-y-2">
+              <select
+                className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                defaultValue=""
+                onChange={(e) => {
+                  const id = e.target.value;
+                  e.target.value = "";
+                  addMember(id);
                 }}
-                people={people}
-                onPersonAdded={(person) => setPeople((prev) => [...prev, person])}
-              />
+              >
+                <option value="">+ Add team member...</option>
+                {people.filter((pp) => !members.some((m) => m.person_id === pp.id)).map((pp) => (
+                  <option key={pp.id} value={pp.id}>
+                    {pp.full_name}{pp.vendor_id ? ` - ${vendors.find((v) => v.id === pp.vendor_id)?.name || "Vendor"}` : ""}
+                  </option>
+                ))}
+              </select>
+              {members.length === 0 ? (
+                <p className="text-sm text-gray-400 italic">No team members yet. Everyone added here gets full access to this project.</p>
+              ) : (
+                <div className="rounded-md border border-gray-200">
+                  {members.map((m) => (
+                    <div key={m.person_id} className="flex items-center gap-2 py-1.5 px-3 border-b border-gray-100 last:border-b-0">
+                      <span className="w-6 h-6 rounded-full bg-blue-100 text-[10px] font-medium text-blue-700 flex items-center justify-center flex-shrink-0">
+                        {(m.person?.full_name || "?").split(" ").map((n) => n[0]).join("").slice(0, 2)}
+                      </span>
+                      <span className="text-sm text-gray-900">{m.person?.full_name || "Unknown"}</span>
+                      {m.person?.vendor_id && <span className="text-xs text-gray-400">- {m.person?.vendor?.name || "Vendor"}</span>}
+                      <input
+                        type="text"
+                        defaultValue={m.role_label || ""}
+                        placeholder="Role label (e.g. Lead QA)"
+                        onBlur={(e) => saveMemberLabel(m.person_id, e.target.value)}
+                        className="ml-auto w-56 rounded border border-gray-200 px-2 py-1 text-xs text-gray-600 focus:border-blue-500 focus:outline-none"
+                      />
+                      <button
+                        onClick={() => removeMember(m.person_id)}
+                        className="text-gray-400 hover:text-red-500 transition-colors"
+                        title="Remove from team"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-          ))}
+          </div>
         </div>
 
         <div className="flex items-center justify-between pt-2 border-t border-gray-200">
@@ -443,14 +517,21 @@ export default function ProjectHeader({ project, vendors, people: initialPeople 
         {p.start_date && <span>Start: {formatDateShort(p.start_date)}</span>}
         {p.target_completion && <span>Target: {formatDateShort(p.target_completion)}</span>}
       </div>
-      {(p.project_owner_id || p.project_manager_id || p.lead_qa_id || Object.values(vendorOwners).some(Boolean)) && (
+      {(p.project_owner_id || members.length > 0) && (
         <div className="flex gap-6 mt-2 text-sm text-gray-500 flex-wrap">
           {p.project_owner_id && <span><span className="font-medium text-gray-700">Owner:</span> {people.find((pp) => pp.id === p.project_owner_id)?.full_name || "—"}</span>}
-          {p.project_manager_id && <span><span className="font-medium text-gray-700">PM:</span> {people.find((pp) => pp.id === p.project_manager_id)?.full_name || "—"}</span>}
-          {p.lead_qa_id && <span><span className="font-medium text-gray-700">Lead QA:</span> {people.find((pp) => pp.id === p.lead_qa_id)?.full_name || "—"}</span>}
-          {vendors.map((v) => vendorOwners[v.id] ? (
-            <span key={v.id}><span className="font-medium text-gray-700">Vendor{vendors.length > 1 ? ` (${v.name})` : ""}:</span> {people.find((pp) => pp.id === vendorOwners[v.id])?.full_name || "—"}</span>
-          ) : null)}
+          {members.length > 0 && (
+            <span>
+              <span className="font-medium text-gray-700">Team:</span>{" "}
+              {members.map((m, i) => (
+                <span key={m.person_id}>
+                  {i > 0 && ", "}
+                  {m.person?.full_name || "Unknown"}
+                  {m.role_label ? <span className="text-gray-400"> ({m.role_label})</span> : null}
+                </span>
+              ))}
+            </span>
+          )}
         </div>
       )}
       {p.notes && <p className="text-sm text-gray-500 mt-2">{p.notes}</p>}

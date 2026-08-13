@@ -187,8 +187,8 @@ All tables have row-level security policies scoped to `org_id` via the `user_org
 21. **Unread Indicators** — NEW pill (never viewed) and red indicator (updated since last view). Comments bump `updated_at`. Own changes don't trigger indicators (auto_mark_read DB trigger).
 22. **Vendor Detail Page** — project-tabbed item view (🔥 urgent, All, per-project), health report (A-F grade, 8 metrics), filters, expandable detail panels with comments, vendor reassignment.
 23. **Two-Flag Meeting Toggle** — separate `include_in_project_meeting` and `include_in_vendor_meeting` flags. Project and vendor agendas are independent.
-24. **Project Roles** — Project Owner, Project Manager, Lead QA fields on projects. Vendor Owner per project-vendor relationship via junction table.
-25. **Project Members** — `project_members` junction table for project visibility. People section in Docs tab. For vendor-role members this also grants item-level visibility to every item in the project (via `user_project_member_ids()`), so approved vendors can see unassigned tasks too.
+24. **Project Owner + Team Members** — one Project Owner field plus a flat Team Members list (`project_members` with a free-text `role_label`), managed in the Edit Project form. Replaced the Project Manager / Lead QA / Vendor Owner role fields on 2026-08-13; former role holders were backfilled as team members with their role as label. Owner and every team member have full project-admin rights.
+25. **Project Members** — `project_members` junction table for project visibility AND full project-admin rights (update/delete all items in the project). Managed as Team Members in the Edit Project form (the Docs-tab People section was removed). For vendor-role members this also grants item-level visibility to every item in the project (via `user_project_member_ids()`), so approved vendors can see unassigned tasks too.
 26. **Status Change Notifications** — digest notifications on status changes to reporter/owner. Verify → Lead QA, Rejected → Vendor Owner.
 27. **Custom Invite/Reset Flow** — bypasses Supabase email, uses Gmail SMTP + server-side token verification to avoid PKCE issues.
 28. **Rejected Status** — new status option for items that fail QA review.
@@ -332,6 +332,7 @@ All in `supabase/migrations/`:
 | `20260804000003_project_modules.sql` | `modules text[]` on projects (default `{actions,raid,docs}`), backfill + drop `roadmap_enabled` |
 | `20260804000004_jira_tickets_and_votes.sql` | `jira_tickets` table (imported U2 board tickets) + `roadmap_votes` table with RLS |
 | `20260804000005_jira_pr_refs.sql` | `has_pr` + `pr_numbers` on jira_tickets (mined from ed-cet/unified PRs) |
+| `20260813000001_team_members.sql` | Team Members replace per-project roles: `role_label` on `project_members`, backfill of PM/Lead QA/Vendor Owners as labeled members, `project_members` UPDATE policy (+ qa parity on insert/delete), `user_is_project_admin` = owner OR team member OR initiative owner |
 
 ## Deployment
 
