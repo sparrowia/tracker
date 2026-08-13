@@ -6,7 +6,6 @@ import { healthColor, healthLabel, formatDateShort } from "@/lib/utils";
 import { useRole } from "@/components/role-context";
 import { isAdmin } from "@/lib/permissions";
 import type { Project, ProjectHealth, Vendor, Person, Initiative } from "@/lib/types";
-import OwnerPicker from "@/components/owner-picker";
 import SteeringCommitteeSection from "@/components/steering-committee-section";
 import Link from "next/link";
 
@@ -23,13 +22,24 @@ const MODULE_OPTIONS: { key: string; label: string; required?: boolean }[] = [
 
 const DEFAULT_MODULES = ["actions", "raid", "docs"];
 
-// Team member row: membership + optional display label carried over from the
-// old role fields (Project Manager, Lead QA, Vendor Owner - <vendor>).
+// Team member row with its project role. Owner is exactly one per project,
+// assigned to the creator by default and reassignable only by a super admin.
 type TeamMember = {
   person_id: string;
-  role_label: string | null;
+  role: string;
   person: { id: string; full_name: string; vendor_id: string | null; vendor?: { name: string } | null } | null;
 };
+
+const MEMBER_ROLE_OPTIONS: { value: string; label: string }[] = [
+  { value: "owner", label: "Owner" },
+  { value: "project_manager", label: "Project Manager" },
+  { value: "product", label: "Product" },
+  { value: "qa", label: "QA" },
+  { value: "member_full", label: "Member - Full" },
+  { value: "member_assigned", label: "Member - Assigned" },
+  { value: "vendor", label: "Vendor" },
+];
+const memberRoleLabel = (r: string) => MEMBER_ROLE_OPTIONS.find((o) => o.value === r)?.label || r;
 
 interface ProjectHeaderProps {
   project: Project;
@@ -38,7 +48,7 @@ interface ProjectHeaderProps {
 }
 
 export default function ProjectHeader({ project, vendors, people: initialPeople }: ProjectHeaderProps) {
-  const [people, setPeople] = useState(initialPeople);
+  const [people] = useState(initialPeople);
   const [p, setP] = useState(project);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({
@@ -85,11 +95,11 @@ export default function ProjectHeader({ project, vendors, people: initialPeople 
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Load team members (with former-role labels)
+  // Load team members with their roles
   useEffect(() => {
     supabase
       .from("project_members")
-      .select("person_id, role_label, person:people(id, full_name, vendor_id, vendor:vendors(name))")
+      .select("person_id, role, person:people(id, full_name, vendor_id, vendor:vendors(name))")
       .eq("project_id", p.id)
       .then(({ data }) => {
         setMembers(sortMembers((data || []) as unknown as TeamMember[]));
@@ -98,15 +108,20 @@ export default function ProjectHeader({ project, vendors, people: initialPeople 
   const supabase = createClient();
 
   function sortMembers(list: TeamMember[]) {
-    return [...list].sort((a, b) => (a.person?.full_name || "").localeCompare(b.person?.full_name || ""));
+    // Owner first, then alphabetical
+    return [...list].sort((a, b) =>
+      a.role === "owner" ? -1 : b.role === "owner" ? 1 : (a.person?.full_name || "").localeCompare(b.person?.full_name || "")
+    );
   }
 
   async function addMember(personId: string) {
     if (!personId || members.some((m) => m.person_id === personId)) return;
+    const person = people.find((pp) => pp.id === personId);
+    const defaultRole = person?.vendor_id ? "vendor" : "product";
     const { data, error } = await supabase
       .from("project_members")
-      .insert({ project_id: p.id, person_id: personId })
-      .select("person_id, role_label, person:people(id, full_name, vendor_id, vendor:vendors(name))")
+      .insert({ project_id: p.id, person_id: personId, role: defaultRole })
+      .select("person_id, role, person:people(id, full_name, vendor_id, vendor:vendors(name))")
       .single();
     if (error || !data) {
       alert(error ? `Could not add team member: ${error.message}` : "Could not add team member — you may not have permission.");
@@ -136,21 +151,43 @@ export default function ProjectHeader({ project, vendors, people: initialPeople 
     window.dispatchEvent(new Event("sidebar:refresh"));
   }
 
-  async function saveMemberLabel(personId: string, raw: string) {
-    const label = raw.trim() || null;
-    const prev = members.find((m) => m.person_id === personId)?.role_label ?? null;
-    if (label === prev) return;
-    setMembers((list) => list.map((m) => (m.person_id === personId ? { ...m, role_label: label } : m)));
+  async function saveMemberRole(personId: string, newRole: string) {
+    const prevRole = members.find((m) => m.person_id === personId)?.role;
+    if (!prevRole || newRole === prevRole) return;
+    if (newRole === "owner" || prevRole === "owner") {
+      if (role !== "super_admin") {
+        alert("Only a super admin can change the project owner.");
+        return;
+      }
+    }
+    if (newRole === "owner") {
+      // Atomic reassignment: previous owner becomes Project Manager
+      const { error } = await supabase.rpc("reassign_project_owner", { p_project_id: p.id, p_person_id: personId });
+      if (error) {
+        alert(`Could not reassign owner: ${error.message}`);
+        return;
+      }
+      setMembers((list) => sortMembers(list.map((m) =>
+        m.person_id === personId ? { ...m, role: "owner" } : m.role === "owner" ? { ...m, role: "project_manager" } : m
+      )));
+      setP((prev) => ({ ...prev, project_owner_id: personId }));
+      return;
+    }
+    if (prevRole === "owner") {
+      alert("Every project needs an owner — pick Owner on another member to reassign instead.");
+      return;
+    }
+    setMembers((list) => list.map((m) => (m.person_id === personId ? { ...m, role: newRole } : m)));
     const { data, error } = await supabase
       .from("project_members")
-      .update({ role_label: label })
+      .update({ role: newRole })
       .eq("project_id", p.id)
       .eq("person_id", personId)
       .select("person_id")
       .single();
     if (error || !data) {
-      alert(error ? `Could not save label: ${error.message}` : "Could not save label — you may not have permission.");
-      setMembers((list) => list.map((m) => (m.person_id === personId ? { ...m, role_label: prev } : m)));
+      alert(error ? `Could not change role: ${error.message}` : "Could not change role — you may not have permission.");
+      setMembers((list) => list.map((m) => (m.person_id === personId ? { ...m, role: prevRole } : m)));
     }
   }
 
@@ -368,18 +405,6 @@ export default function ProjectHeader({ project, vendors, people: initialPeople 
             </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">Project Owner</label>
-            <OwnerPicker
-              value={p.project_owner_id || ""}
-              onChange={(id) => {
-                supabase.from("projects").update({ project_owner_id: id || null }).eq("id", p.id).then(() => {});
-                setP((prev) => ({ ...prev, project_owner_id: id || null }));
-              }}
-              people={people}
-              onPersonAdded={(person) => setPeople((prev) => [...prev, person])}
-            />
-          </div>
           <div className="md:col-span-2">
             <label className="block text-xs font-medium text-gray-500 mb-1">Team Members</label>
             <div className="space-y-2">
@@ -400,7 +425,7 @@ export default function ProjectHeader({ project, vendors, people: initialPeople 
                 ))}
               </select>
               {members.length === 0 ? (
-                <p className="text-sm text-gray-400 italic">No team members yet. Everyone added here gets full access to this project.</p>
+                <p className="text-sm text-gray-400 italic">No team members yet. Add people and assign each a role.</p>
               ) : (
                 <div className="rounded-md border border-gray-200">
                   {members.map((m) => (
@@ -410,20 +435,27 @@ export default function ProjectHeader({ project, vendors, people: initialPeople 
                       </span>
                       <span className="text-sm text-gray-900">{m.person?.full_name || "Unknown"}</span>
                       {m.person?.vendor_id && <span className="text-xs text-gray-400">- {m.person?.vendor?.name || "Vendor"}</span>}
-                      <input
-                        type="text"
-                        defaultValue={m.role_label || ""}
-                        placeholder="Role label (e.g. Lead QA)"
-                        onBlur={(e) => saveMemberLabel(m.person_id, e.target.value)}
-                        className="ml-auto w-56 rounded border border-gray-200 px-2 py-1 text-xs text-gray-600 focus:border-blue-500 focus:outline-none"
-                      />
-                      <button
-                        onClick={() => removeMember(m.person_id)}
-                        className="text-gray-400 hover:text-red-500 transition-colors"
-                        title="Remove from team"
+                      <select
+                        value={m.role}
+                        onChange={(e) => saveMemberRole(m.person_id, e.target.value)}
+                        className="ml-auto w-44 rounded border border-gray-200 px-2 py-1 text-xs text-gray-600 focus:border-blue-500 focus:outline-none"
+                        title={m.role === "owner" && role !== "super_admin" ? "Only a super admin can change the owner" : undefined}
                       >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                      </button>
+                        {MEMBER_ROLE_OPTIONS.map((o) => (
+                          <option key={o.value} value={o.value} disabled={o.value === "owner" && role !== "super_admin"}>
+                            {o.label}
+                          </option>
+                        ))}
+                      </select>
+                      {(m.role !== "owner" || role === "super_admin") && (
+                        <button
+                          onClick={() => removeMember(m.person_id)}
+                          className="text-gray-400 hover:text-red-500 transition-colors"
+                          title="Remove from team"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -527,7 +559,7 @@ export default function ProjectHeader({ project, vendors, people: initialPeople 
                 <span key={m.person_id}>
                   {i > 0 && ", "}
                   {m.person?.full_name || "Unknown"}
-                  {m.role_label ? <span className="text-gray-400"> ({m.role_label})</span> : null}
+                  <span className="text-gray-400"> ({memberRoleLabel(m.role)})</span>
                 </span>
               ))}
             </span>

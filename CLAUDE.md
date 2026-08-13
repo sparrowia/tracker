@@ -194,7 +194,9 @@ All access control is enforced at the Supabase RLS layer via helper functions:
 - `user_vendor_id()` — returns vendor_id for vendor-role users
 - `user_is_active()` — checks deactivated_at is null
 - `user_can_edit(created_by, owner_id)` — admin+ always true; user if creator or owner
-- `user_is_project_admin(project_id)` — true when the auth user is the project's `project_owner_id`, a **team member** (`project_members` row), listed in `initiative_owners` for the project's initiative, or set as the legacy `initiatives.owner_id`. Grants UPDATE + DELETE on `action_items`, `blockers`, `raid_entries`, and `agenda_items` linked to that project. (2026-08-13, migration `20260813000001_team_members.sql`: the earlier `project_manager_id`/`lead_qa_id` branches are gone — former role holders were backfilled into `project_members` with a `role_label`, so their rights carry through membership.)
+- `user_project_role(project_id)` — the auth user's per-project role from `project_members.role` (null if not a member). The task-table policies are built on it; see "Project Owner + Team Members".
+- `user_is_project_admin(project_id)` — true when the user's project role is a full-edit one (`owner`/`project_manager`/`product`/`qa`/`member_full`) or they are an initiative owner (`user_is_initiative_owner`). Grants UPDATE on `action_items`, `blockers`, `raid_entries`, `agenda_items` in that project. DELETE is narrower — see the role matrix.
+- `user_mentioned_in(entity_type, id)` — true when the user is recorded in `item_mentions` for that task (populated by the `record_item_mentions` comment trigger + backfill). Powers the assigned/opened/mentioned limited view.
 - `vendor_visible_project_ids(p_vendor_id, p_person_id)` — SECURITY DEFINER set of project ids a vendor user is allowed to read: any project containing an action item / RAID entry / blocker assigned to their vendor or owned by them, an agenda item for their vendor, a `project_vendor_owners` row, or a `project_members` row. Used by `projects_select`.
 
 Separate SELECT/INSERT/UPDATE/DELETE policies on every data table. Vendor-scoped reads filter by `vendor_id`. Migrations: `20260310000001_rbac_and_invitations.sql` (initial), `20260507000001_project_owner_admin.sql` + `20260507000002_pm_is_project_admin.sql` + `20260507000003_qa_lead_is_project_admin.sql` (project-admin scope: owner, PM, QA lead).
@@ -729,15 +731,26 @@ Layout: Unscheduled | **In Progress** (collapsible, blue header) | Overdue (red,
 - **PR association**: Jira's dev-panel has ZERO links (the Jira↔GitHub integration is unconnected — ticket U2-87), so `has_pr`/`pr_numbers` are mined from ed-cet/unified PR titles + branch names (`gh pr list` → `scripts/_set-jira-pr-refs.mjs`, migration `20260804000005`). Snapshot-based; re-run to refresh.
 - A proper live sync needs a `JIRA_API_TOKEN` env var — not set up yet.
 
-## Project Owner + Team Members (replaced per-project roles, 2026-08-13)
+## Project Owner + Team Members (role-based, 2026-08-13)
 
-Projects have ONE role field: `project_owner_id` (OwnerPicker in the Edit Project form). Everything else is a flat **Team Members** list backed by `project_members`, managed in the Edit Project form (add via dropdown, remove via X, free-text `role_label` per member saved on blur). Members and the owner all have full project-admin rights via `user_is_project_admin` — there is deliberately no per-role permission difference for now.
+Each project has a flat **Team Members** list (`project_members`) managed in the Edit Project form, and every member carries a `role` (dropdown). DB-enforced matrix (migrations `20260813000001_team_members.sql` + `20260813000002_member_roles.sql`):
 
-The old role fields — `project_manager_id`, `lead_qa_id` (on `projects`) and the `project_vendor_owners` junction — still exist in the DB with their historical data and still drive notification routing (new-ticket alerts read `project_manager_id`; Verify/Rejected notifications read `lead_qa_id`/`project_vendor_owners`), but the UI no longer displays or writes them. Former role holders were backfilled into `project_members` with their role as `role_label` ("Project Manager", "Lead QA", "Vendor Owner - <vendor>"). Migration: `20260813000001_team_members.sql`.
+| Role | See | Create tasks | Edit | Delete tasks | Delete project |
+|---|---|---|---|---|---|
+| `owner` | all | yes | all | any | **yes** |
+| `project_manager` | all | yes | all | any | no |
+| `product` / `qa` | all | yes | all | own-created only | no |
+| `member_full` | all | **no** | all | own-created only (vacuous) | no |
+| `member_assigned` / `vendor` | **only assigned / opened / mentioned** | no | their visible tasks | no | no |
+
+- **Owner rules:** exactly one per project (unique partial index), defaults to the creator (`trg_project_creator_owner`), and only a **super_admin** may reassign — via the `reassign_project_owner(project_id, person_id)` RPC (old owner is demoted to `project_manager`). `projects.project_owner_id` is kept in sync as the single-owner pointer; `projects_delete` = owner or super_admin (the old creator rule is retired).
+- **Account-level `super_admin`/`admin` bypass project roles.** Internal non-members keep the old baseline (read all, edit own/created, no delete). Initiative owners retain project-admin reach via `user_is_initiative_owner`.
+- **Limited view** (`member_assigned`/`vendor`): "opened" = `created_by`/`reporter_id` (public-form/intake reports); "mentioned" = `item_mentions` rows written by the `record_item_mentions` trigger when a comment @mentions them. Mentioned people are still auto-added to the team (default role `member_assigned`).
+- The legacy columns `project_manager_id`/`lead_qa_id`/`project_vendor_owners` + `role_label` still exist with historical data and still drive notification routing (new-ticket → PM, Verify → Lead QA, Rejected → vendor owner), but the UI no longer writes them.
 
 ## Project Members
 
-`project_members` junction table controls project visibility AND grants full project-admin rights (see `user_is_project_admin`). Managed as **Team Members** in the Edit Project form — the "People" section in the Docs tab was removed 2026-08-13. Rows carry an optional `role_label` (display-only, no permission effect). `user_visible_project_ids` RPC includes project_members. For **vendor**-role members this also grants item-level visibility to every item in the project via `user_project_member_ids()` — see "Vendor RLS — Personal Items" — and, since the team-members change, membership gives vendor users the same full edit/delete rights as everyone else, so only add a vendor person to the team when that's intended.
+`project_members` (with `role`) is the team list — see the matrix above. Managed in the Edit Project form; the Docs-tab "People" section was removed 2026-08-13. `user_visible_project_ids` RPC includes project_members (sidebar/dashboard scoping). The old "vendor project member sees every item in the project" behavior (`20260701000001`) is **retired** — vendor accounts and `member_assigned`/`vendor` roles see only assigned/opened/mentioned tasks, DB-enforced.
 
 ## Status Change Notifications
 

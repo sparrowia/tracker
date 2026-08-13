@@ -14,7 +14,7 @@ import { useUndo, UndoToast } from "@/components/undo-toast";
 import CommentThread from "@/components/comment-thread";
 import VendorPicker from "@/components/vendor-picker";
 import { useRole } from "@/components/role-context";
-import { canCreate, canDelete, canEditItem } from "@/lib/permissions";
+import { canCreate, canDelete, canEditItem, isAdmin } from "@/lib/permissions";
 import ReminderButton from "@/components/reminder-button";
 import dynamic from "next/dynamic";
 import type { DocsEditorHandle } from "@/components/docs-editor";
@@ -93,6 +93,16 @@ export default function ProjectTabs({
   const searchParams = useSearchParams();
   const supabase = createClient();
   const { role, profileId, userPersonId } = useRole();
+  // Per-project role: member_full / member_assigned / vendor cannot create tasks.
+  // RLS is the authority; this just hides the add buttons.
+  const [myProjectRole, setMyProjectRole] = useState<string | null>(null);
+  useEffect(() => {
+    if (!userPersonId) { setMyProjectRole(null); return; }
+    supabase.from("project_members").select("role").eq("project_id", project.id).eq("person_id", userPersonId).maybeSingle().then(({ data }) => {
+      setMyProjectRole((data as { role?: string } | null)?.role ?? null);
+    });
+  }, [project.id, userPersonId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const allowCreate = isAdmin(role) || !["member_full", "member_assigned", "vendor"].includes(myProjectRole ?? "");
   const [tabOrder, setTabOrder] = useState<Tab[]>(loadTabOrder);
   const urlTab = searchParams.get("tab") as Tab | null;
   const urlItem = searchParams.get("item");
@@ -363,7 +373,7 @@ export default function ProjectTabs({
         </div>
 
         <div style={{ display: active === "raid" ? "block" : "none" }}>
-          <RaidLog initialEntries={raidEntries} project={project} people={peopleList} vendors={vendorsList} onPersonAdded={addPerson} onVendorAdded={addVendor} addUndo={addUndo} onCountChange={setRaidCount} intakeSourceMap={intakeSourceMap} onMeetingToggle={bumpAgendaRefresh} searchFilter={searchFilter} deepLinkItemId={resolvedTab === "raid" ? urlItem : undefined}
+          <RaidLog initialEntries={raidEntries} project={project} people={peopleList} vendors={vendorsList} onPersonAdded={addPerson} onVendorAdded={addVendor} addUndo={addUndo} onCountChange={setRaidCount} intakeSourceMap={intakeSourceMap} onMeetingToggle={bumpAgendaRefresh} searchFilter={searchFilter} allowCreate={allowCreate} deepLinkItemId={resolvedTab === "raid" ? urlItem : undefined}
             onConvertedToAction={async (actionId) => {
               const { data } = await supabase.from("action_items").select("*, owner:people!action_items_owner_id_fkey(*), vendor:vendors!action_items_vendor_id_fkey(*)").eq("id", actionId).single();
               if (data && itemAddersRef.current.addAction) {
@@ -382,7 +392,7 @@ export default function ProjectTabs({
         </div>
 
         <div style={{ display: active === "actions" ? "block" : "none" }}>
-          <ActionItemsPanel actions={actions} people={peopleList} vendors={vendorsList} onPersonAdded={addPerson} onVendorAdded={addVendor} addUndo={addUndo} onCountChange={setActionCount} intakeSourceMap={intakeSourceMap} onNewItemsSuggested={onNewItemsSuggested} registerAdder={(fn) => { itemAddersRef.current.addAction = fn; return () => { itemAddersRef.current.addAction = undefined; }; }} registerResolver={(fn) => { itemAddersRef.current.resolveAction = fn; return () => { itemAddersRef.current.resolveAction = undefined; }; }} registerUpdater={(fn) => { itemAddersRef.current.updateAction = fn; return () => { itemAddersRef.current.updateAction = undefined; }; }} onMeetingToggle={bumpAgendaRefresh} orgId={project.org_id} projectId={project.id} projectSlug={project.slug} searchFilter={searchFilter} deepLinkItemId={resolvedTab === "actions" ? urlItem : undefined}
+          <ActionItemsPanel actions={actions} people={peopleList} vendors={vendorsList} onPersonAdded={addPerson} onVendorAdded={addVendor} addUndo={addUndo} onCountChange={setActionCount} intakeSourceMap={intakeSourceMap} onNewItemsSuggested={onNewItemsSuggested} registerAdder={(fn) => { itemAddersRef.current.addAction = fn; return () => { itemAddersRef.current.addAction = undefined; }; }} registerResolver={(fn) => { itemAddersRef.current.resolveAction = fn; return () => { itemAddersRef.current.resolveAction = undefined; }; }} registerUpdater={(fn) => { itemAddersRef.current.updateAction = fn; return () => { itemAddersRef.current.updateAction = undefined; }; }} onMeetingToggle={bumpAgendaRefresh} orgId={project.org_id} projectId={project.id} projectSlug={project.slug} searchFilter={searchFilter} allowCreate={allowCreate} deepLinkItemId={resolvedTab === "actions" ? urlItem : undefined}
             onConvertedToRaid={async (raidId) => {
               const { data } = await supabase.from("raid_entries").select("*, owner:people!raid_entries_owner_id_fkey(*), reporter:people!raid_entries_reporter_id_fkey(*), vendor:vendors(*)").eq("id", raidId).single();
               if (data && itemAddersRef.current.addRaid) {
@@ -1447,6 +1457,7 @@ function ActionItemsPanel({
   projectId,
   projectSlug,
   searchFilter = "",
+  allowCreate = true,
   deepLinkItemId,
   onConvertedToRaid,
   onConvertedToBlocker,
@@ -1468,6 +1479,7 @@ function ActionItemsPanel({
   projectId: string;
   projectSlug: string;
   searchFilter?: string;
+  allowCreate?: boolean;
   deepLinkItemId?: string | null;
   onConvertedToRaid?: (raidId: string) => void;
   onConvertedToBlocker?: (blockerId: string) => void;
@@ -2161,7 +2173,7 @@ function ActionItemsPanel({
               </div>
             )}
           </div>
-          {canCreate(role) && (
+          {canCreate(role) && allowCreate && (
             <div className="flex items-center gap-3">
               <button
                 onClick={handleAddSection}
@@ -2320,7 +2332,7 @@ function ActionItemsPanel({
               <div key={sec ? `sec-${sec.id}` : "sec-ungrouped"} className="flex items-center gap-2 bg-gray-100 border-b border-gray-300 px-3 py-1.5">
                 <span className="text-[11px] font-bold text-gray-700 uppercase tracking-wide">{sec ? sec.title : "Ungrouped"}</span>
                 <span className="text-[10px] text-gray-500 bg-gray-200 rounded px-1.5 py-0.5">{entry.count}</span>
-                {sec && canCreate(role) && (
+                {sec && canCreate(role) && allowCreate && (
                   <div className="ml-auto flex items-center gap-2">
                     <button onClick={() => { const t = window.prompt("Rename section:", sec.title); if (t) handleRenameSection(sec.id, t); }} className="text-[10px] text-gray-400 hover:text-gray-700">Rename</button>
                     <button onClick={() => handleDeleteSection(sec.id)} className="text-[10px] text-gray-400 hover:text-red-600">Delete</button>

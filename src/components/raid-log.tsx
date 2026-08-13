@@ -33,6 +33,7 @@ interface RaidLogProps {
   registerUpdater?: (fn: (id: string, field: string, value: string, person?: Person | null, vendor?: Vendor | null) => void) => () => void;
   registerAdder?: (fn: (item: RaidRow) => void) => () => void;
   searchFilter?: string;
+  allowCreate?: boolean;
   deepLinkItemId?: string | null;
 }
 
@@ -309,7 +310,7 @@ function ChangelogPanel({ entryId, orgId, people }: { entryId: string; orgId: st
   );
 }
 
-export default function RaidLog({ initialEntries, project, people, vendors, onPersonAdded, onVendorAdded, addUndo, onCountChange, intakeSourceMap = {}, onMeetingToggle, onConvertedToAction, onConvertedToBlocker, registerUpdater, registerAdder, searchFilter = "", deepLinkItemId }: RaidLogProps) {
+export default function RaidLog({ initialEntries, project, people, vendors, onPersonAdded, onVendorAdded, addUndo, onCountChange, intakeSourceMap = {}, onMeetingToggle, onConvertedToAction, onConvertedToBlocker, registerUpdater, registerAdder, searchFilter = "", allowCreate = true, deepLinkItemId }: RaidLogProps) {
   const { role, profileId, userPersonId } = useRole();
   const [entries, setEntries] = useState<RaidRow[]>(initialEntries);
 
@@ -1144,7 +1145,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                 </div>
               )}
             </div>
-            {canCreate(role) && (
+            {canCreate(role) && allowCreate && (
               <button
                 onClick={() => { setAddingType(addingType === raidType ? null : raidType); setAddTitle(""); setAddPriority("medium"); setAddIssueType(""); }}
                 className="text-xs text-blue-300 hover:text-white transition-colors"
