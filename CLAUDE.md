@@ -176,16 +176,17 @@ All data tables (ActionItem, RaidEntry, Blocker, AgendaItem, SupportTicket, Proj
 
 ### Roles
 
-Four roles defined as `user_role` enum in Supabase, stored on `profiles.role`:
+Five ACCOUNT-level roles defined as `user_role` enum in Supabase, stored on `profiles.role`. Since 2026-08-13 the account role sets the ceiling; what someone can do *inside a project* comes from their per-project Team Member role (see "Project Owner + Team Members"):
 
-| Role | Data Access | Create | Edit | Delete | Invite | Admin Pages |
-|------|------------|--------|------|--------|--------|-------------|
-| **super_admin** | All org data | Yes | All items | Yes | Yes | Yes |
-| **admin** | All org data | Yes | All items | Yes* | Yes (not super_admin) | Yes |
+| Role | Data Access | Invite | Admin Pages | Notes |
+|------|------------|--------|-------------|-------|
+| **super_admin** | All org data | Yes | Yes | Bypasses project roles. The ONLY role that can reassign a project's Owner or touch owner membership rows. |
+| **admin** | All org data | Yes (not super_admin) | Yes | Bypasses project roles for item edit/delete. Cannot delete projects (Owner or super_admin only) and cannot set Owner. |
+| **user** | All org data, EXCEPT projects where their team role is `member_assigned`/`vendor` (limited view) | No | No | Per-project rights from Team Member role; outside teams: create + edit own/created items, no delete. |
+| **qa** | Same as user | No | No | Treated identically to `user` in the task policies; per-project rights from Team Member role. |
+| **vendor** | Only items assigned to their vendor company or to them, items they opened, or items they are @mentioned in | No | No | No create, no delete; updates only on visible items. |
 
-\* **Exception — deleting projects:** `projects_delete` allows only the project's creator or a super_admin (migration `20260804000001_project_creator_delete.sql`). Admins can no longer delete projects they didn't create. The Delete Project button lives in the Edit Project form and is gated the same way client-side.
-| **user** | All org data | Yes | Items they created/own + items in projects they own, are QA lead on, or whose initiative they own | Items in projects they own/QA-lead/initiative-own | No | No |
-| **vendor** | Only their vendor's items | No | Status only | No | No | No |
+**Deleting projects:** `projects_delete` allows only the project's **Owner** (team role) or a super_admin — migration `20260813000002_member_roles.sql`; the earlier creator rule (`20260804000001`) is retired. The Delete Project button in the Edit Project form is gated the same way client-side.
 
 ### Database Enforcement (RLS)
 
@@ -199,7 +200,7 @@ All access control is enforced at the Supabase RLS layer via helper functions:
 - `user_mentioned_in(entity_type, id)` — true when the user is recorded in `item_mentions` for that task (populated by the `record_item_mentions` comment trigger + backfill). Powers the assigned/opened/mentioned limited view.
 - `vendor_visible_project_ids(p_vendor_id, p_person_id)` — SECURITY DEFINER set of project ids a vendor user is allowed to read: any project containing an action item / RAID entry / blocker assigned to their vendor or owned by them, an agenda item for their vendor, a `project_vendor_owners` row, or a `project_members` row. Used by `projects_select`.
 
-Separate SELECT/INSERT/UPDATE/DELETE policies on every data table. Vendor-scoped reads filter by `vendor_id`. Migrations: `20260310000001_rbac_and_invitations.sql` (initial), `20260507000001_project_owner_admin.sql` + `20260507000002_pm_is_project_admin.sql` + `20260507000003_qa_lead_is_project_admin.sql` (project-admin scope: owner, PM, QA lead).
+Separate SELECT/INSERT/UPDATE/DELETE policies on every data table. Migration history: `20260310000001_rbac_and_invitations.sql` (initial), `2026050700000*` (historical project-admin scope), `20260702000002_qa_role_policies.sql` (qa parity), **`20260813000002_member_roles.sql` (the CURRENT role-aware policy set on action_items/raid_entries/blockers/projects — read this one first when reasoning about task permissions).**
 
 **Project visibility is vendor-scoped — `projects` is NOT org-wide for vendors.** The `projects_select` policy lets non-vendor roles (super_admin/admin/user) read every project in the org, but a `vendor`-role user can only read projects in `vendor_visible_project_ids()`. This was originally org-wide for *everyone*, which leaked internal-only project rows — `name`, `description`, and `notes` — to any vendor via a direct deep link (e.g. the "Open in Tracker" link in a digest email), even projects with no items assigned to them. Migration `20260615000001_scope_vendor_project_visibility.sql`. **Do NOT store secrets/credentials in `projects.notes` or `description`** — those columns are returned to the client for anyone who can SELECT the project row, regardless of which UI tab renders them.
 
@@ -598,16 +599,17 @@ Comments use TipTap editor with `@tiptap/extension-mention`:
 - Delete cascade: cancels pending invitation or deactivates joined user before removing contact
 - "+ Add Contact" button in dark header
 
-## Vendor RLS — Personal Items
+## Vendor RLS — Limited View
 
 Vendor-role users see an `action_items` / `raid_entries` / `blockers` item where:
-- `vendor_id` matches their vendor (original behavior), OR
-- `owner_id` matches their person record (added), OR
-- the item's `project_id` is one they are a `project_members` member of (added — see below)
+- `vendor_id` matches their vendor company, OR
+- `owner_id` matches their person record (assigned), OR
+- `created_by` (or `reporter_id` on raid_entries) matches them (they opened it), OR
+- they are @mentioned on it (`item_mentions` via `user_mentioned_in()`)
 - `user_person_id()` helper function maps `auth.uid()` to `people.id`
-- Migrations: `20260326000003_vendor_see_personal_items.sql`, `20260701000001_vendor_project_member_item_visibility.sql`
+- Migrations: `20260326000003_vendor_see_personal_items.sql` (historical), `20260813000002_member_roles.sql` (current policy set)
 
-**Project members see ALL items in their projects (including vendors).** Being an "approved person" (a `project_members` row, added via the Docs-tab People section) grants a vendor visibility to *every* item in that project — not just items assigned to their vendor or owned by them. Enforced by the `user_project_member_ids()` SECURITY DEFINER helper (returns the project ids the current auth user is a member of, bypassing `project_members` RLS to avoid recursion), added to the three vendor SELECT policies. This closes the gap where a vendor project member could open a project but not see its unassigned tasks (e.g. a RAID entry with `vendor_id = null` and `owner_id = null`). **Trade-off:** a vendor added to a project's approved-people list sees items assigned to *other* vendors and internal-only items in that project too — don't add a vendor as a member on projects where cross-vendor items must stay hidden; assign individual items to them instead. `agenda_items` is intentionally NOT covered — vendor agenda-item visibility stays `vendor_id`-only.
+**The "project members see ALL items in their projects" behavior (`20260701000001`) is RETIRED (2026-08-13).** Adding a vendor to a project's team no longer reveals every item in that project — visibility stays assigned/opened/mentioned regardless of membership. To give a vendor person sight of a task, assign it to them (or their vendor) or @mention them in a comment. `user_project_member_ids()` still exists in the DB but is no longer referenced by the task SELECT policies. `agenda_items` vendor visibility stays `vendor_id`-only.
 
 ## Password Reset
 
@@ -759,6 +761,8 @@ When a RAID entry, action item, or blocker status changes:
 - **Verify (needs_verification)** on vendor-assigned items → Lead QA gets notified
 - **Rejected** on vendor-assigned items → Vendor Owner gets notified
 
+⚠️ The Verify/Rejected routing (and the new-ticket → PM alert) still reads the LEGACY `lead_qa_id` / `project_manager_id` / `project_vendor_owners` columns, which the UI stopped writing on 2026-08-13 — so these only fire on projects that had those roles set before then. Rewiring routing to the Team Member roles is an open follow-up.
+
 ## Invite Flow (Custom SMTP)
 
 Invites bypass Supabase's email system entirely:
@@ -886,4 +890,4 @@ Initiatives with a `steering_phase` set are hidden from the sidebar Initiatives 
 
 ## Rejected Status
 
-`rejected` added to `item_status` enum. Available in all status dropdowns. Red badge styling. Triggers vendor owner notification when set on vendor-assigned items.
+`rejected` added to `item_status` enum. Available in all status dropdowns. Red badge styling. Triggers vendor owner notification when set on vendor-assigned items (reads the legacy `project_vendor_owners` column — see the Status Change Notifications caveat).

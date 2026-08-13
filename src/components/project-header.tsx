@@ -70,9 +70,10 @@ export default function ProjectHeader({ project, vendors, people: initialPeople 
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [healthOverride, setHealthOverride] = useState<ProjectHealth | null>(null);
   const [allInitiatives, setAllInitiatives] = useState<Initiative[]>([]);
-  const { role, profileId, userPersonId } = useRole();
+  const { role, userPersonId } = useRole();
   const displayHealth = healthOverride ?? p.health;
-  const canDeleteProject = role === "super_admin" || (!!profileId && p.created_by === profileId);
+  // Matches projects_delete RLS: the project's Owner (team role) or a super_admin
+  const canDeleteProject = role === "super_admin" || (!!userPersonId && members.some((m) => m.person_id === userPersonId && m.role === "owner"));
   const [ownedInitiativeIds, setOwnedInitiativeIds] = useState<Set<string>>(new Set());
   // Admins can move the project to any initiative; others only to ones they own
   // (junction table or legacy owner_id). The current initiative is always listed

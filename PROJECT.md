@@ -130,9 +130,10 @@ src/
 | `comment_notifications` | Queued email-digest notifications (@mentions, owner comments, assignments, file shares, new-ticket alerts) |
 | `jira_tickets` | Imported Jira tickets from the U2 board (xprepls.atlassian.net) for the Release Roadmap — key, summary, status, release target, epic, labels, PR refs, local due_date (not synced back to Jira) |
 | `roadmap_votes` | Per-user 👍/👎 votes on roadmap cards (PK: profile + entity_type + entity_id; entity_type `raid_entry` \| `jira_ticket`) |
+| `item_mentions` | Per-task @mention records (entity_type + entity_id + person_id), written by the `record_item_mentions` comment trigger; powers the assigned/opened/mentioned limited view. RLS default-deny — read via `user_mentioned_in()` |
 
 ### Junction Tables
-`project_vendors`, `project_vendor_owners`, `project_members`, `initiative_owners`, `meeting_projects`, `meeting_attendees`, `intake_entities`, `correction_log`
+`project_vendors`, `project_vendor_owners` (legacy, no longer written), `project_members` (carries `role` — the Team Member role that drives task permissions), `initiative_owners`, `meeting_projects`, `meeting_attendees`, `intake_entities`, `correction_log`
 
 ### Views
 - `blocker_ages` — blockers with computed age
@@ -148,6 +149,7 @@ src/
 - `generate_vendor_agenda(vendor_id, limit)` — ranked vendor agenda with scoring
 - `generate_project_agenda(project_id, limit)` — ranked project agenda
 - `generate_project_agenda_from_selected(project_id, limit)` — agenda from items toggled for meeting (`include_in_meeting = true`)
+- `reassign_project_owner(project_id, person_id)` — super_admin only; demotes the current Owner to Project Manager, promotes the given person, syncs `projects.project_owner_id`
 
 ### Key Enums
 - **item_status:** pending, in_progress, complete, needs_verification, paused, at_risk, blocked, identified, assessing, mitigated, closed, rejected
@@ -189,7 +191,7 @@ All tables have row-level security policies scoped to `org_id` via the `user_org
 23. **Two-Flag Meeting Toggle** — separate `include_in_project_meeting` and `include_in_vendor_meeting` flags. Project and vendor agendas are independent.
 24. **Project Owner + Team Members (role-based)** — flat Team Members list (`project_members.role`) with a role dropdown per member: Owner (full incl. project delete, one per project, creator by default, super_admin-only reassignment via `reassign_project_owner` RPC), Project Manager (full, deletes any task), Product / QA (full, deletes own tasks), Member - Full (edits all, no create/delete), Member - Assigned / Vendor (limited to assigned/opened/mentioned tasks). DB-enforced via RLS; account super_admin/admin bypass.
 25. **Project Members** — `project_members` junction table for project visibility + the role above. Managed as Team Members in the Edit Project form (the Docs-tab People section was removed). Vendor "member sees everything" visibility was retired 2026-08-13 — limited roles see only assigned/opened/mentioned items, backed by the `item_mentions` table.
-26. **Status Change Notifications** — digest notifications on status changes to reporter/owner. Verify → Lead QA, Rejected → Vendor Owner.
+26. **Status Change Notifications** — digest notifications on status changes to reporter/owner. Verify → Lead QA, Rejected → Vendor Owner (routing reads the legacy role columns, which stopped being written 2026-08-13 — fires only where those were set before then; rewiring to team roles is an open follow-up).
 27. **Custom Invite/Reset Flow** — bypasses Supabase email, uses Gmail SMTP + server-side token verification to avoid PKCE issues.
 28. **Rejected Status** — new status option for items that fail QA review.
 29. **WYSIWYG Docs Editor** — TipTap rich text editor with table support for project documentation sections.
@@ -210,7 +212,7 @@ All tables have row-level security policies scoped to `org_id` via the `user_org
 44. **Vendor as Owner** — an action item's owner can be a person **or** a vendor (`owner_vendor_id`, mutually exclusive with `owner_id`). The Owner picker shows a "Vendors" group; the Owner column renders a purple vendor chip. Distinct from the `vendor_id` "associated vendor" field.
 45. **Project Link in Header** — the project's `asana_link` is surfaced top-right of the project header (opposite the title); admins set/edit it inline.
 46. **Project Modules** — per-project tab visibility via `projects.modules` (Action Items required; Blockers, RAID Log, Meeting Agenda, Docs, Roadmap optional). Toggled in the Edit Project form; tabs update live via a `project:modules-change` event. Default set: Action Items + RAID Log + Docs. The project Intake tab was removed entirely.
-47. **Delete Project** — red button in the Edit Project form, restricted to the project's creator or a super_admin (RLS `projects_delete` matches). Child items are detached (`ON DELETE SET NULL`), not deleted.
+47. **Delete Project** — red button in the Edit Project form, restricted to the project's **Owner** (team role) or a super_admin (RLS `projects_delete` matches; the creator rule was retired 2026-08-13). Child items are detached (`ON DELETE SET NULL`), not deleted.
 48. **Edit-Form Initiative Dropdown** — reassign a project's initiative from the Edit Project form; admins see all initiatives, other users only ones they own. The old inline header dropdown was removed.
 49. **Release Roadmap** — time-bucketed drag-and-drop board (Week/Month/Quarter/Year) fed by pending Decisions, imported U2 Jira tickets, and opt-in cross-project Decisions/Issues ("+ Projects" picker). Columns: Unscheduled, collapsible In Progress (status- and PR-driven), Overdue, time buckets, Later. Dropping a card sets `due_date` to the end of the period; card modal has details, PR/Jira links, and per-user 👍/👎 voting (`roadmap_votes`).
 50. **Jira Import (U2)** — one-off snapshot of R2-or-later tickets (Release Target field) into `jira_tickets` via `scripts/_import-jira-r2.mjs`; PR association mined from ed-cet/unified PR titles/branches via `scripts/_set-jira-pr-refs.mjs` (Jira's GitHub integration is unconnected). Live sync pending a `JIRA_API_TOKEN`.
@@ -326,12 +328,23 @@ All in `supabase/migrations/`:
 | `20260610000005_action_item_start_date.sql` | `start_date` on action_items, exposed via `action_item_ages` |
 | `20260610000006_action_item_owner_vendor.sql` | `owner_vendor_id` (vendor as owner) on action_items, exposed via `action_item_ages` |
 | `20260615000001_scope_vendor_project_visibility.sql` | Scope `projects_select` for vendors to `vendor_visible_project_ids()` (no more org-wide project leak) |
-| `20260701000001_vendor_project_member_item_visibility.sql` | Vendor `project_members` see ALL items in their projects; `user_project_member_ids()` helper added to vendor SELECT policies on action_items/raid_entries/blockers |
+| `20260701000001_vendor_project_member_item_visibility.sql` | Vendor `project_members` see ALL items in their projects; `user_project_member_ids()` helper added to vendor SELECT policies (RETIRED by `20260813000002`) |
+| `20260702000001_qa_role_enum.sql` | Add `qa` to the `user_role` enum |
+| `20260702000002_qa_role_policies.sql` | QA account-role policies: INSERT parity with `user`; project-member QA updates any task, deletes own (superseded by `20260813000002`'s role-aware rewrite) |
+| `20260727000001_raid_issue_type.sql` | `issue_type` column on raid_entries (Issues only) with CHECK constraint |
+| `20260727000002_raid_issue_type_ext_system.sql` | Add `ext_system` issue type for third-party-system defects |
+| `20260727000003_status_migrated_to_jira.sql` | Add `migrated_to_jira` to the `item_status` enum |
+| `20260728000001_issue_type_align_form.sql` | Align `issue_type` values with the public issue form's shared list (`lib/issue-types.ts`) |
 | `20260804000001_project_creator_delete.sql` | `projects_delete` policy: only the creator or a super_admin (admins lose blanket delete) |
 | `20260804000002_project_roadmap.sql` | `roadmap_enabled` boolean on projects (superseded same day by modules) |
 | `20260804000003_project_modules.sql` | `modules text[]` on projects (default `{actions,raid,docs}`), backfill + drop `roadmap_enabled` |
 | `20260804000004_jira_tickets_and_votes.sql` | `jira_tickets` table (imported U2 board tickets) + `roadmap_votes` table with RLS |
 | `20260804000005_jira_pr_refs.sql` | `has_pr` + `pr_numbers` on jira_tickets (mined from ed-cet/unified PRs) |
+| `20260806000001_raid_business_unit.sql` | `business_unit` column on raid_entries (Issues detail panel) |
+| `20260806000002_business_unit_split_product_development.sql` | Split the combined `product_development` unit into `product` + `development` |
+| `20260806000003_jira_plain_summary_description.sql` | `plain_summary`/`auto_summary` + description fields on jira_tickets for plain-language roadmap cards |
+| `20260806000004_jira_business_unit.sql` | `business_unit` on jira_tickets (roadmap-local, never pushed to Jira) |
+| `20260807000001_business_unit_add_finance.sql` | Widen the business-unit CHECKs to include `finance` |
 | `20260813000001_team_members.sql` | Team Members replace per-project roles: `role_label` on `project_members`, backfill of PM/Lead QA/Vendor Owners as labeled members, `project_members` UPDATE policy (+ qa parity on insert/delete), `user_is_project_admin` = owner OR team member OR initiative owner |
 | `20260813000002_member_roles.sql` | Member roles: `project_members.role` (owner/project_manager/product/qa/member_full/member_assigned/vendor) + backfill, one-owner index, creator-becomes-owner trigger, `reassign_project_owner` RPC (super_admin), `item_mentions` table + comment-mention trigger/backfill, full role-aware RLS rewrite on action_items/raid_entries/blockers + projects_delete (owner or super_admin) |
 
@@ -353,6 +366,6 @@ All docs live in this repo: [github.com/sparrowia/tracker](https://github.com/sp
 | [`CLAUDE.md`](https://github.com/sparrowia/tracker/blob/main/CLAUDE.md) | AI assistant instructions, conventions, and guardrails |
 | [`src/lib/types.ts`](https://github.com/sparrowia/tracker/blob/main/src/lib/types.ts) | All TypeScript interfaces and enums |
 | [`src/lib/utils.ts`](https://github.com/sparrowia/tracker/blob/main/src/lib/utils.ts) | Formatting helpers (priority colors, status badges, dates) |
-| [`supabase/migrations/`](https://github.com/sparrowia/tracker/tree/main/supabase/migrations) | Full database schema history (99 migrations) |
+| [`supabase/migrations/`](https://github.com/sparrowia/tracker/tree/main/supabase/migrations) | Full database schema history |
 | [`.env.local.example`](https://github.com/sparrowia/tracker/blob/main/.env.local.example) | Required environment variables |
 | [`PROMPT.md`](https://github.com/sparrowia/tracker/blob/main/PROMPT.md) | Bootstrap prompt for AI assistants |
