@@ -983,13 +983,19 @@ function BlockersPanel({
   function saveField(id: string, field: string, value: string) {
     const dbUpdates: Record<string, unknown> = {};
 
+    // See the equivalent in the actions board: a write filtered out by row-level
+    // security updates zero rows and reports SUCCESS, so the optimistic edit
+    // below has to be rolled back explicitly or it silently "reverts" on reload.
+    const previous = blockers.find((b) => b.id === id);
+    let notifyOnSuccess: (() => void) | null = null;
+
     if (field === "owner_id") {
       const newOwner = people.find((p) => p.id === value) || null;
       dbUpdates.owner_id = value || null;
       setBlockers((prev) => prev.map((b) => b.id === id ? { ...b, owner_id: value || null, owner: newOwner } as BlockerRow : b));
       if (value) {
         const blocker = blockers.find((b) => b.id === id);
-        if (blocker) notifyBlockerAssignment(value, blocker.title, blocker.id);
+        if (blocker) notifyOnSuccess = () => notifyBlockerAssignment(value, blocker.title, blocker.id);
       }
     } else if (field === "vendor_id") {
       const newVendor = vendors.find((v) => v.id === value) || null;
@@ -1003,11 +1009,21 @@ function BlockersPanel({
       } else {
         setBlockers((prev) => prev.map((b) => b.id === id ? { ...b, [field]: value } as BlockerRow : b));
       }
-      if (field === "status") { const b = blockers.find((b) => b.id === id); if (b) notifyBlockerStatusChange(b, value); }
+      if (field === "status") { const b = blockers.find((b) => b.id === id); if (b) notifyOnSuccess = () => notifyBlockerStatusChange(b, value); }
     }
 
-    supabase.from("blockers").update(dbUpdates).eq("id", id).then(({ error }) => {
-      if (error) console.error("Save failed:", error);
+    supabase.from("blockers").update(dbUpdates).eq("id", id).select("id").then(({ data, error }) => {
+      if (error || !data || data.length === 0) {
+        if (previous) setBlockers((prev) => prev.map((b) => b.id === id ? previous : b));
+        console.error("Save failed:", error ?? "update matched no rows (row-level security)");
+        window.alert(
+          error
+            ? `Couldn't save that change: ${error.message}`
+            : "Couldn't save that change. You may not have permission to edit this item on this project. Ask the project owner to add you as a member.",
+        );
+        return;
+      }
+      notifyOnSuccess?.();
     });
   }
 
@@ -1759,6 +1775,17 @@ function ActionItemsPanel({
   function saveField(id: string, field: string, value: string) {
     const dbUpdates: Record<string, unknown> = {};
 
+    // Snapshot for rollback. The edit lands in local state first so the UI stays
+    // responsive, but the write can still be rejected — and the rejection is not
+    // always an error. When row-level security filters the row out of the UPDATE,
+    // PostgREST updates zero rows and reports SUCCESS: `error` is null and
+    // nothing surfaces. That is what made a blocked assignee change look saved
+    // and then "revert" on the next page load.
+    const previous = actions.find((a) => a.id === id);
+    // Notifications wait for the write. Telling someone they have been assigned
+    // a task that was never actually reassigned is worse than telling them late.
+    let notifyOnSuccess: (() => void) | null = null;
+
     if (field === "owner_id") {
       const newOwner = people.find((p) => p.id === value) || null;
       dbUpdates.owner_id = value || null;
@@ -1767,7 +1794,7 @@ function ActionItemsPanel({
       // Notify new owner
       if (value) {
         const action = actions.find((a) => a.id === id);
-        if (action) notifyAssignment(value, action.title, "action item", action.id);
+        if (action) notifyOnSuccess = () => notifyAssignment(value, action.title, "action item", action.id);
       }
     } else if (field === "owner_vendor_id") {
       dbUpdates.owner_vendor_id = value || null;
@@ -1788,11 +1815,23 @@ function ActionItemsPanel({
       } else {
         setActions((prev) => prev.map((a) => a.id === id ? { ...a, [field]: coerced } as ActionRow : a));
       }
-      if (field === "status") { const a = actions.find((a) => a.id === id); if (a) notifyActionStatusChange(a, value); }
+      if (field === "status") { const a = actions.find((a) => a.id === id); if (a) notifyOnSuccess = () => notifyActionStatusChange(a, value); }
     }
 
-    supabase.from("action_items").update(dbUpdates).eq("id", id).then(({ error }) => {
-      if (error) console.error("Save failed:", error);
+    // `.select("id")` is what makes a silent rejection visible: without it the
+    // zero-row case is indistinguishable from a successful write.
+    supabase.from("action_items").update(dbUpdates).eq("id", id).select("id").then(({ data, error }) => {
+      if (error || !data || data.length === 0) {
+        if (previous) setActions((prev) => prev.map((a) => a.id === id ? previous : a));
+        console.error("Save failed:", error ?? "update matched no rows (row-level security)");
+        window.alert(
+          error
+            ? `Couldn't save that change: ${error.message}`
+            : "Couldn't save that change. You may not have permission to edit this item on this project. Ask the project owner to add you as a member.",
+        );
+        return;
+      }
+      notifyOnSuccess?.();
     });
   }
 
