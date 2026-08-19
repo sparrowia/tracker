@@ -12,7 +12,7 @@ import OwnerPicker from "@/components/owner-picker";
 import CommentThread from "@/components/comment-thread";
 import VendorPicker from "@/components/vendor-picker";
 import { useRole } from "@/components/role-context";
-import { canCreate, canDeleteItem, canEditItem } from "@/lib/permissions";
+import { canDeleteItem } from "@/lib/permissions";
 import ReminderButton from "@/components/reminder-button";
 
 type RaidRow = RaidEntry & { owner: Person | null; reporter: Person | null; vendor: Vendor | null };
@@ -34,6 +34,7 @@ interface RaidLogProps {
   registerAdder?: (fn: (item: RaidRow) => void) => () => void;
   searchFilter?: string;
   allowCreate?: boolean;
+  projectRole?: string | null;
   deepLinkItemId?: string | null;
 }
 
@@ -310,7 +311,7 @@ function ChangelogPanel({ entryId, orgId, people }: { entryId: string; orgId: st
   );
 }
 
-export default function RaidLog({ initialEntries, project, people, vendors, onPersonAdded, onVendorAdded, addUndo, onCountChange, intakeSourceMap = {}, onMeetingToggle, onConvertedToAction, onConvertedToBlocker, registerUpdater, registerAdder, searchFilter = "", allowCreate = true, deepLinkItemId }: RaidLogProps) {
+export default function RaidLog({ initialEntries, project, people, vendors, onPersonAdded, onVendorAdded, addUndo, onCountChange, intakeSourceMap = {}, onMeetingToggle, onConvertedToAction, onConvertedToBlocker, registerUpdater, registerAdder, searchFilter = "", allowCreate = true, projectRole = null, deepLinkItemId }: RaidLogProps) {
   const { role, profileId, userPersonId } = useRole();
   const [entries, setEntries] = useState<RaidRow[]>(initialEntries);
 
@@ -1145,7 +1146,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                 </div>
               )}
             </div>
-            {canCreate(role) && allowCreate && (
+            {allowCreate && (
               <button
                 onClick={() => { setAddingType(addingType === raidType ? null : raidType); setAddTitle(""); setAddPriority("medium"); setAddIssueType(""); }}
                 className="text-xs text-blue-300 hover:text-white transition-colors"
@@ -1823,7 +1824,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                             <path d="M15 3h6v6"/><path d="M10 14L21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
                           </svg>
                         </button>
-                        {canDeleteItem(role, profileId, entry, userPersonId) && (
+                        {canDeleteItem(role, profileId, entry, userPersonId, projectRole) && (
                           <button
                             onClick={() => handleDelete(entry.id)}
                             className="text-gray-400 hover:text-red-600 transition-colors"

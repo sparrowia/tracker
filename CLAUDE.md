@@ -176,7 +176,7 @@ All data tables (ActionItem, RaidEntry, Blocker, AgendaItem, SupportTicket, Proj
 
 ### Roles
 
-Five ACCOUNT-level roles defined as `user_role` enum in Supabase, stored on `profiles.role`. Since 2026-08-13 the account role sets the ceiling; what someone can do *inside a project* comes from their per-project Team Member role (see "Project Owner + Team Members"):
+Five ACCOUNT-level roles defined as `user_role` enum in Supabase, stored on `profiles.role`. Inside a project, an explicit Team Member role supersedes the account role; the account role is the fallback everywhere the person has no project membership (see "Project Owner + Team Members"):
 
 | Role | Data Access | Invite | Admin Pages | Notes |
 |------|------------|--------|-------------|-------|
@@ -184,7 +184,7 @@ Five ACCOUNT-level roles defined as `user_role` enum in Supabase, stored on `pro
 | **admin** | All org data | Yes (not super_admin) | Yes | Bypasses project roles for item edit/delete. Cannot delete projects (Owner or super_admin only) and cannot set Owner. |
 | **user** | All org data, EXCEPT projects where their team role is `member_assigned`/`vendor` (limited view) | No | No | Per-project rights from Team Member role; outside teams: create + edit own/created items, no delete. |
 | **qa** | Same as user | No | No | Treated identically to `user` in the task policies; per-project rights from Team Member role. |
-| **vendor** | Only items assigned to their vendor company or to them, items they opened, or items they are @mentioned in | No | No | No create, no delete; updates only on visible items. |
+| **vendor** | By default, only items assigned to their vendor company or to them, items they opened, or items they are @mentioned in | No | No | A project role may grant broader rights on that project only; otherwise no create/delete and updates only on visible items. |
 
 **Deleting projects:** `projects_delete` allows only the project's **Owner** (team role) or a super_admin — migration `20260813000002_member_roles.sql`; the earlier creator rule (`20260804000001`) is retired. The Delete Project button in the Edit Project form is gated the same way client-side.
 
@@ -746,13 +746,13 @@ Each project has a flat **Team Members** list (`project_members`) managed in the
 | `member_assigned` / `vendor` | **only assigned / opened / mentioned** | no | their visible tasks | no | no |
 
 - **Owner rules:** exactly one per project (unique partial index), defaults to the creator (`trg_project_creator_owner`), and only a **super_admin** may reassign — via the `reassign_project_owner(project_id, person_id)` RPC (old owner is demoted to `project_manager`). `projects.project_owner_id` is kept in sync as the single-owner pointer; `projects_delete` = owner or super_admin (the old creator rule is retired).
-- **Account-level `super_admin`/`admin` bypass project roles.** Internal non-members keep the old baseline (read all, edit own/created, no delete). Initiative owners retain project-admin reach via `user_is_initiative_owner`.
+- **The explicit project role supersedes account-level `user`/`qa`/`vendor` permissions for that project.** This deliberately permits a vendor account to be `member_full`, Product, QA, PM, or Owner on selected projects while remaining vendor-scoped elsewhere. Account-level `super_admin`/`admin` retain their emergency bypass. Internal non-members keep the old baseline (read all, edit own/created, no delete). Initiative owners retain project-admin reach via `user_is_initiative_owner` only where they have no explicit project role.
 - **Limited view** (`member_assigned`/`vendor`): "opened" = `created_by`/`reporter_id` (public-form/intake reports); "mentioned" = `item_mentions` rows written by the `record_item_mentions` trigger when a comment @mentions them. Mentioned people are still auto-added to the team (default role `member_assigned`).
 - The legacy columns `project_manager_id`/`lead_qa_id`/`project_vendor_owners` + `role_label` still exist with historical data and still drive notification routing (new-ticket → PM, Verify → Lead QA, Rejected → vendor owner), but the UI no longer writes them.
 
 ## Project Members
 
-`project_members` (with `role`) is the team list — see the matrix above. Managed in the Edit Project form; the Docs-tab "People" section was removed 2026-08-13. `user_visible_project_ids` RPC includes project_members (sidebar/dashboard scoping). The old "vendor project member sees every item in the project" behavior (`20260701000001`) is **retired** — vendor accounts and `member_assigned`/`vendor` roles see only assigned/opened/mentioned tasks, DB-enforced.
+`project_members` (with `role`) is the team list — see the matrix above. Managed in the Edit Project form; the Docs-tab "People" section was removed 2026-08-13. `user_visible_project_ids` RPC includes project_members (sidebar/dashboard scoping). Project role precedence is enforced by migration `20260819000001_project_role_precedence.sql`: full roles see/edit the whole project even on vendor accounts; `member_assigned` stays personal-only, and the project `vendor` role stays vendor/personal-scoped.
 
 ## Status Change Notifications
 

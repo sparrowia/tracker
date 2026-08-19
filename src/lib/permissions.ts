@@ -4,6 +4,16 @@ export function canCreate(role: UserRole): boolean {
   return role !== "vendor";
 }
 
+// Inside a project, the explicitly assigned project role is authoritative.
+// Account role is only the fallback when the person is not a team member.
+export function canCreateProjectItem(role: UserRole, projectRole: string | null): boolean {
+  if (role === "super_admin" || role === "admin") return true;
+  if (projectRole !== null) {
+    return ["owner", "project_manager", "product", "qa"].includes(projectRole);
+  }
+  return canCreate(role);
+}
+
 export function canDelete(role: UserRole): boolean {
   return role === "super_admin" || role === "admin";
 }
@@ -14,9 +24,17 @@ export function canDeleteItem(
   role: UserRole,
   profileId: string,
   item: { created_by?: string | null; owner_id?: string | null },
-  userPersonId: string | null
+  userPersonId: string | null,
+  projectRole: string | null = null,
 ): boolean {
   if (canDelete(role)) return true;
+  if (projectRole !== null) {
+    if (["owner", "project_manager"].includes(projectRole)) return true;
+    if (["product", "qa", "member_full"].includes(projectRole)) {
+      return !!(item.created_by && item.created_by === profileId);
+    }
+    return false;
+  }
   if (role !== "qa") return false;
   if (item.created_by && item.created_by === profileId) return true;
   if (userPersonId && item.owner_id === userPersonId) return true;
