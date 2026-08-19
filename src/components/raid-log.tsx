@@ -1491,11 +1491,15 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                       {raidUnreadIndicator(entry) === "updated" && <span className="flex-shrink-0" title="Updated">❗</span>}
                       {/* Title — inline editable for decisions */}
                       {entry.raid_type === "decision" ? (
-                        <span className="text-sm font-semibold min-w-0 flex-1 truncate" title={entry.title} onClick={(e) => e.stopPropagation()}>
-                          <InlineText value={entry.title} onSave={(v) => { if (v.trim()) saveField(entry.id, "title", v.trim()); }} placeholder="Decision title..." />
+                        <span className="relative h-5 min-w-0 flex-1" onClick={(e) => e.stopPropagation()}>
+                          <span className="absolute left-0 top-0 block w-full truncate text-sm font-semibold hover:z-20 hover:w-max hover:max-w-none hover:overflow-visible hover:bg-white hover:pr-2 hover:text-clip">
+                            <InlineText value={entry.title} onSave={(v) => { if (v.trim()) saveField(entry.id, "title", v.trim()); }} placeholder="Decision title..." />
+                          </span>
                         </span>
                       ) : (
-                        <span className={`text-sm font-semibold truncate min-w-0 flex-1 ${isChild ? "text-gray-700" : "text-gray-900"}`} title={entry.title}>{entry.title}</span>
+                        <span className="relative h-5 min-w-0 flex-1">
+                          <span className={`absolute left-0 top-0 block w-full truncate text-sm font-semibold hover:z-20 hover:w-max hover:max-w-none hover:overflow-visible hover:bg-white hover:pr-2 hover:text-clip ${isChild ? "text-gray-700" : "text-gray-900"}`}>{entry.title}</span>
+                        </span>
                       )}
                       {childCount > 0 && (
                         <span className="text-[10px] text-[#000000] bg-gray-200 rounded px-1.5 py-0.5 flex-shrink-0">{childCount}</span>
@@ -1885,8 +1889,9 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                   <div id={`raid-${entry.id}`} className="bg-white px-3 py-2 border-b border-gray-200 last:border-b-0 cursor-pointer hover:bg-gray-50" onClick={() => toggleExpand(entry.id)}>
                     <div className="flex items-center gap-4 min-w-0">
                       <span className="text-xs text-gray-500 font-medium w-[80px] flex-shrink-0">{typeLabel[entry.raid_type]}</span>
-                      <span className="text-sm font-semibold text-gray-900 truncate min-w-0" title={entry.title}>{entry.title}</span>
-                      <div className="flex-1" />
+                      <span className="relative h-5 min-w-0 flex-1">
+                        <span className="absolute left-0 top-0 block w-full truncate text-sm font-semibold text-gray-900 hover:z-20 hover:w-max hover:max-w-none hover:overflow-visible hover:bg-white hover:pr-2 hover:text-clip">{entry.title}</span>
+                      </span>
                       <div className="w-[68px] flex-shrink-0 flex justify-end">
                         <span className={`inline-flex px-1.5 py-0.5 text-xs rounded border ${priorityColor(entry.priority)}`}>{priorityLabel(entry.priority)}</span>
                       </div>
