@@ -607,9 +607,16 @@ Vendor-role users see an `action_items` / `raid_entries` / `blockers` item where
 - `created_by` (or `reporter_id` on raid_entries) matches them (they opened it), OR
 - they are @mentioned on it (`item_mentions` via `user_mentioned_in()`)
 - `user_person_id()` helper function maps `auth.uid()` to `people.id`
-- Migrations: `20260326000003_vendor_see_personal_items.sql` (historical), `20260813000002_member_roles.sql` (current policy set)
+- Migrations: `20260326000003_vendor_see_personal_items.sql` (historical), `20260813000002_member_roles.sql` (role-aware policy foundation), `20260819000001_project_role_precedence.sql` (current precedence rules)
 
-**The "project members see ALL items in their projects" behavior (`20260701000001`) is RETIRED (2026-08-13).** Adding a vendor to a project's team no longer reveals every item in that project — visibility stays assigned/opened/mentioned regardless of membership. To give a vendor person sight of a task, assign it to them (or their vendor) or @mention them in a comment. `user_project_member_ids()` still exists in the DB but is no longer referenced by the task SELECT policies. `agenda_items` vendor visibility stays `vendor_id`-only.
+**The old "every vendor who is a project member sees ALL items" behavior (`20260701000001`) is RETIRED (2026-08-13).** Visibility now follows the explicit `project_members.role`, which supersedes the person's broader account role for that project (`20260819000001_project_role_precedence.sql`):
+
+- Owner, Project Manager, Product, QA, and Member - Full roles see all project items, even when the person's account role is `vendor`.
+- Member - Assigned sees only items assigned to, opened by, or mentioning that person.
+- Vendor sees vendor-company items plus items assigned to, opened by, or mentioning that person.
+- The broader account role is the fallback only when the person has no explicit role in that project, so their normal access remains unchanged everywhere else.
+
+Account `admin` and `super_admin` roles retain their emergency bypass. `user_project_member_ids()` still exists in the DB but is no longer referenced by the task SELECT policies. `agenda_items` vendor visibility stays `vendor_id`-only.
 
 ## Password Reset
 
