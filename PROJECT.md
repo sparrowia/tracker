@@ -356,7 +356,7 @@ npm run build   # always build before pushing
 git push origin main   # auto-deploys to Vercel
 ```
 
-Do NOT use `npx vercel` — the CLI is scoped to the wrong Vercel team. Rely on git push auto-deploy only.
+Deploy through git rather than `vercel deploy`. The Vercel CLI reaches this project with `--scope edcetera`; use it for deployment status, environment variables, and `vercel redeploy`.
 
 ## Related Documentation
 

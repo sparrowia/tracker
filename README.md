@@ -34,4 +34,4 @@ npx supabase --workdir . db push
 
 ## Deployment
 
-Commits to `main` auto-deploy to production via Vercel. Always `npm run build` before pushing. Do **not** use `npx vercel` — the CLI is scoped to a different Vercel team.
+Commits to `main` auto-deploy to production via Vercel. Always `npm run build` before pushing. Deploy through git rather than `vercel deploy`; the Vercel CLI reaches this project with `--scope edcetera` and is available for deployment status, environment variables, and redeploys.
