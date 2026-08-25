@@ -91,12 +91,13 @@ export default function PublicIssueForm({
     setFiles((prev) => prev.filter((_, i) => i !== index));
   }
 
-  async function uploadFiles(): Promise<string[]> {
-    if (files.length === 0) return [];
+  async function uploadFiles(): Promise<{ urls: string[]; failures: string[] }> {
+    if (files.length === 0) return { urls: [], failures: [] };
 
     const supabase = getStorageClient();
 
     const urls: string[] = [];
+    const failures: string[] = [];
     for (const file of files) {
       const timestamp = Date.now();
       const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
@@ -106,14 +107,19 @@ export default function PublicIssueForm({
         .from("issue-attachments")
         .upload(path, file);
 
-      if (!uploadError) {
-        const { data: urlData } = supabase.storage
-          .from("issue-attachments")
-          .getPublicUrl(path);
-        urls.push(urlData.publicUrl);
+      if (uploadError) {
+        // Silently dropping the file would file the issue with no attachment
+        // and no warning — the reporter has to be told.
+        failures.push(`${file.name} (${uploadError.message})`);
+        continue;
       }
+
+      const { data: urlData } = supabase.storage
+        .from("issue-attachments")
+        .getPublicUrl(path);
+      urls.push(urlData.publicUrl);
     }
-    return urls;
+    return { urls, failures };
   }
 
   async function handleSubmit(andNew: boolean) {
@@ -131,7 +137,15 @@ export default function PublicIssueForm({
 
     setSubmitting(true);
     try {
-      const attachmentUrls = await uploadFiles();
+      const { urls: attachmentUrls, failures } = await uploadFiles();
+
+      if (failures.length > 0) {
+        setError(
+          `Could not upload ${failures.join("; ")}. Remove the file and submit again, or try a smaller file.`
+        );
+        setSubmitting(false);
+        return;
+      }
 
       const res = await fetch("/api/issues/submit", {
         method: "POST",

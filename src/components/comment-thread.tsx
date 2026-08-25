@@ -48,6 +48,19 @@ function initials(name: string): string {
   return name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
 }
 
+/**
+ * Storage object name for an attachment. Storage paths can't carry spaces or
+ * other special characters, so the display name and the stored name differ —
+ * every path has to be built here or uploads and deletes stop lining up.
+ */
+function storageName(fileName: string): string {
+  return fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
+}
+
+function attachmentPath(orgId: string, commentId: string, fileName: string): string {
+  return `${orgId}/${commentId}/${storageName(fileName)}`;
+}
+
 /** Render comment body with @mentions styled */
 function renderBody(body: string) {
   const regex = /@\[([^\]]+)\]\(([^)]+)\)/g;
@@ -81,6 +94,7 @@ export default function CommentThread({ raidEntryId, actionItemId, blockerId, or
   const [files, setFiles] = useState<File[]>([]);
   const [posting, setPosting] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [editorEmpty, setEditorEmpty] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editorRef = useRef<CommentEditorRef>(null);
   const supabase = createClient();
@@ -119,13 +133,17 @@ export default function CommentThread({ raidEntryId, actionItemId, blockerId, or
   }
 
   async function handlePost() {
-    if (!editorRef.current || editorRef.current.isEmpty() || posting) return;
+    if (posting) return;
+    const hasText = !!editorRef.current && !editorRef.current.isEmpty();
+    const pendingFiles = [...files]; // Capture before any async/state changes
+    // An attachment on its own is a valid comment — only bail when there is
+    // neither text nor a file.
+    if (!hasText && pendingFiles.length === 0) return;
     setPosting(true);
     setUploadError(null);
 
-    const storedBody = editorRef.current.getContent();
-    const mentionIds = editorRef.current.getMentionIds();
-    const pendingFiles = [...files]; // Capture before any async/state changes
+    const storedBody = hasText ? editorRef.current!.getContent() : "";
+    const mentionIds = hasText ? editorRef.current!.getMentionIds() : [];
 
     const insert: Record<string, unknown> = {
       org_id: orgId,
@@ -152,8 +170,7 @@ export default function CommentThread({ raidEntryId, actionItemId, blockerId, or
     const errors: string[] = [];
     if (pendingFiles.length > 0) {
       for (const file of pendingFiles) {
-        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-        const path = `${orgId}/${comment.id}/${safeName}`;
+        const path = attachmentPath(orgId, comment.id, file.name);
         const { error: uploadErr } = await supabase.storage
           .from("comment-attachments")
           .upload(path, file);
@@ -183,7 +200,7 @@ export default function CommentThread({ raidEntryId, actionItemId, blockerId, or
     }
 
     // Queue notifications
-    queueNotifications(comment.id, storedBody, mentionIds);
+    queueNotifications(comment.id, storedBody, mentionIds, pendingFiles.map((f) => f.name));
 
     // Bump parent item's updated_at so the ❗ indicator shows for other users
     // Read back DB-set updated_at (trigger overwrites to now()) and use it for own read_at
@@ -206,7 +223,8 @@ export default function CommentThread({ raidEntryId, actionItemId, blockerId, or
       supabase.from("activity_log").insert({ org_id: orgId, entity_type: "blocker", entity_id: blockerId, action: "comment", field_name: "comment", old_value: null, new_value: null, performed_by: profileId }).then(() => {});
     }
 
-    editorRef.current.clear();
+    editorRef.current?.clear();
+    setEditorEmpty(true);
     setFiles([]);
     setPosting(false);
 
@@ -214,7 +232,7 @@ export default function CommentThread({ raidEntryId, actionItemId, blockerId, or
     fetchComments();
   }
 
-  async function queueNotifications(commentId: string, commentBody: string, mentionIds: string[]) {
+  async function queueNotifications(commentId: string, commentBody: string, mentionIds: string[], fileNames: string[] = []) {
     const mentionedIds = new Set(mentionIds);
     const recipientIds = new Set(mentionedIds);
     if (ownerId) recipientIds.add(ownerId);
@@ -222,7 +240,13 @@ export default function CommentThread({ raidEntryId, actionItemId, blockerId, or
 
     if (recipientIds.size === 0) return;
 
-    const cleanBody = commentBody.replace(/@\[([^\]]+)\]\([^)]+\)/g, "@$1");
+    // A files-only comment has no text, so describe the attachment instead of
+    // sending an empty notification.
+    const cleanBody = commentBody.trim()
+      ? commentBody.replace(/@\[([^\]]+)\]\([^)]+\)/g, "@$1")
+      : fileNames.length > 0
+      ? `Attached ${fileNames.join(", ")}`
+      : "";
 
     const notifications: Record<string, unknown>[] = [];
     for (const personId of recipientIds) {
@@ -255,7 +279,7 @@ export default function CommentThread({ raidEntryId, actionItemId, blockerId, or
     const comment = comments.find((c) => c.id === commentId);
     if (!comment) return;
     if (comment.attachments.length > 0) {
-      const paths = comment.attachments.map((a) => `${orgId}/${commentId}/${a.file_name}`);
+      const paths = comment.attachments.map((a) => attachmentPath(orgId, commentId, a.file_name));
       await supabase.storage.from("comment-attachments").remove(paths);
     }
     const { error } = await supabase.from("comments").delete().eq("id", commentId);
@@ -289,6 +313,7 @@ export default function CommentThread({ raidEntryId, actionItemId, blockerId, or
               ref={editorRef}
               people={people}
               onSubmit={handlePost}
+              onEmptyChange={setEditorEmpty}
             />
           </div>
         </div>
@@ -342,8 +367,8 @@ export default function CommentThread({ raidEntryId, actionItemId, blockerId, or
           <span className="text-[10px] text-gray-400">{"\u2318"}+Enter to post</span>
           <button
             onClick={handlePost}
-            disabled={posting}
-            className="px-3 py-1 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50 transition-colors"
+            disabled={posting || (editorEmpty && files.length === 0)}
+            className="px-3 py-1 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {posting ? "Posting..." : "Post"}
           </button>
@@ -390,7 +415,9 @@ export default function CommentThread({ raidEntryId, actionItemId, blockerId, or
                     )}
                   </div>
 
-                  <p className="text-sm text-gray-700 mt-0.5 whitespace-pre-wrap">{renderBody(c.body)}</p>
+                  {c.body?.trim() && (
+                    <p className="text-sm text-gray-700 mt-0.5 whitespace-pre-wrap">{renderBody(c.body)}</p>
+                  )}
 
                   {c.attachments && c.attachments.length > 0 && (
                     <div className="space-y-2 mt-1.5">

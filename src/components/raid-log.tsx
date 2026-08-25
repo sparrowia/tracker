@@ -129,6 +129,28 @@ function ageFromDate(date: string): number {
   return Math.floor(diff / (1000 * 60 * 60 * 24));
 }
 
+/**
+ * Stored text rendered with line breaks, **bold** markdown and clickable URLs.
+ * The public issue form embeds attachment links straight into the description
+ * and the reported page URL into the notes, so any view that shows those
+ * fields has to linkify — otherwise the attachments read as dead text.
+ */
+function richTextHtml(value: string): string {
+  return value
+    // Quotes have to be escaped along with the angle brackets: a URL is
+    // interpolated into an href below, and anyone can write a description
+    // through the public issue form.
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;")
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-blue-600 underline hover:text-blue-800 break-all">$1</a>')
+    .replace(/\n/g, "<br />");
+}
+
+function RichText({ value, className }: { value: string; className?: string }) {
+  return <div className={className} dangerouslySetInnerHTML={{ __html: richTextHtml(value) }} />;
+}
+
 function InlineText({ value, onSave, placeholder, multiline }: { value: string; onSave: (v: string) => void; placeholder?: string; multiline?: boolean }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
@@ -147,17 +169,11 @@ function InlineText({ value, onSave, placeholder, multiline }: { value: string; 
 
   if (!editing) {
     if (multiline && value) {
-      // Render with line breaks, bold markdown, and clickable URLs
-      const html = value
-        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-        .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-        .replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-blue-600 underline hover:text-blue-800 break-all">$1</a>')
-        .replace(/\n/g, "<br />");
       return (
         <div
           className="text-gray-900 text-sm mt-0.5 hover:bg-gray-100 rounded cursor-pointer px-1 -mx-1 py-0.5 break-words overflow-hidden"
           onClick={(e) => { if ((e.target as HTMLElement).tagName === "A") return; e.stopPropagation(); setEditing(true); }}
-          dangerouslySetInnerHTML={{ __html: html }}
+          dangerouslySetInnerHTML={{ __html: richTextHtml(value) }}
         />
       );
     }
@@ -1927,11 +1943,19 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                       <div className="grid grid-cols-2 gap-4 px-5 py-3 border-t border-gray-200">
                         <div className="rounded border border-gray-200 bg-white p-3">
                           <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Description</span>
-                          <div className="text-sm text-gray-800 whitespace-pre-wrap mt-1">{entry.description || <span className="text-gray-400 italic">No description</span>}</div>
+                          {entry.description ? (
+                            <RichText value={entry.description} className="text-sm text-gray-800 mt-1 break-words overflow-hidden" />
+                          ) : (
+                            <div className="text-sm text-gray-400 italic mt-1">No description</div>
+                          )}
                         </div>
                         <div className="rounded border border-gray-200 bg-white p-3">
                           <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">Meeting Notes</span>
-                          <div className="text-sm text-gray-800 whitespace-pre-wrap mt-1">{entry.notes || <span className="text-gray-400 italic">No notes</span>}</div>
+                          {entry.notes ? (
+                            <RichText value={entry.notes} className="text-sm text-gray-800 mt-1 break-words overflow-hidden" />
+                          ) : (
+                            <div className="text-sm text-gray-400 italic mt-1">No notes</div>
+                          )}
                         </div>
                       </div>
                       {entry.raid_type === "issue" && entry.next_steps && (

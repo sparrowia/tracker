@@ -120,10 +120,13 @@ interface CommentEditorProps {
   people: Person[];
   placeholder?: string;
   onSubmit?: () => void;
+  /** Fires whenever the editor becomes empty or non-empty, so the parent can
+      enable/disable its own Post button. */
+  onEmptyChange?: (empty: boolean) => void;
 }
 
 const CommentEditor = forwardRef<CommentEditorRef, CommentEditorProps>(
-  ({ people, placeholder = "Add a comment... (@ to mention)", onSubmit }, ref) => {
+  ({ people, placeholder = "Add a comment... (@ to mention)", onSubmit, onEmptyChange }, ref) => {
     const peopleRef = useRef(people);
     peopleRef.current = people;
 
@@ -220,6 +223,18 @@ const CommentEditor = forwardRef<CommentEditorRef, CommentEditorProps>(
         },
       },
     });
+
+    // Let the parent enable/disable its own Post button as the editor fills and
+    // empties. A fresh editor is empty, which is the parent's initial state, so
+    // there is nothing to report until the first edit.
+    useEffect(() => {
+      if (!editor || !onEmptyChange) return;
+      const report = () => onEmptyChange(editor.isEmpty);
+      editor.on("update", report);
+      return () => {
+        editor.off("update", report);
+      };
+    }, [editor, onEmptyChange]);
 
     useImperativeHandle(ref, () => ({
       getContent: () => {
