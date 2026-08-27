@@ -649,6 +649,8 @@ nesting remains independent through `parent_id`. The Issues header exposes
 folder leaves its issues in the normal list with no visible "Ungrouped" row).
 Issue rows can be dragged onto a folder header to move them into that folder;
 dropping a child promotes it to a top-level issue while preserving its children.
+Issues inside a folder are indented beneath its header, with their children
+indented one additional level.
 In the multi-select `Nest under...`
 dropdown, folders appear first alphabetically, followed by top-level tasks that
 already have children, also alphabetically.

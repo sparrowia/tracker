@@ -1505,13 +1505,13 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
               }
               type OrderedRow =
                 | { kind: "folder"; folder: IssueFolder; count: number }
-                | { kind: "entry"; entry: RaidRow; isChild: boolean };
+                | { kind: "entry"; entry: RaidRow; isChild: boolean; inFolder: boolean };
               const ordered: OrderedRow[] = [];
-              const pushParent = (parent: RaidRow) => {
-                ordered.push({ kind: "entry", entry: parent, isChild: false });
+              const pushParent = (parent: RaidRow, inFolder = false) => {
+                ordered.push({ kind: "entry", entry: parent, isChild: false, inFolder });
                 if (expandedParents.has(parent.id)) {
                   const children = childMap.get(parent.id);
-                  if (children) children.forEach((child) => ordered.push({ kind: "entry", entry: child, isChild: true }));
+                  if (children) children.forEach((child) => ordered.push({ kind: "entry", entry: child, isChild: true, inFolder }));
                 }
               };
 
@@ -1521,12 +1521,12 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                 for (const folder of sortedFolders) {
                   const folderItems = parentItems.filter((entry) => entry.folder_id === folder.id);
                   ordered.push({ kind: "folder", folder, count: folderItems.length });
-                  if (!collapsedFolderIds.has(folder.id)) folderItems.forEach(pushParent);
+                  if (!collapsedFolderIds.has(folder.id)) folderItems.forEach((entry) => pushParent(entry, true));
                 }
                 const ungrouped = parentItems.filter((entry) => !entry.folder_id || !folderIds.has(entry.folder_id));
-                ungrouped.forEach(pushParent);
+                ungrouped.forEach((entry) => pushParent(entry));
               } else {
-                parentItems.forEach(pushParent);
+                parentItems.forEach((entry) => pushParent(entry));
               }
 
               // Include orphaned children (parent filtered out or in a different
@@ -1534,7 +1534,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
               for (const entry of items) {
                 const rendered = ordered.some((row) => row.kind === "entry" && row.entry.id === entry.id);
                 if (entry.parent_id && !rendered && !parentItems.some((parent) => parent.id === entry.parent_id)) {
-                  ordered.push({ kind: "entry", entry, isChild: true });
+                  ordered.push({ kind: "entry", entry, isChild: true, inFolder: false });
                 }
               }
               visibleIdsRef.current = ordered.filter((row): row is Extract<OrderedRow, { kind: "entry" }> => row.kind === "entry").map((row) => row.entry.id);
@@ -1580,7 +1580,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                 );
               }
 
-              const { entry, isChild } = row;
+              const { entry, isChild, inFolder } = row;
               const isExpanded = expandedId === entry.id;
               const badge = statusBadge(entry.status);
               const age = ageFromDate(entry.first_flagged_at);
@@ -1598,7 +1598,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                   {/* Collapsed row */}
                   <div id={`raid-${entry.id}`}
                     className={`border-b last:border-b-0 cursor-pointer relative overflow-hidden ${isResolving ? "bg-green-100 opacity-0 border-transparent" : isDragging ? "opacity-40 bg-white border-gray-400" : isDropNest ? "bg-blue-50 border-blue-300" : selectedIds.has(entry.id) ? "bg-blue-50 border-gray-400" : isClosed ? "bg-gray-50 hover:bg-gray-100 border-gray-400" : "bg-white hover:bg-gray-50 border-gray-400"}`}
-                    style={{ transition: isResolving ? "all 350ms ease-out" : undefined, paddingLeft: isChild ? "2rem" : "0.75rem", paddingRight: "0.75rem", ...(isResolving ? { maxHeight: 0, paddingTop: 0, paddingBottom: 0, overflow: "hidden" } : { maxHeight: 200, paddingTop: "0.5rem", paddingBottom: "0.5rem" }) }}
+                    style={{ transition: isResolving ? "all 350ms ease-out" : undefined, paddingLeft: inFolder ? (isChild ? "3.25rem" : "2rem") : (isChild ? "2rem" : "0.75rem"), paddingRight: "0.75rem", ...(isResolving ? { maxHeight: 0, paddingTop: 0, paddingBottom: 0, overflow: "hidden" } : { maxHeight: 200, paddingTop: "0.5rem", paddingBottom: "0.5rem" }) }}
                     onClick={() => toggleExpand(entry.id)}
                     draggable={entry.raid_type !== "decision"}
                     onDragStart={entry.raid_type !== "decision" ? (e) => handleDragStart(entry.id, e) : undefined}
