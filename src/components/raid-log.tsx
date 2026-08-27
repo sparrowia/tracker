@@ -455,7 +455,11 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
       .then(({ data, error }) => {
         if (!active) return;
         if (error) console.error("Load issue folders failed:", error);
-        else setIssueFolders((data as IssueFolder[]) || []);
+        else {
+          const folders = (data as IssueFolder[]) || [];
+          setIssueFolders(folders);
+          setCollapsedFolderIds(new Set(folders.map((folder) => folder.id)));
+        }
       });
     return () => { active = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1210,6 +1214,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
       return;
     }
     setIssueFolders((prev) => [...prev, data as IssueFolder].sort((a, b) => a.title.localeCompare(b.title)));
+    setCollapsedFolderIds((prev) => new Set([...prev, (data as IssueFolder).id]));
   }
 
   async function handleRenameFolder(id: string, title: string) {
