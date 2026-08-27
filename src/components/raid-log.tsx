@@ -1444,7 +1444,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                 childMap.set(key, children.sort((a, b) => a.sort_order - b.sort_order));
               }
               type OrderedRow =
-                | { kind: "folder"; folder: IssueFolder | null; count: number }
+                | { kind: "folder"; folder: IssueFolder; count: number }
                 | { kind: "entry"; entry: RaidRow; isChild: boolean };
               const ordered: OrderedRow[] = [];
               const pushParent = (parent: RaidRow) => {
@@ -1464,10 +1464,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                   if (!collapsedFolderIds.has(folder.id)) folderItems.forEach(pushParent);
                 }
                 const ungrouped = parentItems.filter((entry) => !entry.folder_id || !folderIds.has(entry.folder_id));
-                if (ungrouped.length > 0) {
-                  ordered.push({ kind: "folder", folder: null, count: ungrouped.length });
-                  ungrouped.forEach(pushParent);
-                }
+                ungrouped.forEach(pushParent);
               } else {
                 parentItems.forEach(pushParent);
               }
@@ -1485,26 +1482,24 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
             })().map((row) => {
               if (row.kind === "folder") {
                 const folder = row.folder;
-                const isCollapsed = folder ? collapsedFolderIds.has(folder.id) : false;
+                const isCollapsed = collapsedFolderIds.has(folder.id);
                 return (
-                  <div key={folder ? `folder-${folder.id}` : "folder-ungrouped"} className="flex items-center gap-2 bg-gray-100 border-b border-gray-300 px-3 py-1.5">
-                    {folder ? (
-                      <button
-                        onClick={() => setCollapsedFolderIds((prev) => {
-                          const next = new Set(prev);
-                          if (next.has(folder.id)) next.delete(folder.id); else next.add(folder.id);
-                          return next;
-                        })}
-                        className="text-gray-500 hover:text-gray-800"
-                        title={isCollapsed ? "Expand folder" : "Collapse folder"}
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform ${isCollapsed ? "" : "rotate-90"}`}><path d="m9 18 6-6-6-6"/></svg>
-                      </button>
-                    ) : <span className="w-3" />}
+                  <div key={`folder-${folder.id}`} className="flex items-center gap-2 bg-gray-100 border-b border-gray-300 px-3 py-1.5">
+                    <button
+                      onClick={() => setCollapsedFolderIds((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(folder.id)) next.delete(folder.id); else next.add(folder.id);
+                        return next;
+                      })}
+                      className="text-gray-500 hover:text-gray-800"
+                      title={isCollapsed ? "Expand folder" : "Collapse folder"}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform ${isCollapsed ? "" : "rotate-90"}`}><path d="m9 18 6-6-6-6"/></svg>
+                    </button>
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-amber-600"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
-                    <span className="text-[11px] font-bold text-gray-700 uppercase tracking-wide">{folder ? folder.title : "Ungrouped"}</span>
+                    <span className="text-[11px] font-bold text-gray-700 uppercase tracking-wide">{folder.title}</span>
                     <span className="text-[10px] text-gray-500 bg-gray-200 rounded px-1.5 py-0.5">{row.count}</span>
-                    {folder && allowCreate && (
+                    {allowCreate && (
                       <div className="ml-auto flex items-center gap-2">
                         <button onClick={() => { const title = window.prompt("Rename folder:", folder.title); if (title) handleRenameFolder(folder.id, title); }} className="text-[10px] text-gray-400 hover:text-gray-700">Rename</button>
                         <button onClick={() => handleDeleteFolder(folder.id)} className="text-[10px] text-gray-400 hover:text-red-600">Delete</button>

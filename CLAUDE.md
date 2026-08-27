@@ -646,7 +646,8 @@ entries themselves. `issue_folders` stores the folder records and the nullable
 `raid_entries.folder_id` associates a top-level issue with a folder; parent/child
 nesting remains independent through `parent_id`. The Issues header exposes
 `+ Add Folder`, and folders can be collapsed, renamed, or deleted (deleting a
-folder leaves its issues ungrouped). In the multi-select `Nest under...`
+folder leaves its issues in the normal list with no visible "Ungrouped" row).
+In the multi-select `Nest under...`
 dropdown, folders appear first alphabetically, followed by top-level tasks that
 already have children, also alphabetically.
 
