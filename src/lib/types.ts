@@ -269,6 +269,17 @@ export interface ActionItemSection {
   updated_at: string;
 }
 
+export interface IssueFolder {
+  id: string;
+  org_id: string;
+  project_id: string;
+  title: string;
+  sort_order: number;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface RaidEntry {
   id: string;
   org_id: string;
@@ -298,6 +309,9 @@ export interface RaidEntry {
   include_in_meeting: boolean;
   include_in_project_meeting: boolean;
   include_in_vendor_meeting: boolean;
+  /** Issues only — optional organizational folder. Parent/subtask nesting is
+   *  still represented independently by parent_id. */
+  folder_id: string | null;
   parent_id: string | null;
   sort_order: number;
   first_flagged_at: string;

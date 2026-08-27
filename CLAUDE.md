@@ -639,6 +639,17 @@ Action items, blockers, and RAID entries support multi-select:
   - Delete button (confirmation dialog)
   - Clear selection
 
+## Issues Log Folders
+
+Issues can be organized into project-scoped folders without becoming RAID
+entries themselves. `issue_folders` stores the folder records and the nullable
+`raid_entries.folder_id` associates a top-level issue with a folder; parent/child
+nesting remains independent through `parent_id`. The Issues header exposes
+`+ Add Folder`, and folders can be collapsed, renamed, or deleted (deleting a
+folder leaves its issues ungrouped). In the multi-select `Nest under...`
+dropdown, folders appear first alphabetically, followed by top-level tasks that
+already have children, also alphabetically.
+
 ## Intake Review (Extraction)
 
 Single-card view with category tabs:

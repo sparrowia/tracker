@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { priorityColor, priorityLabel, statusBadge, formatAge, formatDateShort, syncUrlParams } from "@/lib/utils";
 import { shiftSelectRange } from "@/lib/selection";
-import type { RaidEntry, RaidType, IssueType, PriorityLevel, ItemStatus, Person, Vendor, Project } from "@/lib/types";
+import type { RaidEntry, RaidType, IssueType, PriorityLevel, ItemStatus, Person, Vendor, Project, IssueFolder } from "@/lib/types";
 import { ISSUE_TYPE_OPTIONS, ISSUE_TYPE_LABEL } from "@/lib/issue-types";
 import { BUSINESS_UNIT_OPTIONS, BUSINESS_UNIT_LABEL } from "@/lib/business-units";
 import OwnerPicker from "@/components/owner-picker";
@@ -248,7 +248,7 @@ const FIELD_LABELS: Record<string, string> = {
   status: "Status", priority: "Priority", owner_id: "Owner", reporter_id: "Reporter",
   vendor_id: "Vendor", raid_type: "Type", issue_type: "Issue Type", impact: "Impact", business_unit: "Business Unit", due_date: "Due Date",
   decision_date: "Decision Date", title: "Title", description: "Description",
-  notes: "Notes", next_steps: "Next Steps", parent_id: "Parent", comment: "Comment",
+  notes: "Notes", next_steps: "Next Steps", folder_id: "Folder", parent_id: "Parent", comment: "Comment",
   include_in_project_meeting: "Project Meeting", include_in_vendor_meeting: "Vendor Meeting", resolved_at: "Resolved",
 };
 
@@ -330,6 +330,8 @@ function ChangelogPanel({ entryId, orgId, people }: { entryId: string; orgId: st
 export default function RaidLog({ initialEntries, project, people, vendors, onPersonAdded, onVendorAdded, addUndo, onCountChange, intakeSourceMap = {}, onMeetingToggle, onConvertedToAction, onConvertedToBlocker, registerUpdater, registerAdder, searchFilter = "", allowCreate = true, projectRole = null, deepLinkItemId }: RaidLogProps) {
   const { role, profileId, userPersonId } = useRole();
   const [entries, setEntries] = useState<RaidRow[]>(initialEntries);
+  const [issueFolders, setIssueFolders] = useState<IssueFolder[]>([]);
+  const [collapsedFolderIds, setCollapsedFolderIds] = useState<Set<string>>(new Set());
 
   const activeEntries = entries.filter((e) => !e.resolved_at);
   const archivedEntries = entries.filter((e) => e.resolved_at).sort((a, b) => new Date(b.resolved_at!).getTime() - new Date(a.resolved_at!).getTime());
@@ -441,6 +443,22 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
   const [moveProjects, setMoveProjects] = useState<{ id: string; name: string; slug: string }[]>([]);
   const [moveTargetId, setMoveTargetId] = useState("");
   const supabase = createClient();
+
+  useEffect(() => {
+    let active = true;
+    supabase
+      .from("issue_folders")
+      .select("*")
+      .eq("project_id", project.id)
+      .order("title")
+      .then(({ data, error }) => {
+        if (!active) return;
+        if (error) console.error("Load issue folders failed:", error);
+        else setIssueFolders((data as IssueFolder[]) || []);
+      });
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project.id]);
 
   // Fetch read timestamps for unread indicators
   useEffect(() => {
@@ -977,7 +995,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
     if (!movingId || !moveTargetId) return;
     const entry = entries.find((e) => e.id === movingId);
     if (!entry) return;
-    const { error } = await supabase.from("raid_entries").update({ project_id: moveTargetId, parent_id: null }).eq("id", movingId);
+    const { error } = await supabase.from("raid_entries").update({ project_id: moveTargetId, parent_id: null, folder_id: null }).eq("id", movingId);
     if (!error) {
       // Also move children
       const children = entries.filter((e) => e.parent_id === movingId);
@@ -988,7 +1006,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
       if (expandedId === movingId) setExpandedId(null);
       const targetName = moveProjects.find((p) => p.id === moveTargetId)?.name || "another project";
       addUndo(`Moved "${entry.title}" to ${targetName}`, async () => {
-        await supabase.from("raid_entries").update({ project_id: project.id, parent_id: entry.parent_id }).eq("id", movingId);
+        await supabase.from("raid_entries").update({ project_id: project.id, parent_id: entry.parent_id, folder_id: entry.folder_id }).eq("id", movingId);
         if (children.length > 0) {
           await supabase.from("raid_entries").update({ project_id: project.id }).in("id", children.map((c) => c.id));
         }
@@ -1037,6 +1055,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
     if (!draggedEntry || !targetEntry) return;
 
     let newParentId: string | null = null;
+    let newFolderId: string | null = null;
     let newSortOrder = targetEntry.sort_order;
 
     if (zone === "nest") {
@@ -1054,9 +1073,12 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
     } else {
       // above/below — sibling of target
       newParentId = targetEntry.parent_id;
+      // A top-level row follows the target into its folder. Children inherit
+      // their visual grouping from their parent and never need a folder id.
+      newFolderId = newParentId ? null : targetEntry.folder_id;
       // Get siblings sorted
       const siblings = entries
-        .filter((e) => e.parent_id === newParentId && e.raid_type === targetEntry.raid_type && e.id !== draggedId && !e.resolved_at)
+        .filter((e) => e.parent_id === newParentId && (newParentId !== null || e.folder_id === newFolderId) && e.raid_type === targetEntry.raid_type && e.id !== draggedId && !e.resolved_at)
         .sort((a, b) => a.sort_order - b.sort_order);
       const targetIdx = siblings.findIndex((e) => e.id === targetId);
       if (zone === "above") {
@@ -1069,9 +1091,9 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
     }
 
     // Update DB
-    const { error } = await supabase.from("raid_entries").update({ parent_id: newParentId, sort_order: newSortOrder }).eq("id", draggedId);
+    const { error } = await supabase.from("raid_entries").update({ parent_id: newParentId, folder_id: newFolderId, sort_order: newSortOrder }).eq("id", draggedId);
     if (!error) {
-      setEntries((prev) => prev.map((e) => e.id === draggedId ? { ...e, parent_id: newParentId, sort_order: newSortOrder } : e));
+      setEntries((prev) => prev.map((e) => e.id === draggedId ? { ...e, parent_id: newParentId, folder_id: newFolderId, sort_order: newSortOrder } : e));
     }
 
     setDraggedId(null);
@@ -1118,6 +1140,50 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
     }
   }
 
+  async function handleAddFolder() {
+    const title = window.prompt("New folder name:");
+    if (!title?.trim()) return;
+    const nextOrder = issueFolders.length > 0 ? Math.max(...issueFolders.map((folder) => folder.sort_order || 0)) + 1 : 0;
+    const { data, error } = await supabase
+      .from("issue_folders")
+      .insert({ org_id: project.org_id, project_id: project.id, title: title.trim(), sort_order: nextOrder, created_by: profileId })
+      .select("*")
+      .single();
+    if (error) {
+      console.error("Add issue folder failed:", error);
+      window.alert("The folder could not be created. Please try again.");
+      return;
+    }
+    setIssueFolders((prev) => [...prev, data as IssueFolder].sort((a, b) => a.title.localeCompare(b.title)));
+  }
+
+  async function handleRenameFolder(id: string, title: string) {
+    const clean = title.trim();
+    if (!clean) return;
+    const previous = issueFolders.find((folder) => folder.id === id)?.title;
+    setIssueFolders((prev) => prev.map((folder) => folder.id === id ? { ...folder, title: clean } : folder));
+    const { data, error } = await supabase.from("issue_folders").update({ title: clean }).eq("id", id).select("id").single();
+    if (error || !data) {
+      if (previous) setIssueFolders((prev) => prev.map((folder) => folder.id === id ? { ...folder, title: previous } : folder));
+      window.alert("The folder was not renamed. You may not have permission to change it.");
+    }
+  }
+
+  async function handleDeleteFolder(id: string) {
+    const folder = issueFolders.find((candidate) => candidate.id === id);
+    if (!folder) return;
+    if (!window.confirm(`Delete folder "${folder.title}"? Its issues will become ungrouped; no issues will be deleted.`)) return;
+    const { error } = await supabase.from("issue_folders").delete().eq("id", id);
+    if (error) {
+      console.error("Delete issue folder failed:", error);
+      window.alert("The folder could not be deleted.");
+      return;
+    }
+    setIssueFolders((prev) => prev.filter((candidate) => candidate.id !== id));
+    setCollapsedFolderIds((prev) => { const next = new Set(prev); next.delete(id); return next; });
+    setEntries((prev) => prev.map((entry) => entry.folder_id === id ? { ...entry, folder_id: null } : entry));
+  }
+
   function renderQuadrant(label: string, raidType: RaidType, allItems: RaidRow[]) {
     const items = applyFilters(allItems);
     // Type-scoped columns (e.g. the Issues "Type" column) never render outside their own quadrant.
@@ -1129,6 +1195,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
       new Map(allItems.filter((e) => e.owner).map((e) => [e.owner!.id, e.owner!.full_name])).entries()
     ).sort((a, b) => a[1].localeCompare(b[1]));
     const filteredCount = items.length !== allItems.length;
+    const showFolderRows = raidType === "issue" && issueFolders.length > 0;
     return (
       <div className="rounded-lg border border-gray-300 overflow-hidden">
         <div className="bg-gray-700 px-4 h-9 flex items-center justify-between">
@@ -1163,12 +1230,22 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
               )}
             </div>
             {allowCreate && (
-              <button
-                onClick={() => { setAddingType(addingType === raidType ? null : raidType); setAddTitle(""); setAddPriority("medium"); setAddIssueType(""); }}
-                className="text-xs text-blue-300 hover:text-white transition-colors"
-              >
-                + Add {label.slice(0, -1)}
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => { setAddingType(addingType === raidType ? null : raidType); setAddTitle(""); setAddPriority("medium"); setAddIssueType(""); }}
+                  className="text-xs text-blue-300 hover:text-white transition-colors"
+                >
+                  + Add {label.slice(0, -1)}
+                </button>
+                {raidType === "issue" && (
+                  <button
+                    onClick={handleAddFolder}
+                    className="text-xs text-blue-300 hover:text-white transition-colors"
+                  >
+                    + Add Folder
+                  </button>
+                )}
+              </div>
             )}
           </div>
         </div>
@@ -1290,9 +1367,9 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
         )}
         {items.length === 0 && allItems.length > 0 && hasActiveFilters ? (
           <p className="text-sm text-gray-400 p-4">No items match filters.</p>
-        ) : items.length === 0 && addingType !== raidType ? (
+        ) : items.length === 0 && !showFolderRows && addingType !== raidType ? (
           <p className="text-sm text-gray-400 p-4">None</p>
-        ) : items.length === 0 ? null : (
+        ) : items.length === 0 && !showFolderRows ? null : (
           <div>
             <div className="bg-gray-50 px-3 py-1 border-b border-gray-300">
               <div className="flex items-center gap-4">
@@ -1366,23 +1443,78 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
               for (const [key, children] of childMap) {
                 childMap.set(key, children.sort((a, b) => a.sort_order - b.sort_order));
               }
-              const ordered: { entry: RaidRow; isChild: boolean }[] = [];
-              for (const p of parentItems) {
-                ordered.push({ entry: p, isChild: false });
-                if (expandedParents.has(p.id)) {
-                  const children = childMap.get(p.id);
-                  if (children) children.forEach((c) => ordered.push({ entry: c, isChild: true }));
+              type OrderedRow =
+                | { kind: "folder"; folder: IssueFolder | null; count: number }
+                | { kind: "entry"; entry: RaidRow; isChild: boolean };
+              const ordered: OrderedRow[] = [];
+              const pushParent = (parent: RaidRow) => {
+                ordered.push({ kind: "entry", entry: parent, isChild: false });
+                if (expandedParents.has(parent.id)) {
+                  const children = childMap.get(parent.id);
+                  if (children) children.forEach((child) => ordered.push({ kind: "entry", entry: child, isChild: true }));
+                }
+              };
+
+              if (showFolderRows) {
+                const folderIds = new Set(issueFolders.map((folder) => folder.id));
+                const sortedFolders = [...issueFolders].sort((a, b) => a.title.localeCompare(b.title));
+                for (const folder of sortedFolders) {
+                  const folderItems = parentItems.filter((entry) => entry.folder_id === folder.id);
+                  ordered.push({ kind: "folder", folder, count: folderItems.length });
+                  if (!collapsedFolderIds.has(folder.id)) folderItems.forEach(pushParent);
+                }
+                const ungrouped = parentItems.filter((entry) => !entry.folder_id || !folderIds.has(entry.folder_id));
+                if (ungrouped.length > 0) {
+                  ordered.push({ kind: "folder", folder: null, count: ungrouped.length });
+                  ungrouped.forEach(pushParent);
+                }
+              } else {
+                parentItems.forEach(pushParent);
+              }
+
+              // Include orphaned children (parent filtered out or in a different
+              // type — not children hidden by a collapsed parent or folder).
+              for (const entry of items) {
+                const rendered = ordered.some((row) => row.kind === "entry" && row.entry.id === entry.id);
+                if (entry.parent_id && !rendered && !parentItems.some((parent) => parent.id === entry.parent_id)) {
+                  ordered.push({ kind: "entry", entry, isChild: true });
                 }
               }
-              // Include orphaned children (parent filtered out or in different type — not just collapsed)
-              for (const e of items) {
-                if (e.parent_id && !ordered.some((o) => o.entry.id === e.id) && !parentItems.some((p) => p.id === e.parent_id)) {
-                  ordered.push({ entry: e, isChild: true });
-                }
-              }
-              visibleIdsRef.current = ordered.map((o) => o.entry.id);
+              visibleIdsRef.current = ordered.filter((row): row is Extract<OrderedRow, { kind: "entry" }> => row.kind === "entry").map((row) => row.entry.id);
               return ordered;
-            })().map(({ entry, isChild }) => {
+            })().map((row) => {
+              if (row.kind === "folder") {
+                const folder = row.folder;
+                const isCollapsed = folder ? collapsedFolderIds.has(folder.id) : false;
+                return (
+                  <div key={folder ? `folder-${folder.id}` : "folder-ungrouped"} className="flex items-center gap-2 bg-gray-100 border-b border-gray-300 px-3 py-1.5">
+                    {folder ? (
+                      <button
+                        onClick={() => setCollapsedFolderIds((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(folder.id)) next.delete(folder.id); else next.add(folder.id);
+                          return next;
+                        })}
+                        className="text-gray-500 hover:text-gray-800"
+                        title={isCollapsed ? "Expand folder" : "Collapse folder"}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform ${isCollapsed ? "" : "rotate-90"}`}><path d="m9 18 6-6-6-6"/></svg>
+                      </button>
+                    ) : <span className="w-3" />}
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-amber-600"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
+                    <span className="text-[11px] font-bold text-gray-700 uppercase tracking-wide">{folder ? folder.title : "Ungrouped"}</span>
+                    <span className="text-[10px] text-gray-500 bg-gray-200 rounded px-1.5 py-0.5">{row.count}</span>
+                    {folder && allowCreate && (
+                      <div className="ml-auto flex items-center gap-2">
+                        <button onClick={() => { const title = window.prompt("Rename folder:", folder.title); if (title) handleRenameFolder(folder.id, title); }} className="text-[10px] text-gray-400 hover:text-gray-700">Rename</button>
+                        <button onClick={() => handleDeleteFolder(folder.id)} className="text-[10px] text-gray-400 hover:text-red-600">Delete</button>
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
+              const { entry, isChild } = row;
               const isExpanded = expandedId === entry.id;
               const badge = statusBadge(entry.status);
               const age = ageFromDate(entry.first_flagged_at);
@@ -2189,27 +2321,61 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
             title="Set due date"
           />
           <div className="w-px h-5 bg-gray-600" />
-          {/* Nest as children of... */}
+          {/* Folders first, then tasks which already have children. */}
           <select
             defaultValue=""
-            onChange={(e) => {
-              if (!e.target.value) return;
-              const parentId = e.target.value;
-              for (const id of selectedIds) {
-                if (id === parentId) continue;
-                supabase.from("raid_entries").update({ parent_id: parentId }).eq("id", id).then(() => {});
-                setEntries((prev) => prev.map((en) => en.id === id ? { ...en, parent_id: parentId } : en));
-              }
-              setSelectedIds(new Set());
+            onChange={async (e) => {
+              const target = e.target.value;
               e.target.value = "";
+              if (!target) return;
+              const [kind, targetId] = target.split(":", 2);
+              if (!targetId || (kind !== "folder" && kind !== "task")) return;
+              const ids = Array.from(selectedIds).filter((id) => id !== targetId);
+              const previous = new Map(entries.filter((entry) => ids.includes(entry.id)).map((entry) => [entry.id, { parent_id: entry.parent_id, folder_id: entry.folder_id }]));
+              const patch = kind === "folder"
+                ? { folder_id: targetId, parent_id: null }
+                : { parent_id: targetId, folder_id: null };
+              setEntries((prev) => prev.map((entry) => ids.includes(entry.id) ? { ...entry, ...patch } : entry));
+              setSelectedIds(new Set());
+              if (kind === "task") setExpandedParents((prev) => new Set([...prev, targetId]));
+
+              const { data, error } = await supabase.from("raid_entries").update(patch).in("id", ids).select("id");
+              if (error || (data?.length ?? 0) !== ids.length) {
+                setEntries((prev) => prev.map((entry) => {
+                  const old = previous.get(entry.id);
+                  return old ? { ...entry, ...old } : entry;
+                }));
+                window.alert("Some selected issues could not be nested. Your view has been restored.");
+              }
             }}
-            className="bg-gray-700 text-white text-xs rounded border border-gray-600 px-2 py-1 focus:outline-none focus:border-blue-400 max-w-[160px]"
+            className="bg-gray-700 text-white text-xs rounded border border-gray-600 px-2 py-1 focus:outline-none focus:border-blue-400 max-w-[200px]"
           >
             <option value="">Nest under...</option>
-            {/* Only top-level items are nest-under targets — never already-nested ones. */}
-            {entries.filter((e) => !selectedIds.has(e.id) && e.raid_type === activeTab && !e.parent_id).map((e) => (
-              <option key={e.id} value={e.id}>{e.title.slice(0, 40)}</option>
-            ))}
+            {activeTab === "issue" && issueFolders.length > 0 && (
+              <optgroup label="Folders">
+                {[...issueFolders].sort((a, b) => a.title.localeCompare(b.title)).map((folder) => (
+                  <option key={folder.id} value={`folder:${folder.id}`}>{folder.title.slice(0, 40)}</option>
+                ))}
+              </optgroup>
+            )}
+            {(() => {
+              const parentTasks = entries
+                .filter((entry) =>
+                  !selectedIds.has(entry.id)
+                  && entry.raid_type === activeTab
+                  && !entry.parent_id
+                  && !entry.resolved_at
+                  && entries.some((child) => child.parent_id === entry.id)
+                )
+                .sort((a, b) => a.title.localeCompare(b.title));
+              return parentTasks.length > 0 ? (
+                <optgroup label="Parent tasks">
+                  {parentTasks.map((entry) => (
+                    <option key={entry.id} value={`task:${entry.id}`}>{entry.title.slice(0, 40)}</option>
+                  ))}
+                </optgroup>
+              ) : null;
+            })()}
           </select>
           <button
             onClick={() => {
@@ -2217,10 +2383,12 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
               const ids = Array.from(selectedIds);
               if (ids.length < 2) return;
               const parentId = ids[0];
+              const childIds = ids.slice(1);
+              setEntries((prev) => prev.map((entry) => childIds.includes(entry.id) ? { ...entry, parent_id: parentId, folder_id: null } : entry));
               for (let i = 1; i < ids.length; i++) {
-                supabase.from("raid_entries").update({ parent_id: parentId }).eq("id", ids[i]).then(() => {});
-                setEntries((prev) => prev.map((en) => en.id === ids[i] ? { ...en, parent_id: parentId } : en));
+                supabase.from("raid_entries").update({ parent_id: parentId, folder_id: null }).eq("id", ids[i]).then(() => {});
               }
+              setExpandedParents((prev) => new Set([...prev, parentId]));
               setSelectedIds(new Set());
             }}
             className="bg-gray-700 text-xs rounded border border-gray-600 px-2 py-1 hover:bg-gray-600 transition-colors"
