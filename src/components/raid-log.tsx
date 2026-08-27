@@ -393,6 +393,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
   });
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<{ id: string; zone: "above" | "nest" | "below" } | null>(null);
+  const [folderDropTargetId, setFolderDropTargetId] = useState<string | null>(null);
   const [addingType, setAddingType] = useState<RaidType | null>(null);
   const [addTitle, setAddTitle] = useState("");
   const [addPriority, setAddPriority] = useState<PriorityLevel>("medium");
@@ -1027,6 +1028,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
 
   function handleDragOver(targetId: string, e: React.DragEvent) {
     e.preventDefault();
+    setFolderDropTargetId(null);
     if (!draggedId || draggedId === targetId) {
       setDropTarget(null);
       return;
@@ -1045,6 +1047,64 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
   function handleDragEnd() {
     setDraggedId(null);
     setDropTarget(null);
+    setFolderDropTargetId(null);
+  }
+
+  function handleFolderDragOver(folderId: string, e: React.DragEvent) {
+    e.preventDefault();
+    if (!draggedId) return;
+    const draggedEntry = entries.find((entry) => entry.id === draggedId);
+    if (!draggedEntry || draggedEntry.raid_type !== "issue") return;
+    e.dataTransfer.dropEffect = "move";
+    setDropTarget(null);
+    setFolderDropTargetId(folderId);
+  }
+
+  async function handleFolderDrop(folderId: string, e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    const movingId = draggedId;
+    const draggedEntry = entries.find((entry) => entry.id === movingId);
+    if (!movingId || !draggedEntry || draggedEntry.raid_type !== "issue") return;
+
+    const folderItems = entries.filter((entry) =>
+      entry.id !== movingId
+      && entry.raid_type === "issue"
+      && !entry.parent_id
+      && entry.folder_id === folderId
+      && !entry.resolved_at
+    );
+    const newSortOrder = folderItems.length > 0
+      ? Math.max(...folderItems.map((entry) => entry.sort_order)) + 1000
+      : 1000;
+    const previous = {
+      parent_id: draggedEntry.parent_id,
+      folder_id: draggedEntry.folder_id,
+      sort_order: draggedEntry.sort_order,
+    };
+
+    setEntries((prev) => prev.map((entry) => entry.id === movingId
+      ? { ...entry, parent_id: null, folder_id: folderId, sort_order: newSortOrder }
+      : entry));
+    setCollapsedFolderIds((prev) => {
+      const next = new Set(prev);
+      next.delete(folderId);
+      return next;
+    });
+    setDraggedId(null);
+    setDropTarget(null);
+    setFolderDropTargetId(null);
+
+    const { data, error } = await supabase
+      .from("raid_entries")
+      .update({ parent_id: null, folder_id: folderId, sort_order: newSortOrder })
+      .eq("id", movingId)
+      .select("id")
+      .single();
+    if (error || !data) {
+      setEntries((prev) => prev.map((entry) => entry.id === movingId ? { ...entry, ...previous } : entry));
+      window.alert("The issue could not be moved into that folder. Your view has been restored.");
+    }
   }
 
   async function handleDrop(targetId: string) {
@@ -1483,8 +1543,19 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
               if (row.kind === "folder") {
                 const folder = row.folder;
                 const isCollapsed = collapsedFolderIds.has(folder.id);
+                const isFolderDropTarget = folderDropTargetId === folder.id;
                 return (
-                  <div key={`folder-${folder.id}`} className="flex items-center gap-2 bg-gray-100 border-b border-gray-300 px-3 py-1.5">
+                  <div
+                    key={`folder-${folder.id}`}
+                    onDragOver={(event) => handleFolderDragOver(folder.id, event)}
+                    onDragLeave={(event) => {
+                      const nextTarget = event.relatedTarget;
+                      if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return;
+                      if (folderDropTargetId === folder.id) setFolderDropTargetId(null);
+                    }}
+                    onDrop={(event) => handleFolderDrop(folder.id, event)}
+                    className={`flex items-center gap-2 border-b px-3 py-1.5 transition-colors ${isFolderDropTarget ? "bg-blue-100 border-blue-400 ring-2 ring-inset ring-blue-400" : "bg-gray-100 border-gray-300"}`}
+                  >
                     <button
                       onClick={() => setCollapsedFolderIds((prev) => {
                         const next = new Set(prev);

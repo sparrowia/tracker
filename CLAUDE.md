@@ -647,6 +647,8 @@ entries themselves. `issue_folders` stores the folder records and the nullable
 nesting remains independent through `parent_id`. The Issues header exposes
 `+ Add Folder`, and folders can be collapsed, renamed, or deleted (deleting a
 folder leaves its issues in the normal list with no visible "Ungrouped" row).
+Issue rows can be dragged onto a folder header to move them into that folder;
+dropping a child promotes it to a top-level issue while preserving its children.
 In the multi-select `Nest under...`
 dropdown, folders appear first alphabetically, followed by top-level tasks that
 already have children, also alphabetically.
