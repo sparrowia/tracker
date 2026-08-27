@@ -1086,11 +1086,6 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
     setEntries((prev) => prev.map((entry) => entry.id === movingId
       ? { ...entry, parent_id: null, folder_id: folderId, sort_order: newSortOrder }
       : entry));
-    setCollapsedFolderIds((prev) => {
-      const next = new Set(prev);
-      next.delete(folderId);
-      return next;
-    });
     setDraggedId(null);
     setDropTarget(null);
     setFolderDropTargetId(null);
