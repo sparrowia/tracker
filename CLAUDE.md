@@ -647,6 +647,8 @@ entries themselves. `issue_folders` stores the folder records and the nullable
 nesting remains independent through `parent_id`. The Issues header exposes
 `+ Add Folder`, and folders can be collapsed, renamed, or deleted (deleting a
 folder leaves its issues in the normal list with no visible "Ungrouped" row).
+The entire folder row toggles collapse/expand by click, Enter, or Space; Rename
+and Delete do not toggle it.
 Issue rows can be dragged onto a folder header to move them into that folder;
 dropping a child promotes it to a top-level issue while preserving its children.
 Dropping an issue does not change the folder's collapsed or expanded state.

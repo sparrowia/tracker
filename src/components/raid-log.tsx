@@ -1542,6 +1542,24 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                 return (
                   <div
                     key={`folder-${folder.id}`}
+                    role="button"
+                    tabIndex={0}
+                    aria-expanded={!isCollapsed}
+                    onClick={() => setCollapsedFolderIds((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(folder.id)) next.delete(folder.id); else next.add(folder.id);
+                      return next;
+                    })}
+                    onKeyDown={(event) => {
+                      if (event.target !== event.currentTarget) return;
+                      if (event.key !== "Enter" && event.key !== " ") return;
+                      event.preventDefault();
+                      setCollapsedFolderIds((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(folder.id)) next.delete(folder.id); else next.add(folder.id);
+                        return next;
+                      });
+                    }}
                     onDragOver={(event) => handleFolderDragOver(folder.id, event)}
                     onDragLeave={(event) => {
                       const nextTarget = event.relatedTarget;
@@ -1549,26 +1567,18 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                       if (folderDropTargetId === folder.id) setFolderDropTargetId(null);
                     }}
                     onDrop={(event) => handleFolderDrop(folder.id, event)}
-                    className={`flex items-center gap-2 border-b px-3 py-1.5 transition-colors ${isFolderDropTarget ? "bg-blue-100 border-blue-400 ring-2 ring-inset ring-blue-400" : "bg-gray-100 border-gray-300"}`}
+                    className={`flex cursor-pointer items-center gap-2 border-b px-3 py-1.5 transition-colors focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-400 ${isFolderDropTarget ? "bg-blue-100 border-blue-400 ring-2 ring-inset ring-blue-400" : "bg-gray-100 hover:bg-gray-200 border-gray-300"}`}
                   >
-                    <button
-                      onClick={() => setCollapsedFolderIds((prev) => {
-                        const next = new Set(prev);
-                        if (next.has(folder.id)) next.delete(folder.id); else next.add(folder.id);
-                        return next;
-                      })}
-                      className="text-gray-500 hover:text-gray-800"
-                      title={isCollapsed ? "Expand folder" : "Collapse folder"}
-                    >
+                    <span className="text-gray-500" title={isCollapsed ? "Expand folder" : "Collapse folder"}>
                       <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform ${isCollapsed ? "" : "rotate-90"}`}><path d="m9 18 6-6-6-6"/></svg>
-                    </button>
+                    </span>
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-amber-600"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
                     <span className="text-[11px] font-bold text-gray-700 uppercase tracking-wide">{folder.title}</span>
                     <span className="text-[10px] text-gray-500 bg-gray-200 rounded px-1.5 py-0.5">{row.count}</span>
                     {allowCreate && (
                       <div className="ml-auto flex items-center gap-2">
-                        <button onClick={() => { const title = window.prompt("Rename folder:", folder.title); if (title) handleRenameFolder(folder.id, title); }} className="text-[10px] text-gray-400 hover:text-gray-700">Rename</button>
-                        <button onClick={() => handleDeleteFolder(folder.id)} className="text-[10px] text-gray-400 hover:text-red-600">Delete</button>
+                        <button onClick={(event) => { event.stopPropagation(); const title = window.prompt("Rename folder:", folder.title); if (title) handleRenameFolder(folder.id, title); }} className="text-[10px] text-gray-400 hover:text-gray-700">Rename</button>
+                        <button onClick={(event) => { event.stopPropagation(); handleDeleteFolder(folder.id); }} className="text-[10px] text-gray-400 hover:text-red-600">Delete</button>
                       </div>
                     )}
                   </div>
