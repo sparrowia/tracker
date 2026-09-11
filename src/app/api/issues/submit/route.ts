@@ -18,6 +18,7 @@ export async function POST(req: NextRequest) {
       issue_type,
       priority,
       critical_confirmed,
+      post_release_issue,
       url,
       os,
       browser,
@@ -31,6 +32,11 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+
+    if (post_release_issue !== undefined && typeof post_release_issue !== "boolean") {
+      return NextResponse.json({ error: "Post release issue must be a boolean" }, { status: 400 });
+    }
+    const postReleaseIssue = post_release_issue === true;
 
     const resolvedType = resolveIssueType(issue_type);
     if (!resolvedType) {
@@ -55,7 +61,8 @@ export async function POST(req: NextRequest) {
     // A feature request is a proposal, not a defect, so it is filed as a
     // Decision (D##) rather than an Issue (I##) and shows up in the Decisions
     // section of the RAID log for a call to be made on it.
-    const raidType = resolvedType === FEATURE_REQUEST_TYPE ? "decision" : "issue";
+    // Explicit post-release reports belong in the Issues Log, including proposals.
+    const raidType = !postReleaseIssue && resolvedType === FEATURE_REQUEST_TYPE ? "decision" : "issue";
     const displayPrefix = raidType === "decision" ? "D" : "I";
 
     const supabase = createAdminClient();
@@ -104,6 +111,7 @@ export async function POST(req: NextRequest) {
     descParts.push(""); // blank line
     descParts.push("---");
     descParts.push(`**Issue Type:** ${typeLabel}`);
+    if (postReleaseIssue) descParts.push("**Post release issue:** Yes — does not need immediate remediation.");
     descParts.push(`**OS:** ${os}`);
     descParts.push(`**Browser:** ${browser}`);
     descParts.push(`**Reporter:** ${reporter_name.trim()}`);
@@ -124,6 +132,7 @@ export async function POST(req: NextRequest) {
       .insert({
         raid_type: raidType,
         issue_type: resolvedType,
+        post_release_issue: postReleaseIssue,
         title: title.trim(),
         description: formattedDescription,
         notes: url?.trim() ? url.trim() : null,

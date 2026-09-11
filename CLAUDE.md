@@ -919,3 +919,14 @@ Initiatives with a `steering_phase` set are hidden from the sidebar Initiatives 
 ## Rejected Status
 
 `rejected` added to `item_status` enum. Available in all status dropdowns. Red badge styling. Triggers vendor owner notification when set on vendor-assigned items (reads the legacy `project_vendor_owners` column — see the Status Change Notifications caveat).
+
+## Post Release intake
+
+The public issue form offers an optional “Post release issue” checkbox for reports
+that can wait until after release. Marked submissions (including feature requests)
+are Issues and are filed in the project's “Post Release” Issues Log folder.
+Migration `20260911000001_post_release_issues.sql` retains the reporter's choice
+and creates/reuses the folder atomically during insertion, with a per-project
+transaction lock for concurrent first reports. Unmarked feature requests remain
+Decisions. Starting another report clears the checkbox. Apply the migration before
+deploying the form/API.

@@ -39,6 +39,7 @@ export default function PublicIssueForm({
   const [issueType, setIssueType] = useState("");
   const [priority, setPriority] = useState("");
   const [criticalConfirmed, setCriticalConfirmed] = useState(false);
+  const [postReleaseIssue, setPostReleaseIssue] = useState(false);
   const [url, setUrl] = useState("");
   const [os, setOs] = useState("");
   const [browser, setBrowser] = useState("");
@@ -157,6 +158,7 @@ export default function PublicIssueForm({
           description: description.trim(),
           issue_type: issueType,
           priority,
+          post_release_issue: postReleaseIssue,
           critical_confirmed: priority === "critical" ? criticalConfirmed : undefined,
           url: url.trim() || undefined,
           os,
@@ -179,6 +181,7 @@ export default function PublicIssueForm({
         setIssueType("");
         setPriority("");
         setCriticalConfirmed(false);
+        setPostReleaseIssue(false);
         setUrl("");
         setOs("");
         setBrowser("");
@@ -234,6 +237,7 @@ export default function PublicIssueForm({
               setIssueType("");
               setPriority("");
               setCriticalConfirmed(false);
+              setPostReleaseIssue(false);
               setUrl("");
               setOs("");
               setBrowser("");
@@ -412,6 +416,23 @@ export default function PublicIssueForm({
                 ))}
               </select>
             </div>
+          </div>
+
+          <div>
+            <label className="flex items-start gap-2 text-sm font-medium text-gray-700 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={postReleaseIssue}
+                onChange={(e) => setPostReleaseIssue(e.target.checked)}
+                aria-describedby="post-release-help"
+                className="mt-0.5 h-4 w-4 rounded border-gray-300 accent-blue-600"
+              />
+              Post release issue
+            </label>
+            <p id="post-release-help" className="mt-1 ml-6 text-sm text-gray-500">
+              This issue can wait until after release and does not need immediate remediation.
+              It will be filed in the Post Release folder in the Issues Log.
+            </p>
           </div>
 
           {/* Attachments */}
