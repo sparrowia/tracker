@@ -604,8 +604,8 @@ export function VendorOpenItems({
                             defaultValue={(detail.next_steps as string) || ""}
                             onBlur={(e) => saveField(item, "next_steps", e.target.value)}
                             placeholder="Next steps..."
-                            rows={2}
-                            className="w-full rounded border border-gray-200 bg-white px-2 py-1 text-sm font-bold focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none mt-1"
+                            rows={4}
+                            className="w-full rounded border border-gray-200 bg-white px-2 py-1 text-sm font-bold focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y mt-1 min-h-[3.5rem]"
                           />
                         ) : (
                           <p className="text-sm text-gray-700 mt-1 whitespace-pre-wrap font-bold">{(detail.next_steps as string) || "—"}</p>
