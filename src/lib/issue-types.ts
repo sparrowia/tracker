@@ -46,7 +46,7 @@ export const ISSUE_TYPE_LABEL: Record<IssueType, string> = {
   performance: "Performance",
   responsive: "Responsive",
   security: "Security",
-  support_request: "Support Request",
+  support_request: "Support",
   ui_ux: "UI/UX",
   other: "Other",
 };
