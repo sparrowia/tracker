@@ -3,18 +3,17 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
-// Four columns reference people(id) with no ON DELETE rule, so Postgres refuses
+// Three columns reference people(id) with no ON DELETE rule, so Postgres refuses
 // the delete outright rather than clearing them. Before this existed the refusal
 // was swallowed and the row simply stayed on screen with no explanation.
 //
-// Executive sponsor MUST be reassigned: a project without a sponsor is a gap
-// nobody sees. Reporter and department rep may be reassigned or explicitly
-// cleared, because they are historical attribution rather than a live duty.
+// All three are live duties someone has to inherit, so each REQUIRES a named
+// replacement. Reporter used to be a fourth; it records who raised an item
+// rather than who owns it, so it now clears itself on delete
+// (20260917000001_reporter_clears_on_person_delete.sql) and never reaches here.
 export interface BlockingRef {
-  table: "projects" | "initiatives" | "raid_entries" | "project_department_statuses";
+  table: "projects" | "initiatives" | "project_department_statuses";
   column: string;
-  /** What the operator has to decide about this group. */
-  kind: "sponsor" | "attribution";
   label: string;
   rows: Array<{ id: string; name: string }>;
 }
@@ -22,14 +21,12 @@ export interface BlockingRef {
 const GROUPS: Array<{
   table: BlockingRef["table"];
   column: string;
-  kind: BlockingRef["kind"];
   label: string;
   nameColumn: string;
 }> = [
-  { table: "projects", column: "executive_sponsor_id", kind: "sponsor", label: "Executive sponsor on these projects", nameColumn: "name" },
-  { table: "initiatives", column: "executive_sponsor_id", kind: "sponsor", label: "Executive sponsor on these initiatives", nameColumn: "name" },
-  { table: "raid_entries", column: "reporter_id", kind: "attribution", label: "Reporter on these issues", nameColumn: "title" },
-  { table: "project_department_statuses", column: "rep_person_id", kind: "attribution", label: "Department representative on these rows", nameColumn: "id" },
+  { table: "projects", column: "executive_sponsor_id", label: "Executive sponsor on these projects", nameColumn: "name" },
+  { table: "initiatives", column: "executive_sponsor_id", label: "Executive sponsor on these initiatives", nameColumn: "name" },
+  { table: "project_department_statuses", column: "rep_person_id", label: "Department representative on these projects", nameColumn: "id" },
 ];
 
 /** What is holding this person, or an empty array when the delete will succeed. */
@@ -52,7 +49,6 @@ export async function findBlockers(personId: string): Promise<BlockingRef[]> {
     out.push({
       table: g.table,
       column: g.column,
-      kind: g.kind,
       label: g.label,
       rows: data.map((row) => ({
         id: String(row.id),
@@ -80,7 +76,8 @@ export default function PersonDeleteModal({ person, blockers, people, onCancel, 
 
   const key = (b: BlockingRef) => `${b.table}.${b.column}`;
   const candidates = people.filter((p) => p.id !== person.id);
-  const unresolved = blockers.filter((b) => b.kind === "sponsor" && !choice[key(b)]);
+  // Every remaining blocker is a duty, so all of them need a named replacement.
+  const unresolved = blockers.filter((b) => !choice[key(b)]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) { if (e.key === "Escape" && !busy) onCancel(); }
@@ -95,7 +92,7 @@ export default function PersonDeleteModal({ person, blockers, people, onCancel, 
     // Reassign first. If any of these fails the delete must not run, or the
     // person disappears while a project still points at them.
     for (const b of blockers) {
-      const next = choice[key(b)] || null;
+      const next = choice[key(b)];
       const { error: e } = await supabase
         .from(b.table)
         .update({ [b.column]: next })
@@ -121,7 +118,7 @@ export default function PersonDeleteModal({ person, blockers, people, onCancel, 
         <div className="border-b border-gray-200 px-5 py-4">
           <h2 className="text-sm font-semibold text-gray-900">Can&rsquo;t delete {person.full_name} yet</h2>
           <p className="mt-1 text-xs text-gray-600">
-            {person.full_name} is still referenced below. Choose who takes over, then the delete can go through.
+            {person.full_name} still holds the responsibilities below. Choose who takes each one over, then the delete can go through.
           </p>
         </div>
 
@@ -130,7 +127,7 @@ export default function PersonDeleteModal({ person, blockers, people, onCancel, 
             <div key={key(b)}>
               <div className="text-xs font-semibold text-gray-800">
                 {b.label}
-                {b.kind === "sponsor" && <span className="ml-1 font-normal text-red-600">(required)</span>}
+                <span className="ml-1 font-normal text-red-600">(required)</span>
               </div>
               <ul className="mt-1 list-disc pl-5 text-xs text-gray-600">
                 {b.rows.map((r) => <li key={r.id}>{r.name}</li>)}
@@ -141,9 +138,7 @@ export default function PersonDeleteModal({ person, blockers, people, onCancel, 
                 disabled={busy}
                 className="mt-2 w-full rounded border border-gray-300 px-2 py-1 text-xs"
               >
-                <option value="">
-                  {b.kind === "sponsor" ? "Select a replacement…" : "Leave empty"}
-                </option>
+                <option value="">Select a replacement…</option>
                 {candidates.map((p) => <option key={p.id} value={p.id}>{p.full_name}</option>)}
               </select>
             </div>
@@ -159,7 +154,7 @@ export default function PersonDeleteModal({ person, blockers, people, onCancel, 
           <button
             onClick={confirm}
             disabled={busy || unresolved.length > 0}
-            title={unresolved.length ? "Choose a replacement sponsor first" : undefined}
+            title={unresolved.length ? "Choose a replacement for each item first" : undefined}
             className="rounded bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-40"
           >
             {busy ? "Working…" : `Reassign and delete`}
