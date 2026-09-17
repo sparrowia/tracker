@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useRole } from "@/components/role-context";
 import { isAdmin } from "@/lib/permissions";
 import Link from "next/link";
+import PersonDeleteModal, { findBlockers, type BlockingRef } from "@/components/person-delete-modal";
 import type { Person, Vendor, Profile, Invitation } from "@/lib/types";
 
 type PersonRow = Omit<Person, "vendor"> & { vendor: Vendor | null };
@@ -26,6 +27,9 @@ export default function PeopleList({ initialPeople, vendors, profiles: initialPr
   const [profiles, setProfiles] = useState(initialProfiles);
   const [invitations, setInvitations] = useState(initialInvitations);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  // Set when a delete is refused by a reference the operator has to resolve.
+  const [blocked, setBlocked] = useState<{ person: PersonRow; blockers: BlockingRef[] } | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [addingInternal, setAddingInternal] = useState(false);
   const [addingExternal, setAddingExternal] = useState(false);
   const [addName, setAddName] = useState("");
@@ -99,12 +103,31 @@ export default function PeopleList({ initialPeople, vendors, profiles: initialPr
     });
   }
 
+  function removeLocally(id: string) {
+    setPeople((prev) => prev.filter((p) => p.id !== id));
+    if (expandedId === id) setExpandedId(null);
+  }
+
   async function handleDelete(id: string) {
-    const { error } = await supabase.from("people").delete().eq("id", id);
-    if (!error) {
-      setPeople((prev) => prev.filter((p) => p.id !== id));
-      if (expandedId === id) setExpandedId(null);
+    setDeleteError(null);
+    const person = people.find((p) => p.id === id);
+    if (!person) return;
+
+    // Ask what is holding them BEFORE attempting the delete, so the operator
+    // gets a list to act on rather than a refusal with no explanation. The
+    // previous version swallowed the error entirely and the row just stayed.
+    const blockers = await findBlockers(id);
+    if (blockers.length) {
+      setBlocked({ person, blockers });
+      return;
     }
+
+    const { error } = await supabase.from("people").delete().eq("id", id);
+    if (error) {
+      setDeleteError(`Could not delete ${person.full_name}: ${error.message}`);
+      return;
+    }
+    removeLocally(id);
   }
 
   async function handleAdd(isInternal: boolean) {
@@ -454,6 +477,23 @@ export default function PeopleList({ initialPeople, vendors, profiles: initialPr
   return (
     <div className="max-w-5xl mx-auto space-y-6">
       <h1 className="text-2xl font-bold text-gray-900">People</h1>
+
+      {deleteError && (
+        <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{deleteError}</p>
+      )}
+
+      {blocked && (
+        <PersonDeleteModal
+          person={blocked.person}
+          blockers={blocked.blockers}
+          people={people.map((p) => ({ id: p.id, full_name: p.full_name }))}
+          onCancel={() => setBlocked(null)}
+          onDeleted={() => {
+            removeLocally(blocked.person.id);
+            setBlocked(null);
+          }}
+        />
+      )}
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-gray-300">
