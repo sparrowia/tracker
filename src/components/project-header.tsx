@@ -66,7 +66,6 @@ export default function ProjectHeader({ project, vendors, people: initialPeople 
   const [deleting, setDeleting] = useState(false);
   const [publicIssueForm, setPublicIssueForm] = useState(project.public_issue_form ?? false);
   const [togglingForm, setTogglingForm] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [healthOverride, setHealthOverride] = useState<ProjectHealth | null>(null);
   const [allInitiatives, setAllInitiatives] = useState<Initiative[]>([]);
@@ -275,14 +274,6 @@ export default function ProjectHeader({ project, vendors, people: initialPeople 
       setPublicIssueForm(newVal);
     }
     setTogglingForm(false);
-  }
-
-  function copyPublicLink() {
-    const url = `${window.location.origin}/issues/${p.slug}`;
-    navigator.clipboard.writeText(url).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
   }
 
   if (editing) {
@@ -568,46 +559,50 @@ export default function ProjectHeader({ project, vendors, people: initialPeople 
         </div>
       )}
       {p.notes && <p className="text-sm text-gray-500 mt-2">{p.notes}</p>}
-      {isAdmin(role) && (
+      {(isAdmin(role) || publicIssueForm) && (
         <div className="flex items-center gap-3 mt-3">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <button
-              type="button"
-              onClick={togglePublicIssueForm}
-              disabled={togglingForm}
-              className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${
-                publicIssueForm ? "bg-blue-600" : "bg-gray-300"
-              } ${togglingForm ? "opacity-50" : ""}`}
-            >
-              <span
-                className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${
-                  publicIssueForm ? "translate-x-4.5" : "translate-x-0.5"
-                }`}
-              />
-            </button>
-            <span className="text-xs text-gray-600">Public Issue Form</span>
-          </label>
-          {publicIssueForm && (
-            <button
-              onClick={copyPublicLink}
-              className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100"
-            >
-              {copied ? (
-                <>
-                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                  </svg>
-                  Copied!
-                </>
+          {/* The toggle stays admin-only: turning a project's form on or off is
+              not a member decision. The LINK is for everyone on the project —
+              they are the people who need to hand it out. */}
+          {isAdmin(role) ? (
+            <label className="flex items-center gap-2 cursor-pointer">
+              <button
+                type="button"
+                onClick={togglePublicIssueForm}
+                disabled={togglingForm}
+                className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${
+                  publicIssueForm ? "bg-blue-600" : "bg-gray-300"
+                } ${togglingForm ? "opacity-50" : ""}`}
+              >
+                <span
+                  className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${
+                    publicIssueForm ? "translate-x-4.5" : "translate-x-0.5"
+                  }`}
+                />
+              </button>
+              {publicIssueForm ? (
+                <a
+                  href={`/issues/${p.slug}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="text-xs text-blue-600 underline hover:text-blue-800"
+                >
+                  Public Issue Form
+                </a>
               ) : (
-                <>
-                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
-                  </svg>
-                  Copy link
-                </>
+                <span className="text-xs text-gray-600">Public Issue Form</span>
               )}
-            </button>
+            </label>
+          ) : (
+            <a
+              href={`/issues/${p.slug}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-blue-600 underline hover:text-blue-800"
+            >
+              Public Issue Form
+            </a>
           )}
         </div>
       )}
