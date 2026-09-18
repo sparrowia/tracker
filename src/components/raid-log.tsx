@@ -1520,7 +1520,10 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
                 const sortedFolders = [...issueFolders].sort((a, b) => a.title.localeCompare(b.title));
                 for (const folder of sortedFolders) {
                   const folderItems = parentItems.filter((entry) => entry.folder_id === folder.id);
-                  ordered.push({ kind: "folder", folder, count: folderItems.length });
+                  // Badge counts every ticket in the folder, children included,
+                  // not just the group rows.
+                  const folderCount = folderItems.reduce((total, entry) => total + 1 + (childMap.get(entry.id)?.length ?? 0), 0);
+                  ordered.push({ kind: "folder", folder, count: folderCount });
                   if (!collapsedFolderIds.has(folder.id)) folderItems.forEach((entry) => pushParent(entry, true));
                 }
                 const ungrouped = parentItems.filter((entry) => !entry.folder_id || !folderIds.has(entry.folder_id));
