@@ -2377,13 +2377,16 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
             defaultValue=""
             onChange={(e) => {
               if (!e.target.value) return;
-              const val = e.target.value;
+              // "__unassigned__" clears the owner; saveField already maps an
+              // empty value to null, so it is passed through as "".
+              const val = e.target.value === "__unassigned__" ? "" : e.target.value;
               for (const id of selectedIds) { saveField(id, "owner_id", val); }
               e.target.value = "";
             }}
             className="bg-gray-700 text-white text-xs rounded border border-gray-600 px-2 py-1 focus:outline-none focus:border-blue-400 max-w-[140px]"
           >
             <option value="">Owner</option>
+            <option value="__unassigned__">Unassigned</option>
             {people.map((p) => (
               <option key={p.id} value={p.id}>{p.full_name}</option>
             ))}
