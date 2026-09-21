@@ -368,9 +368,23 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
     if (entry) {
       setActiveTab(entry.raid_type);
       if (entry.resolved_at) setShowArchived(true);
-      setTimeout(() => {
-        document.getElementById(`raid-${deepLinkItemId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
-      }, 200);
+      // Wait for the row rather than assuming it has rendered. A fixed 200ms
+      // raced a long list plus the folder fetch above, and because the lookup
+      // was optional-chained a miss failed silently — the link landed on the
+      // project and scrolled nowhere, with nothing logged. Give up after a few
+      // seconds so a genuinely absent row cannot spin forever.
+      let frame = 0;
+      const deadline = Date.now() + 5000;
+      const scrollWhenReady = () => {
+        const el = document.getElementById(`raid-${deepLinkItemId}`);
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+          return;
+        }
+        if (Date.now() < deadline) frame = requestAnimationFrame(scrollWhenReady);
+      };
+      frame = requestAnimationFrame(scrollWhenReady);
+      return () => cancelAnimationFrame(frame);
     }
   }, [deepLinkItemId]); // eslint-disable-line react-hooks/exhaustive-deps
   // Sub-tab survives a refresh via ?raid=. useSearchParams (not window.location)
@@ -458,7 +472,18 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
         else {
           const folders = (data as IssueFolder[]) || [];
           setIssueFolders(folders);
-          setCollapsedFolderIds(new Set(folders.map((folder) => folder.id)));
+          // Folders arrive after first paint and every one of them starts
+          // collapsed — except the one holding a deep-linked entry. Collapsing
+          // that one removes the very row the link exists to reach: the entry
+          // renders ungrouped on first paint, the link scrolls to it, and then
+          // this handler pulls it back out of the DOM. Foldered entries were
+          // therefore unreachable by link no matter the timing.
+          const linkedFolderId = deepLinkItemId
+            ? entries.find((entry) => entry.id === deepLinkItemId)?.folder_id ?? null
+            : null;
+          setCollapsedFolderIds(
+            new Set(folders.map((folder) => folder.id).filter((id) => id !== linkedFolderId)),
+          );
         }
       });
     return () => { active = false; };
