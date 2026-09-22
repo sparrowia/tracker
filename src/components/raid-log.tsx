@@ -406,6 +406,10 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
     return new Set();
   });
   const [draggedId, setDraggedId] = useState<string | null>(null);
+  // Every row travelling with this drag. Dragging a row that is part of a
+  // multi-row selection moves the whole selection, which is what selecting
+  // several rows and dragging one of them looks like it should do.
+  const [draggedIds, setDraggedIds] = useState<string[]>([]);
   const [dropTarget, setDropTarget] = useState<{ id: string; zone: "above" | "nest" | "below" } | null>(null);
   const [folderDropTargetId, setFolderDropTargetId] = useState<string | null>(null);
   const [addingType, setAddingType] = useState<RaidType | null>(null);
@@ -1047,6 +1051,13 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
   }
 
   function handleDragStart(id: string, e: React.DragEvent) {
+    // Drag the selection when the grabbed row belongs to it; otherwise the
+    // grabbed row alone. Grabbing an unselected row does not disturb the
+    // selection, it just isn't part of this move.
+    const group = selectedIds.has(id) && selectedIds.size > 1
+      ? entries.filter((entry) => selectedIds.has(entry.id)).sort((a, b) => a.sort_order - b.sort_order).map((entry) => entry.id)
+      : [id];
+    setDraggedIds(group);
     setDraggedId(id);
     e.dataTransfer.effectAllowed = "move";
     // Make the drag image semi-transparent
@@ -1058,7 +1069,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
   function handleDragOver(targetId: string, e: React.DragEvent) {
     e.preventDefault();
     setFolderDropTargetId(null);
-    if (!draggedId || draggedId === targetId) {
+    if (!draggedId || draggedId === targetId || draggedIds.includes(targetId)) {
       setDropTarget(null);
       return;
     }
@@ -1075,6 +1086,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
 
   function handleDragEnd() {
     setDraggedId(null);
+    setDraggedIds([]);
     setDropTarget(null);
     setFolderDropTargetId(null);
   }
@@ -1092,96 +1104,140 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
   async function handleFolderDrop(folderId: string, e: React.DragEvent) {
     e.preventDefault();
     e.stopPropagation();
-    const movingId = draggedId;
-    const draggedEntry = entries.find((entry) => entry.id === movingId);
-    if (!movingId || !draggedEntry || draggedEntry.raid_type !== "issue") return;
+    const movingIds = draggedIds.length > 0 ? draggedIds : draggedId ? [draggedId] : [];
+    // Folders hold issues, so anything else in the selection stays where it is.
+    const moving = entries
+      .filter((entry) => movingIds.includes(entry.id) && entry.raid_type === "issue")
+      .sort((a, b) => a.sort_order - b.sort_order);
+    if (moving.length === 0) return;
+    const movedIds = new Set(moving.map((entry) => entry.id));
 
     const folderItems = entries.filter((entry) =>
-      entry.id !== movingId
+      !movedIds.has(entry.id)
       && entry.raid_type === "issue"
       && !entry.parent_id
       && entry.folder_id === folderId
       && !entry.resolved_at
     );
-    const newSortOrder = folderItems.length > 0
-      ? Math.max(...folderItems.map((entry) => entry.sort_order)) + 1000
-      : 1000;
-    const previous = {
-      parent_id: draggedEntry.parent_id,
-      folder_id: draggedEntry.folder_id,
-      sort_order: draggedEntry.sort_order,
-    };
+    // Dropped rows land at the end of the folder, keeping their order.
+    const base = folderItems.length > 0
+      ? Math.max(...folderItems.map((entry) => entry.sort_order))
+      : 0;
+    const placed = moving.map((entry, i) => ({ id: entry.id, sort_order: base + (i + 1) * 1000 }));
 
-    setEntries((prev) => prev.map((entry) => entry.id === movingId
-      ? { ...entry, parent_id: null, folder_id: folderId, sort_order: newSortOrder }
-      : entry));
+    const previous = entries;
+    setEntries((prev) => prev.map((entry) => {
+      const hit = placed.find((x) => x.id === entry.id);
+      return hit ? { ...entry, parent_id: null, folder_id: folderId, sort_order: hit.sort_order } : entry;
+    }));
     setDraggedId(null);
+    setDraggedIds([]);
     setDropTarget(null);
     setFolderDropTargetId(null);
 
-    const { data, error } = await supabase
-      .from("raid_entries")
-      .update({ parent_id: null, folder_id: folderId, sort_order: newSortOrder })
-      .eq("id", movingId)
-      .select("id")
-      .single();
-    if (error || !data) {
-      setEntries((prev) => prev.map((entry) => entry.id === movingId ? { ...entry, ...previous } : entry));
-      window.alert("The issue could not be moved into that folder. Your view has been restored.");
+    for (const item of placed) {
+      const { error } = await supabase
+        .from("raid_entries")
+        .update({ parent_id: null, folder_id: folderId, sort_order: item.sort_order })
+        .eq("id", item.id);
+      if (error) {
+        setEntries(previous);
+        window.alert(moving.length > 1
+          ? "Those issues could not be moved into that folder. Your view has been restored."
+          : "The issue could not be moved into that folder. Your view has been restored.");
+        return;
+      }
     }
   }
 
   async function handleDrop(targetId: string) {
-    if (!draggedId || draggedId === targetId || !dropTarget) return;
+    const movingIds = draggedIds.length > 0 ? draggedIds : draggedId ? [draggedId] : [];
+    if (movingIds.length === 0 || movingIds.includes(targetId) || !dropTarget) return;
     const zone = dropTarget.zone;
-    const draggedEntry = entries.find((e) => e.id === draggedId);
     const targetEntry = entries.find((e) => e.id === targetId);
-    if (!draggedEntry || !targetEntry) return;
+    if (!targetEntry) return;
 
-    let newParentId: string | null = null;
+    // Rows travel in the order they are already in, so a group lands looking
+    // the way it looked before it was picked up. Only rows of the target's own
+    // kind move: a selection can span types, and a risk does not belong in a
+    // list of issues.
+    const moving = entries
+      .filter((e) => movingIds.includes(e.id) && e.raid_type === targetEntry.raid_type)
+      .sort((a, b) => a.sort_order - b.sort_order);
+    if (moving.length === 0) return;
+    const movedIds = new Set(moving.map((e) => e.id));
+
+    let newParentId: string | null;
     let newFolderId: string | null = null;
-    let newSortOrder = targetEntry.sort_order;
 
     if (zone === "nest") {
-      // Don't allow nesting under own children
       const isDescendant = (parentId: string, childId: string): boolean => {
         const children = entries.filter((e) => e.parent_id === parentId);
         return children.some((c) => c.id === childId || isDescendant(c.id, childId));
       };
-      if (isDescendant(draggedId, targetId)) return;
+      // Nothing may be nested under its own child, which would orphan the pair.
+      if (moving.some((m) => isDescendant(m.id, targetId))) return;
       newParentId = targetId;
-      // Place at end of children
-      const children = entries.filter((e) => e.parent_id === targetId && e.id !== draggedId);
-      newSortOrder = children.length > 0 ? Math.max(...children.map((c) => c.sort_order)) + 1000 : 1000;
       setExpandedParents((prev) => new Set([...prev, targetId]));
     } else {
-      // above/below — sibling of target
+      // above/below — sibling of the target. A top-level row follows the target
+      // into its folder; children inherit their grouping from their parent and
+      // never carry a folder id.
       newParentId = targetEntry.parent_id;
-      // A top-level row follows the target into its folder. Children inherit
-      // their visual grouping from their parent and never need a folder id.
       newFolderId = newParentId ? null : targetEntry.folder_id;
-      // Get siblings sorted
-      const siblings = entries
-        .filter((e) => e.parent_id === newParentId && (newParentId !== null || e.folder_id === newFolderId) && e.raid_type === targetEntry.raid_type && e.id !== draggedId && !e.resolved_at)
-        .sort((a, b) => a.sort_order - b.sort_order);
-      const targetIdx = siblings.findIndex((e) => e.id === targetId);
-      if (zone === "above") {
-        const prev = targetIdx > 0 ? siblings[targetIdx - 1].sort_order : targetEntry.sort_order - 1000;
-        newSortOrder = Math.floor((prev + targetEntry.sort_order) / 2);
-      } else {
-        const next = targetIdx < siblings.length - 1 ? siblings[targetIdx + 1].sort_order : targetEntry.sort_order + 1000;
-        newSortOrder = Math.floor((targetEntry.sort_order + next) / 2);
+    }
+
+    // Rebuild the destination list and renumber it in one pass, 1000 apart.
+    // Interpolating between two neighbours cannot fit an arbitrary number of
+    // rows: the gap halves with every insert and eventually collides.
+    const destination = entries
+      .filter((e) =>
+        e.parent_id === newParentId
+        && (newParentId !== null || e.folder_id === newFolderId)
+        && e.raid_type === targetEntry.raid_type
+        && !movedIds.has(e.id)
+        && !e.resolved_at)
+      .sort((a, b) => a.sort_order - b.sort_order);
+
+    let insertAt = destination.length;
+    if (zone !== "nest") {
+      const targetIdx = destination.findIndex((e) => e.id === targetId);
+      if (targetIdx >= 0) insertAt = zone === "above" ? targetIdx : targetIdx + 1;
+    }
+    const ordered = [...destination.slice(0, insertAt), ...moving, ...destination.slice(insertAt)];
+
+    const updates = ordered
+      .map((e, i) => ({
+        id: e.id,
+        parent_id: movedIds.has(e.id) ? newParentId : e.parent_id,
+        folder_id: movedIds.has(e.id) ? newFolderId : e.folder_id,
+        sort_order: (i + 1) * 1000,
+      }))
+      .filter((u) => {
+        const before = entries.find((e) => e.id === u.id);
+        return !!before && (before.sort_order !== u.sort_order || before.parent_id !== u.parent_id || before.folder_id !== u.folder_id);
+      });
+
+    const previous = entries;
+    setEntries((prev) => prev.map((e) => {
+      const u = updates.find((x) => x.id === e.id);
+      return u ? { ...e, parent_id: u.parent_id, folder_id: u.folder_id, sort_order: u.sort_order } : e;
+    }));
+    setDraggedId(null);
+    setDraggedIds([]);
+    setDropTarget(null);
+
+    for (const u of updates) {
+      const { error } = await supabase
+        .from("raid_entries")
+        .update({ parent_id: u.parent_id, folder_id: u.folder_id, sort_order: u.sort_order })
+        .eq("id", u.id);
+      if (error) {
+        setEntries(previous);
+        window.alert("That move could not be saved. Your view has been restored.");
+        return;
       }
     }
-
-    // Update DB
-    const { error } = await supabase.from("raid_entries").update({ parent_id: newParentId, folder_id: newFolderId, sort_order: newSortOrder }).eq("id", draggedId);
-    if (!error) {
-      setEntries((prev) => prev.map((e) => e.id === draggedId ? { ...e, parent_id: newParentId, folder_id: newFolderId, sort_order: newSortOrder } : e));
-    }
-
-    setDraggedId(null);
-    setDropTarget(null);
   }
 
   async function handleAdd() {
@@ -1626,7 +1682,7 @@ export default function RaidLog({ initialEntries, project, people, vendors, onPe
               const childCount = items.filter((e) => e.parent_id === entry.id).length;
 
               const isClosed = entry.status === "closed";
-              const isDragging = draggedId === entry.id;
+              const isDragging = draggedId === entry.id || draggedIds.includes(entry.id);
               const isDropNest = dropTarget?.id === entry.id && dropTarget.zone === "nest";
               const isDropAbove = dropTarget?.id === entry.id && dropTarget.zone === "above";
               const isDropBelow = dropTarget?.id === entry.id && dropTarget.zone === "below";
